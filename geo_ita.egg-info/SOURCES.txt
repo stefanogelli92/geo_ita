@@ -1,0 +1,11 @@
+README.md
+setup.py
+geo_ita/__init__.py
+geo_ita/config.py
+geo_ita/data.py
+geo_ita/definition.py
+geo_ita.egg-info/PKG-INFO
+geo_ita.egg-info/SOURCES.txt
+geo_ita.egg-info/dependency_links.txt
+geo_ita.egg-info/requires.txt
+geo_ita.egg-info/top_level.txt
