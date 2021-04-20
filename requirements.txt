@@ -4,3 +4,4 @@ pandas~=1.0.5
 twine==1.13.0
 geopandas~=0.6.1
 setuptools~=41.4.0
+geopy~=2.1.0

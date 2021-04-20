@@ -43,3 +43,10 @@ dimensioni_comuni = {
                       "Codice Comune": "codice_comune",
                       "Superficie totale (Km2)": "superficie_km2"}
 }
+
+
+plot_italy_margins_4326 = [[36.4, 47.35], [6.5, 18.6]]
+plot_italy_margins_32632 = [[723576.6901562785, 2070542.52875489], [4355801.264971882, 5999391.278141545]]
+
+
+min_acceptable_similarity = 0.8
