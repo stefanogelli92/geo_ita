@@ -5,3 +5,7 @@ twine==1.13.0
 geopandas~=0.6.1
 setuptools~=41.4.0
 geopy~=2.1.0
+matplotlib~=3.1.1
+numpy~=1.16.5
+descartes
+xlrd==1.2.0

@@ -11,13 +11,14 @@ import ssl
 import geopy.geocoders
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
+
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 geopy.geocoders.options.default_ssl_context = ctx
 
 
-def _find_coord_columns(df):
+def __find_coord_columns(df):
     column_list = df.columns
     flag_coord_found = False
     lat_tag = None
@@ -41,13 +42,13 @@ def _find_coord_columns(df):
     return flag_coord_found, lat_tag, long_tag
 
 
-def _create_geo_dataframe(df0):
+def __create_geo_dataframe(df0):
     if isinstance(df0, pd.DataFrame):
-        flag_coord_found, lat_tag, long_tag = _find_coord_columns(df0)
+        flag_coord_found, lat_tag, long_tag = __find_coord_columns(df0)
         if flag_coord_found:
             df = gpd.GeoDataFrame(
                 df0, geometry=gpd.points_from_xy(df0[lat_tag], df0[long_tag]))
-            coord_system = _find_coordinates_system(df0, lat_tag, long_tag)
+            coord_system = __find_coordinates_system(df0, lat_tag, long_tag)
             df.crs = {'init': coord_system}
         elif "geometry" in df0.columns:
             df = gpd.GeoDataFrame(df0)
@@ -60,16 +61,16 @@ def _create_geo_dataframe(df0):
     return df
 
 
-def _find_coordinates_system(df, lat, lon):
+def __find_coordinates_system(df, lat, lon):
     # TODO Controllo correttezza margini italia
     center_lat = df[lat].median()
     center_lon = df[lon].median()
 
     if (plot_italy_margins_4326[0][0] <= center_lat <= plot_italy_margins_4326[0][1]) & \
-        (plot_italy_margins_4326[1][0] <= center_lon <= plot_italy_margins_4326[1][1]):
+            (plot_italy_margins_4326[1][0] <= center_lon <= plot_italy_margins_4326[1][1]):
         result = "epsg:4326"
     elif (plot_italy_margins_32632[0][0] <= center_lat <= plot_italy_margins_32632[0][1]) & \
-        (plot_italy_margins_32632[1][0] <= center_lon <= plot_italy_margins_32632[1][1]):
+            (plot_italy_margins_32632[1][0] <= center_lon <= plot_italy_margins_32632[1][1]):
         result = "epsg:32632"
     else:
         result = "epsg:32632"
@@ -84,32 +85,32 @@ def get_city_from_coordinates(df0, comune_tag=None, provincia_tag=None, regione_
     df_comuni.crs = {'init': 'epsg:32632'}
     df_comuni = df_comuni.to_crs({'init': 'epsg:4326'})
 
-    df = _create_geo_dataframe(df0)
+    df = __create_geo_dataframe(df0)
     df = df[["key_mapping", "geometry"]].drop_duplicates()
     df = df.to_crs({'init': 'epsg:4326'})
 
     map_city = gpd.sjoin(df, df_comuni, op='within')
-    map_city = map_city[["key_mapping", "denominazione_comune", "denominazione_provincia", "Regione"]]
+    map_city = map_city[["key_mapping", cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_REGIONE]]
     rename_col = {}
     if comune_tag is not None:
-        rename_col["denominazione_comune"] = comune_tag
+        rename_col[cfg.TAG_COMUNE] = comune_tag
     if provincia_tag is not None:
-        rename_col["denominazione_provincia"] = provincia_tag
+        rename_col[cfg.TAG_PROVINCIA] = provincia_tag
     if regione_tag is not None:
-        rename_col["Regione"] = regione_tag
+        rename_col[cfg.TAG_REGIONE] = regione_tag
     map_city.rename(columns=rename_col, inplace=True)
     return df0.merge(map_city, on=["key_mapping"], how="left").drop(["key_mapping"], axis=1)
 
 
-def _clean_denom_text(series):
+def __clean_denom_text(series):
     series = series.str.lower()  # All strig in lowercase
-    series = series.str.replace('[^\w\s]', ' ')  # Remove non alphabetic characters
+    series = series.str.replace(r'[^\w\s]', ' ', regex=True)  # Remove non alphabetic characters
     series = series.str.strip()
-    series = series.str.replace('\s+', ' ')
+    series = series.str.replace(r'\s+', ' ', regex=True)
     return series
 
 
-def _find_match(not_match1, not_match2):
+def __find_match(not_match1, not_match2):
     """
     Parameters
     ----------
@@ -117,7 +118,7 @@ def _find_match(not_match1, not_match2):
     not_match2: Lista dei nomi a cui abbinare un valore della lista not_match1
 
     Returns
-    Restituisce un dizionario contenente per ogni parole di not_match1 la parola più simile di not_match2 con il
+    Restituisce un dizionario contenente per ogni parola di not_match1 la parola più simile di not_match2 con il
     relativo punteggio
     """
     match_dict = {}
@@ -133,7 +134,7 @@ def _find_match(not_match1, not_match2):
     return match_dict
 
 
-def _uniform_names(df1, df2, tag_1, tag_2, tag, unique_flag=True):
+def __uniform_names(df1, df2, tag_1, tag_2, tag, unique_flag=True):
     # TODO add split (/)
     # TODO add replace city - province - ita eng
     """
@@ -154,8 +155,8 @@ def _uniform_names(df1, df2, tag_1, tag_2, tag, unique_flag=True):
         df1[tag_1 + "_original"] = df1[tag_1]
     if tag_2 == tag:
         df2[tag_2 + "_original"] = df2[tag_2]
-    df1[tag] = _clean_denom_text(df1[tag_1])
-    df2[tag] = _clean_denom_text(df2[tag_2])
+    df1[tag] = __clean_denom_text(df1[tag_1])
+    df2[tag] = __clean_denom_text(df2[tag_2])
     den1 = df1[df1[tag].notnull()][tag].unique()
     den2 = df2[df2[tag].notnull()][tag].unique()
     not_match1 = list(set(den1) - set(den2))
@@ -163,7 +164,7 @@ def _uniform_names(df1, df2, tag_1, tag_2, tag, unique_flag=True):
         not_match2 = list(set(den2) - set(den1))
     else:
         not_match2 = den2
-    match_dict = _find_match(not_match1, not_match2)
+    match_dict = __find_match(not_match1, not_match2)
     items = [(k, v[0], v[1]) for k, v in match_dict.items()]
     items = sorted(items, key=lambda tup: (tup[1], tup[2]), reverse=True)
     for a, b, c in items:
@@ -172,7 +173,8 @@ def _uniform_names(df1, df2, tag_1, tag_2, tag, unique_flag=True):
             not_match1.remove(a)
             if unique_flag:
                 not_match2.remove(b)
-    print("{} unknown comuni".format(len(not_match1)))
+    if len(not_match1) > 0:
+        print("{} unknown comuni".format(len(not_match1)))
     return df1, df2
 
 
@@ -180,15 +182,16 @@ def get_province_from_city(df0, comuni_tag, unique_flag=True):
     # TODO log
     df = df0.copy()
     anagrafica = get_anagrafica_df()
-    df, anagrafica = _uniform_names(df, anagrafica, comuni_tag, "denominazione_comune",
-                                                 "denominazione_comune", unique_flag=unique_flag)
+    df, anagrafica = __uniform_names(df, anagrafica,
+                                     comuni_tag, cfg.TAG_COMUNE, cfg.TAG_COMUNE,
+                                     unique_flag=unique_flag)
     df = df.merge(
-        anagrafica[["denominazione_comune", "denominazione_provincia", "codice_provincia"]],
-        on="denominazione_comune", how="left")
+        anagrafica[[cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_REGIONE]],
+        on=cfg.TAG_COMUNE, how="left")
     return df
 
 
-def _test_city_in_address(df, city_tag, address_tag):
+def __test_city_in_address(df, city_tag, address_tag):
     return df.apply(lambda x: x[city_tag].lower() in x[address_tag] if x[address_tag] else False, axis=1)
 
 
@@ -198,7 +201,7 @@ def get_coordinates_from_address(df, address_tag, city_tag=None, province_tag=No
 
     df["address_search"] = df[address_tag].str.lower()
     if city_tag:
-        df["test"] = _test_city_in_address(df, city_tag, "address_search")
+        df["test"] = __test_city_in_address(df, city_tag, "address_search")
         perc_success = df["test"].sum() / df.shape[0]
         if perc_success < 0.1:
             df["address_search"] = df["address_search"] + ", " + df[city_tag].str.lower()
@@ -212,12 +215,9 @@ def get_coordinates_from_address(df, address_tag, city_tag=None, province_tag=No
     df["address_test"] = df["location"].apply(lambda loc: loc.address if loc else None).str.lower()
     df["test"] = False
     if city_tag:
-        df["test"] = _test_city_in_address(df, city_tag, "address_test")
+        df["test"] = __test_city_in_address(df, city_tag, "address_test")
     elif province_tag:
-        df["test"] = df["test"] | _test_city_in_address(df, province_tag, "address_test")
+        df["test"] = df["test"] | __test_city_in_address(df, province_tag, "address_test")
     elif regione_tag:
-        df["test"] = df["test"] | _test_city_in_address(df, regione_tag, "address_test")
+        df["test"] = df["test"] | __test_city_in_address(df, regione_tag, "address_test")
     return df
-
-
-

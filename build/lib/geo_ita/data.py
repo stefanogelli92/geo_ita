@@ -7,7 +7,7 @@ import geo_ita.config as cfg
 from pathlib import PureWindowsPath
 
 
-def _get_last_file_from_folder(path):
+def __get_last_file_from_folder(path):
     files = os.listdir(path)
     last_files = ""
     last_date = datetime(1999, 1, 1)
@@ -19,7 +19,20 @@ def _get_last_file_from_folder(path):
     return last_files, last_date
 
 
-def _rename_col(df, rename_dict):
+def __get_last_shape_file_from_folder(path):
+    files = os.listdir(path)
+    last_files = ""
+    last_date = datetime(1999, 1, 1)
+    for f in files:
+        if f.split(".")[1] == "shp":
+            date = pd.to_datetime(f.split("_")[0][-8:], format="%d%m%Y")
+            if date > last_date:
+                last_date = date
+                last_files = f
+    return last_files, last_date
+
+
+def __rename_col(df, rename_dict):
     df.columns = [rename_dict[x] if x in rename_dict else x for x in df.columns]
 
 
@@ -30,15 +43,18 @@ def get_anagrafica_df():
     appartenenza e delle regioni.
     """
     path = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"])
-    last_files, _ = _get_last_file_from_folder(path)
+    last_files, _ = __get_last_file_from_folder(path)
 
     df = pd.read_excel(path / PureWindowsPath(last_files))
 
-    _rename_col(df, cfg.anagrafica_comuni["column_rename"])
-
-    df["Regione"] = df["Regione"].str.split("/").str[0]
-    df["sigla"].fillna("NAN", inplace=True)
-    df["denominazione_provincia"] = df["denominazione_provincia"].str.split("/").str[0]
+    __rename_col(df, cfg.anagrafica_comuni["column_rename"])
+    prova = df[df[cfg.TAG_CODICE_COMUNE].apply(lambda x: not isinstance(x, int))]
+    df[cfg.TAG_CODICE_COMUNE] = df[cfg.TAG_CODICE_COMUNE].astype(int)
+    df[cfg.TAG_CODICE_PROVINCIA] = df[cfg.TAG_CODICE_PROVINCIA].astype(int)
+    df[cfg.TAG_CODICE_REGIONE] = df[cfg.TAG_CODICE_REGIONE].astype(int)
+    df[cfg.TAG_REGIONE] = df[cfg.TAG_REGIONE].str.split("/").str[0]
+    df[cfg.TAG_SIGLA].fillna("NAN", inplace=True)
+    df[cfg.TAG_PROVINCIA] = df[cfg.TAG_PROVINCIA].str.split("/").str[0]
     return df
 
 
@@ -48,10 +64,11 @@ def get_popolazione_df():
     Restituisce un dataset contenente la popolazione dei singoli comuni italiani (dato ISTAT)
     """
     path = root_path / PureWindowsPath(cfg.popolazione_comuni["path"])
-    last_files, _ = _get_last_file_from_folder(path)
+    last_files, _ = __get_last_file_from_folder(path)
     df = pd.read_csv(path / PureWindowsPath(last_files))
     df = df[df["Territorio"] != "Italia"]
-    _rename_col(df, cfg.popolazione_comuni["column_rename"])
+    __rename_col(df, cfg.popolazione_comuni["column_rename"])
+    df[cfg.TAG_CODICE_COMUNE] = df[cfg.TAG_CODICE_COMUNE].astype(int)
     return df
 
 
@@ -62,9 +79,12 @@ def get_comuni_shape_df():
     Dataset utilizzato per fare plot geografici dell'italia.
     """
     path = root_path / PureWindowsPath(cfg.shape_comuni["path"])
-    last_files, _ = _get_last_file_from_folder(path)
+    last_files, _ = __get_last_shape_file_from_folder(path)
     df = gpd.read_file(path / PureWindowsPath(last_files), encoding='utf-8')
-    _rename_col(df, cfg.shape_comuni["column_rename"])
+    __rename_col(df, cfg.shape_comuni["column_rename"])
+    df["center_x"] = df["geometry"].centroid.x
+    df["center_y"] = df["geometry"].centroid.y
+    df[cfg.TAG_CODICE_COMUNE] = df[cfg.TAG_CODICE_COMUNE].astype(int)
     return df
 
 
@@ -75,9 +95,12 @@ def get_province_shape_df():
     Dataset utilizzato per fare plot geografici dell'italia.
     """
     path = root_path / PureWindowsPath(cfg.shape_province["path"])
-    last_files, _ = _get_last_file_from_folder(path)
+    last_files, _ = __get_last_shape_file_from_folder(path)
     df = gpd.read_file(path / PureWindowsPath(last_files), encoding='utf-8')
-    _rename_col(df, cfg.shape_province["column_rename"])
+    __rename_col(df, cfg.shape_province["column_rename"])
+    df["center_x"] = df["geometry"].centroid.x
+    df["center_y"] = df["geometry"].centroid.y
+    df[cfg.TAG_CODICE_PROVINCIA] = df[cfg.TAG_CODICE_PROVINCIA].astype(int)
     return df
 
 
@@ -88,9 +111,12 @@ def get_regioni_shape_df():
     Dataset utilizzato per fare plot geografici dell'italia.
     """
     path = root_path / PureWindowsPath(cfg.shape_regioni["path"])
-    last_files, _ = _get_last_file_from_folder(path)
+    last_files, _ = __get_last_shape_file_from_folder(path)
     df = gpd.read_file(path / PureWindowsPath(last_files), encoding='utf-8')
-    _rename_col(df, cfg.shape_regioni["column_rename"])
+    __rename_col(df, cfg.shape_regioni["column_rename"])
+    df["center_x"] = df["geometry"].centroid.x
+    df["center_y"] = df["geometry"].centroid.y
+    df[cfg.TAG_CODICE_REGIONE] = df[cfg.TAG_CODICE_REGIONE].astype(int)
     return df
 
 
@@ -101,12 +127,13 @@ def get_dimensioni_df():
     appartenenza e delle regioni.
     """
     path = root_path / PureWindowsPath(cfg.dimensioni_comuni["path"])
-    last_files, _ = _get_last_file_from_folder(path)
+    last_files, _ = __get_last_file_from_folder(path)
 
     df = pd.read_excel(path / PureWindowsPath(last_files), sheet_name="Dati comunali")
 
-    _rename_col(df, cfg.dimensioni_comuni["column_rename"])
-
+    __rename_col(df, cfg.dimensioni_comuni["column_rename"])
+    df = df[df[cfg.TAG_CODICE_COMUNE].notnull()]
+    df[cfg.TAG_CODICE_COMUNE] = df[cfg.TAG_CODICE_COMUNE].astype(int)
     return df
 
 
@@ -121,16 +148,11 @@ def create_df_comuni():
     """
     anagrafica = get_anagrafica_df()[cfg.anagrafica_comuni["column_rename"].values()]
     popolazione = get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
-    popolazione["codice_comune"] = popolazione["codice_comune"].astype(int)
-    popolazione.drop(['denominazione_comune'], axis=1, inplace=True)
-    df = anagrafica.merge(popolazione, how="left", on="codice_comune")
+    df = anagrafica.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
     shape = get_comuni_shape_df()[cfg.shape_comuni["column_rename"].values()]
-    shape["center_x"] = shape["geometry"].centroid.x
-    shape["center_y"] = shape["geometry"].centroid.y
-    df = df.merge(shape, how="left", on="codice_comune")
+    df = df.merge(shape, how="left", on=cfg.TAG_CODICE_COMUNE)
     dimensioni = get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
-    dimensioni.drop(['codice_provincia', 'codice_regione'], axis=1, inplace=True)
-    df = df.merge(dimensioni, how="left", on="codice_comune")
+    df = df.merge(dimensioni, how="left", on=cfg.TAG_CODICE_COMUNE)
     return df
 
 
@@ -145,19 +167,15 @@ def create_df_province():
     """
     anagrafica = get_anagrafica_df()[cfg.anagrafica_comuni["column_rename"].values()]
     popolazione = get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
-    popolazione["codice_comune"] = popolazione["codice_comune"].astype(int)
-    popolazione.drop(['denominazione_comune'], axis=1, inplace=True)
-    df = anagrafica.merge(popolazione, how="left", on="codice_comune")
+    df = anagrafica.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
     df["sigla"].fillna("NAN", inplace=True)
-    df = df.groupby(["denominazione_provincia", "codice_provincia", "Regione", "sigla"])["popolazione"].sum().reset_index()
+    dimensioni = get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
+    df = df.merge(dimensioni, how="left", on=cfg.TAG_CODICE_COMUNE)
+    df = df.groupby([cfg.TAG_PROVINCIA, cfg.TAG_CODICE_PROVINCIA, cfg.TAG_SIGLA,
+                     cfg.TAG_REGIONE])[[cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]].sum().reset_index()
     df = df.replace({'NAN': None})
     shape = get_province_shape_df()[cfg.shape_province["column_rename"].values()]
-    shape["center_x"] = shape["geometry"].centroid.x
-    shape["center_y"] = shape["geometry"].centroid.y
-    df = df.merge(shape, how="left", on="codice_provincia")
-    dimensioni = get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
-    dimensioni = dimensioni.groupby("codice_provincia")["superficie_km2"].sum().reset_index()
-    df = df.merge(dimensioni, how="left", on="codice_provincia")
+    df = df.merge(shape, how="left", on=cfg.TAG_CODICE_PROVINCIA)
     return df
 
 
@@ -171,18 +189,11 @@ def create_df_regioni():
     """
     anagrafica = get_anagrafica_df()[cfg.anagrafica_comuni["column_rename"].values()]
     popolazione = get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
-    popolazione["codice_comune"] = popolazione["codice_comune"].astype(int)
-    popolazione.drop(['denominazione_comune'], axis=1, inplace=True)
-    df = anagrafica.merge(popolazione, how="left", on="codice_comune")
-    df = df.groupby(["codice_regione", "Regione"])["popolazione"].sum().reset_index()
-    shape = get_regioni_shape_df()[cfg.shape_regioni["column_rename"].values()]
-    shape["center_x"] = shape["geometry"].centroid.x
-    shape["center_y"] = shape["geometry"].centroid.y
-    df = df.merge(shape, how="left", on="codice_regione")
+    df = anagrafica.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
+    df["sigla"].fillna("NAN", inplace=True)
     dimensioni = get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
-    dimensioni = dimensioni.groupby("codice_regione")["superficie_km2"].sum().reset_index()
-    df = df.merge(dimensioni, how="left", on="codice_regione")
+    df = df.merge(dimensioni, how="left", on=cfg.TAG_CODICE_COMUNE)
+    df = df.groupby([cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE])[[cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]].sum().reset_index()
+    shape = get_regioni_shape_df()[cfg.shape_regioni["column_rename"].values()]
+    df = df.merge(shape, how="left", on=cfg.TAG_CODICE_REGIONE)
     return df
-
-
-get_popolazione_df()

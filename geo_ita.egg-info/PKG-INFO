@@ -1,12 +1,34 @@
 Metadata-Version: 2.1
 Name: geo-ita
-Version: 0.0.17
+Version: 0.0.27
 Summary: A package for geo analysis for Italy
 Home-page: https://github.com/enelx-customer-business-analytics/geo_ita.git
 Author: Stefano Gelli
 Author-email: stefano.mat92@gmail.com
 License: UNKNOWN
-Description: geo_ita
+Description: # Geo Ita
+        
+        Geo Ita is a library for geographical analysis within Italy.
+        You can get some geographical information such as Population, Area and Shape of each comune, province and regioni.
+        
+        ## Installation
+        
+        TODO
+        
+        ```bash
+        pip install -----
+        ```
+        
+        ## Usage
+        
+        ```python
+        from geo_ita.enrich_dataframe import get_coordinates_from_address
+        
+        df = get_coordinates_from_address(df, "address")
+        ```
+        
+        ## License
+        [MIT](https://choosealicense.com/licenses/mit/)
 Platform: UNKNOWN
 Classifier: Programming Language :: Python :: 3.7
 Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)

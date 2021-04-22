@@ -4,11 +4,11 @@ from setuptools import setup, find_packages
 with open("README.md", "r") as readme_file:
     readme = readme_file.read()
 
-requirements = ["ipython>=6", "nbformat>=4", "nbconvert>=5", "requests>=2"]
+requirements = ["pandas", "twine", "geopandas", "geopy", "matplotlib>=3.1.1", "numpy", "descartes", "xlrd==1.2.0"]
 
 setup(
     name="geo_ita",
-    version="0.0.17",
+    version="0.0.27",
     author="Stefano Gelli",
     author_email="stefano.mat92@gmail.com",
     description="A package for geo analysis for Italy",

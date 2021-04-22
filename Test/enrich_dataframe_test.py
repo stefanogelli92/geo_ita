@@ -41,7 +41,7 @@ def test_get_coordinates_from_address():
     n_tot = result.shape[0]
     n_right = result["test"].sum()
     perc_success = n_right / n_tot
-    if perc_success >= 0.8:
+    if perc_success >= 0.7:
         print("OK ", round(perc_success * 100, 1))
     else:
         print("KO ", round(perc_success * 100, 1))
