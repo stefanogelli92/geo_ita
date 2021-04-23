@@ -62,3 +62,21 @@ plot_italy_margins_32632 = [[723576.6901562785, 2070542.52875489], [4355801.2649
 
 
 min_acceptable_similarity = 0.8
+
+rename_comuni_nomi = {"rome": "roma",
+                      "milano": "milano",
+                      "naples": "napoli",
+                      "turin": "torino",
+                      "florence": "firenze",
+                      "venice": "venezia",
+                      "padua": "padova",
+                      "syracuse": "siracusa",
+                      "figline valdarno": "figline e incisa valdarno",
+                      "incisa in val darno": "figline e incisa valdarno",
+                      "presicce": "presicce acquarica",
+                      "acquarica del capo": "presicce acquarica",
+                      "corigliano calabro": "corigliano rossano",
+                      "rossano calabro": "corigliano rossano",
+                      "montoro inferiore": "montoro",
+                      "montoro superiore": "montoro",
+                      }

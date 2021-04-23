@@ -1,10 +1,15 @@
 import os
-from geo_ita.definition import *
 from datetime import datetime
+from pathlib import PureWindowsPath
+
 import pandas as pd
 import geopandas as gpd
+
+from geo_ita.definition import *
 import geo_ita.config as cfg
-from pathlib import PureWindowsPath
+
+# Todo Remove multiple file in folder
+# Todo Print Last date update
 
 
 def __get_last_file_from_folder(path):
@@ -48,12 +53,11 @@ def get_anagrafica_df():
     df = pd.read_excel(path / PureWindowsPath(last_files))
 
     __rename_col(df, cfg.anagrafica_comuni["column_rename"])
-    prova = df[df[cfg.TAG_CODICE_COMUNE].apply(lambda x: not isinstance(x, int))]
     df[cfg.TAG_CODICE_COMUNE] = df[cfg.TAG_CODICE_COMUNE].astype(int)
     df[cfg.TAG_CODICE_PROVINCIA] = df[cfg.TAG_CODICE_PROVINCIA].astype(int)
     df[cfg.TAG_CODICE_REGIONE] = df[cfg.TAG_CODICE_REGIONE].astype(int)
     df[cfg.TAG_REGIONE] = df[cfg.TAG_REGIONE].str.split("/").str[0]
-    df[cfg.TAG_SIGLA].fillna("NAN", inplace=True)
+    df[cfg.TAG_SIGLA].fillna("NA", inplace=True)
     df[cfg.TAG_PROVINCIA] = df[cfg.TAG_PROVINCIA].str.split("/").str[0]
     return df
 

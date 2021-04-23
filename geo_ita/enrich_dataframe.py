@@ -1,16 +1,20 @@
 import difflib
 import time
+import logging
+import ssl
 
 import pandas as pd
 import geopandas as gpd
+import geopy.geocoders
+from geopy.geocoders import Nominatim
+from geopy.extra.rate_limiter import RateLimiter
+
 from geo_ita.data import create_df_comuni, get_anagrafica_df
 from geo_ita.config import plot_italy_margins_4326, plot_italy_margins_32632
 import geo_ita.config as cfg
 
-import ssl
-import geopy.geocoders
-from geopy.geocoders import Nominatim
-from geopy.extra.rate_limiter import RateLimiter
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
 
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
@@ -50,8 +54,10 @@ def __create_geo_dataframe(df0):
                 df0, geometry=gpd.points_from_xy(df0[lat_tag], df0[long_tag]))
             coord_system = __find_coordinates_system(df0, lat_tag, long_tag)
             df.crs = {'init': coord_system}
+            log.info("Found columns about coordinates: ({}, {})".format(lat_tag, long_tag))
         elif "geometry" in df0.columns:
             df = gpd.GeoDataFrame(df0)
+            log.info("Found geometry columns")
         else:
             raise Exception("The DataFrame must have a geometry attribute or lat-long.")
     elif isinstance(df0, gpd.GeoDataFrame):
@@ -69,11 +75,14 @@ def __find_coordinates_system(df, lat, lon):
     if (plot_italy_margins_4326[0][0] <= center_lat <= plot_italy_margins_4326[0][1]) & \
             (plot_italy_margins_4326[1][0] <= center_lon <= plot_italy_margins_4326[1][1]):
         result = "epsg:4326"
+        log.debug("Found coord system: {}".format(result))
     elif (plot_italy_margins_32632[0][0] <= center_lat <= plot_italy_margins_32632[0][1]) & \
             (plot_italy_margins_32632[1][0] <= center_lon <= plot_italy_margins_32632[1][1]):
         result = "epsg:32632"
+        log.debug("Found coord system: {}".format(result))
     else:
         result = "epsg:32632"
+        log.warning("Unable to find coord system so the default is used: {}".format(result))
     return result
 
 
@@ -90,6 +99,12 @@ def get_city_from_coordinates(df0, comune_tag=None, provincia_tag=None, regione_
     df = df.to_crs({'init': 'epsg:4326'})
 
     map_city = gpd.sjoin(df, df_comuni, op='within')
+    n_tot = map_city.shape[0]
+    missing = map_city[cfg.TAG_COMUNE].isna().sum()
+    if len(missing) == n_tot:
+        log.debug("Found the correct city for each point")
+    else:
+        log.warning("Unable to find the city for {} points: {}".format(len(missing), missing))
     map_city = map_city[["key_mapping", cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_REGIONE]]
     rename_col = {}
     if comune_tag is not None:
@@ -157,6 +172,7 @@ def __uniform_names(df1, df2, tag_1, tag_2, tag, unique_flag=True):
         df2[tag_2 + "_original"] = df2[tag_2]
     df1[tag] = __clean_denom_text(df1[tag_1])
     df2[tag] = __clean_denom_text(df2[tag_2])
+    df1[tag] = df1[tag_1].replace(cfg.rename_comuni_nomi)
     den1 = df1[df1[tag].notnull()][tag].unique()
     den2 = df2[df2[tag].notnull()][tag].unique()
     not_match1 = list(set(den1) - set(den2))
@@ -173,8 +189,10 @@ def __uniform_names(df1, df2, tag_1, tag_2, tag, unique_flag=True):
             not_match1.remove(a)
             if unique_flag:
                 not_match2.remove(b)
-    if len(not_match1) > 0:
-        print("{} unknown comuni".format(len(not_match1)))
+    if len(not_match1) == 0:
+        log.debug("All name have been matched")
+    else:
+        log.warning("Unable to match {} names: {}".format(len(not_match1), not_match1))
     return df1, df2
 
 
@@ -209,15 +227,23 @@ def get_coordinates_from_address(df, address_tag, city_tag=None, province_tag=No
     geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
     start = time.time()
     df["location"] = (df["address_search"]).apply(geocode)
-    print(time.time() - start)
+    log.info("Finding of location from address ended in {} seconds".format(time.time() - start))
     df["latitude"] = df["location"].apply(lambda loc: loc.latitude if loc else None)
     df["longitude"] = df["location"].apply(lambda loc: loc.longitude if loc else None)
     df["address_test"] = df["location"].apply(lambda loc: loc.address if loc else None).str.lower()
     df["test"] = False
     if city_tag:
         df["test"] = __test_city_in_address(df, city_tag, "address_test")
+        log.debug("Found {} location over {} address. But {} are not in the correct city.".format(df["location"].notnull().sum(), df.shape[0], (~df["test"]).sum()))
     elif province_tag:
         df["test"] = df["test"] | __test_city_in_address(df, province_tag, "address_test")
+        log.debug("Found {} location over {} address. But {} are not in the correct provincia.".format(
+            df["location"].notnull().sum(), df.shape[0], (~df["test"]).sum()))
     elif regione_tag:
         df["test"] = df["test"] | __test_city_in_address(df, regione_tag, "address_test")
+        log.debug("Found {} location over {} address. But {} are not in the correct regione.".format(
+            df["location"].notnull().sum(), df.shape[0], (~df["test"]).sum()))
+    else:
+        df.drop(["test"], axis=1, inplace=True)
+        log.debug("Found {} location over {} address.".format(df["location"].notnull().sum(), df.shape[0]))
     return df
