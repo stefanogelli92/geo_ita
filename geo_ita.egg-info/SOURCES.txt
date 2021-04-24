@@ -12,4 +12,5 @@ geo_ita.egg-info/dependency_links.txt
 geo_ita.egg-info/requires.txt
 geo_ita.egg-info/top_level.txt
 test/test_data.py
+test/test_enrich_dataframe.py
 test/test_plot.py

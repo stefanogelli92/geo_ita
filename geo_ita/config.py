@@ -8,6 +8,13 @@ TAG_REGIONE = "denominazione_regione"
 TAG_CODICE_REGIONE = "codice_regione"
 TAG_POPOLAZIONE = "popolazione"
 TAG_SUPERFICIE = "superficie_km2"
+LEVEL_COMUNE = 0
+LEVEL_PROVINCIA = 1
+LEVEL_REGIONE = 2
+CODE_CODICE_ISTAT = 0
+CODE_SIGLA = 1
+CODE_DENOMINAZIONE = 2
+KEY_UNIQUE = "key_geo_ita"
 
 anagrafica_comuni = {
     "path": r"data_sources/Anagrafica",
@@ -19,6 +26,13 @@ anagrafica_comuni = {
                        "Denominazione Regione": TAG_REGIONE,
                        "Codice Regione": TAG_CODICE_REGIONE,
                        "Sigla automobilistica": TAG_SIGLA}}
+
+variazioni_amministrative = {
+    "path": r"data_sources/Variazioni",
+    "column_rename": {"Denominazione Comune": TAG_COMUNE,
+                      "Denominazione Comune associata alla variazione o nuova denominazione": "new_denominazione_comune",
+                      "Data decorrenza validità amministrativa": "data_decorrenza",
+                       "Tipo variazione": "tipo_variazione"}}
 
 popolazione_comuni = {
     "path": r"data_sources/Comuni/Popolazione",
@@ -64,7 +78,7 @@ plot_italy_margins_32632 = [[723576.6901562785, 2070542.52875489], [4355801.2649
 min_acceptable_similarity = 0.8
 
 rename_comuni_nomi = {"rome": "roma",
-                      "milano": "milano",
+                      "milan": "milano",
                       "naples": "napoli",
                       "turin": "torino",
                       "florence": "firenze",
@@ -80,3 +94,43 @@ rename_comuni_nomi = {"rome": "roma",
                       "montoro inferiore": "montoro",
                       "montoro superiore": "montoro",
                       }
+
+comuni_exceptions = {
+    "paterno paterno": "paternò",
+    "paternò": "paterno paterno"
+}
+
+
+comuni_omonimi = {
+    TAG_COMUNE: ["Livo", "Livo",
+                 "Peglio", "Peglio",
+                 "Castro", "Castro",
+                 "Samone", "Samone",
+                 "Calliano", "Calliano",
+                 "San Teodoro", "San Teodoro"],
+    TAG_SIGLA: ["CO", "TN",
+                "CO", "PU",
+                "BG", "LE",
+                "TO", "TN",
+                "AT", "TN",
+                "ME", "SS"],
+    TAG_PROVINCIA: ["Como", "Trento",
+                    "Como", "Pesaro e Urbino",
+                    "Bergamo", "Lecce",
+                    "Torino", "Trento",
+                    "Asti", "Trento",
+                    "Messina", "Sassari"],
+    TAG_REGIONE: ["Lombardia", "Trentino-Alto Adige",
+                  "Lombardia", "Marche",
+                  "Lombardia", "Puglia",
+                  "Piemonte", "Trentino-Alto Adige",
+                  "Piemonte", "Trentino-Alto Adige",
+                  "Sicilia", "Sardegna"],
+    "new_name": ["Livo como", "Livo",
+                 "Peglio como", "Peglio",
+                 "Castro bergamo", "Castro",
+                 "Samone", "Samone trento",
+                 "Calliano asti", "Calliano",
+                 "San Teodoro messina", "San Teodoro"]
+}
+

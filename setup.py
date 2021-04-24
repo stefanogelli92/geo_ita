@@ -8,7 +8,7 @@ requirements = ["pandas", "twine", "geopandas", "geopy", "matplotlib>=3.1.1", "n
 
 setup(
     name="geo_ita",
-    version="0.0.38",
+    version="0.0.47",
     author="Stefano Gelli",
     author_email="stefano.mat92@gmail.com",
     description="A package for geo analysis for Italy",
@@ -20,6 +20,7 @@ setup(
     include_package_data=True,
     package_data={
             "geo_ita": ["data_sources/Anagrafica/*.*",
+                        "data_sources/Variazioni/*.*",
                          "data_sources/Comuni/Dimensioni/*.*",
                          "data_sources/Comuni/Popolazione/*.*",
                          "data_sources/Comuni/Shape/*.*",

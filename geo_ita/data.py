@@ -2,11 +2,13 @@ import os
 from datetime import datetime
 from pathlib import PureWindowsPath
 
+import numpy as np
 import pandas as pd
 import geopandas as gpd
 
 from geo_ita.definition import *
 import geo_ita.config as cfg
+
 
 # Todo Remove multiple file in folder
 # Todo Print Last date update
@@ -17,10 +19,13 @@ def __get_last_file_from_folder(path):
     last_files = ""
     last_date = datetime(1999, 1, 1)
     for f in files:
-        date = pd.to_datetime(f.split(".")[0][-10:], format="%d_%m_%Y")
-        if date > last_date:
-            last_date = date
-            last_files = f
+        try:
+            date = pd.to_datetime(f.split(".")[0][-10:], format="%d_%m_%Y")
+            if date > last_date:
+                last_date = date
+                last_files = f
+        except:
+            pass
     return last_files, last_date
 
 
@@ -59,6 +64,16 @@ def get_anagrafica_df():
     df[cfg.TAG_REGIONE] = df[cfg.TAG_REGIONE].str.split("/").str[0]
     df[cfg.TAG_SIGLA].fillna("NA", inplace=True)
     df[cfg.TAG_PROVINCIA] = df[cfg.TAG_PROVINCIA].str.split("/").str[0]
+    return df
+
+
+def get_variazioni_amministrative_df():
+    path = root_path / PureWindowsPath(cfg.variazioni_amministrative["path"])
+    last_files, _ = __get_last_file_from_folder(path)
+
+    df = pd.read_csv(path / PureWindowsPath(last_files), encoding='latin-1', sep=";")
+
+    __rename_col(df, cfg.variazioni_amministrative["column_rename"])
     return df
 
 
@@ -141,6 +156,18 @@ def get_dimensioni_df():
     return df
 
 
+def get_df(level):
+    if level == cfg.LEVEL_COMUNE:
+        result = create_df_comuni()
+    elif level == cfg.LEVEL_PROVINCIA:
+        result = create_df_province()
+    elif level == cfg.LEVEL_REGIONE:
+        result = create_df_regioni()
+    else:
+        raise Exception("Unknown level")
+    return result
+
+
 def create_df_comuni():
     """
     Returns
@@ -197,7 +224,8 @@ def create_df_regioni():
     df["sigla"].fillna("NAN", inplace=True)
     dimensioni = get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
     df = df.merge(dimensioni, how="left", on=cfg.TAG_CODICE_COMUNE)
-    df = df.groupby([cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE])[[cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]].sum().reset_index()
+    df = df.groupby([cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE])[
+        [cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]].sum().reset_index()
     shape = get_regioni_shape_df()[cfg.shape_regioni["column_rename"].values()]
     df = df.merge(shape, how="left", on=cfg.TAG_CODICE_REGIONE)
     return df

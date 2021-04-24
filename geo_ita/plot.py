@@ -1,4 +1,5 @@
 import os
+import logging
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
@@ -22,17 +23,15 @@ from bokeh.models import (GMapPlot, GMapOptions, ColumnDataSource, Circle, LogCo
 
 import geo_ita.config as cfg
 from geo_ita.data import create_df_comuni, create_df_province, create_df_regioni, get_anagrafica_df
-from geo_ita.enrich_dataframe import __clean_denom_text, __uniform_names
+from geo_ita.enrich_dataframe import __clean_denom_text, __uniform_names, _code_or_desc
 
-CODE_CODICE_ISTAT = 0
-CODE_SIGLA = 1
-CODE_DENOMINAZIONE = 2
-LEVEL_COMUNE = 0
-LEVEL_PROVINCIA = 1
-LEVEL_REGIONE = 2
-HEADER_BOKEH = {LEVEL_COMUNE: 'Comune',
-                LEVEL_PROVINCIA: 'Provincia',
-                LEVEL_REGIONE: 'Regione'}
+
+HEADER_BOKEH = {cfg.LEVEL_COMUNE: 'Comune',
+                cfg.LEVEL_PROVINCIA: 'Provincia',
+                cfg.LEVEL_REGIONE: 'Regione'}
+
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
 
 
 def _human_format(num):
@@ -68,8 +67,12 @@ def _plot_distribution_on_shape(df, color, ax, show_colorbar, numeric_values, va
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
         sm._A = []
     else:
-        cmap = get_cmap('tab10')
+
         color_map = df["count"].value_counts(dropna=False).reset_index()
+        if color_map.shape[0] <= 10:
+            cmap = get_cmap('tab10')
+        else:
+            cmap = get_cmap('tab20')
         color_map["color"] = None
         for i in range(color_map.shape[0]):
             color_map.iat[i, 2] = cmap(i % 10)
@@ -114,32 +117,21 @@ def _add_labels_on_plot(df, ax, print_perc, numeric_values):
                         horizontalalignment='center', color='black', wrap=True)
 
 
-def _code_or_desc(list_values):
-    n_tot = len(list_values)
-    if (sum([isinstance(item, int) or item.isdigit() for item in list_values]) / n_tot) > 0.8:
-        result = CODE_CODICE_ISTAT
-    elif (sum([isinstance(item, str) and item.isalpha() and len(item) == 2 for item in list_values]) / n_tot) > 0.8:
-        result = CODE_SIGLA
-    else:
-        result = CODE_DENOMINAZIONE
-    return result
-
-
 def _get_tag_anag(code, level):
-    if level == LEVEL_COMUNE:
-        if code == CODE_CODICE_ISTAT:
+    if level == cfg.LEVEL_COMUNE:
+        if code == cfg.CODE_CODICE_ISTAT:
             result = cfg.TAG_CODICE_COMUNE
         else:
             result = cfg.TAG_COMUNE
-    elif level == LEVEL_PROVINCIA:
-        if code == CODE_CODICE_ISTAT:
+    elif level == cfg.LEVEL_PROVINCIA:
+        if code == cfg.CODE_CODICE_ISTAT:
             result = cfg.TAG_CODICE_PROVINCIA
-        elif code == CODE_SIGLA:
+        elif code == cfg.CODE_SIGLA:
             result = cfg.TAG_SIGLA
         else:
             result = cfg.TAG_PROVINCIA
-    elif level == LEVEL_REGIONE:
-        if code == CODE_CODICE_ISTAT:
+    elif level == cfg.LEVEL_REGIONE:
+        if code == cfg.CODE_CODICE_ISTAT:
             result = cfg.TAG_CODICE_REGIONE
         else:
             result = cfg.TAG_REGIONE
@@ -149,11 +141,11 @@ def _get_tag_anag(code, level):
 
 
 def _get_shape_from_level(level):
-    if level == LEVEL_COMUNE:
+    if level == cfg.LEVEL_COMUNE:
         shape = create_df_comuni()
-    elif level == LEVEL_PROVINCIA:
+    elif level == cfg.LEVEL_PROVINCIA:
         shape = create_df_province()
-    elif level == LEVEL_REGIONE:
+    elif level == cfg.LEVEL_REGIONE:
         shape = create_df_regioni()
     else:
         raise Exception("Level UNKNOWN")
@@ -161,7 +153,7 @@ def _get_shape_from_level(level):
 
 
 def _plot_distribution(df0,
-                       geo_tag1,
+                       geo_tag_input,
                        value_tag,
                        level,
                        color,
@@ -177,53 +169,64 @@ def _plot_distribution(df0,
     # Todo Plot backgroud regions grey
     # Todo auto check if center scale and use 3 color map
     df = df0.copy()
-    df = df[df[geo_tag1].notnull()]
+    df = df[df[geo_tag_input].notnull()]
 
-    code = _code_or_desc(list(df[geo_tag1].unique()))
+    code = _code_or_desc(list(df[geo_tag_input].unique()))
 
     shape = _get_shape_from_level(level)
 
-    geo_tag2 = _get_tag_anag(code, level)
+    geo_tag_shape = _get_tag_anag(code, level)
 
     anagr_df = get_anagrafica_df()
 
     if filter_list is not None:
         code_filter = _code_or_desc(filter_list)
         tag_2 = _get_tag_anag(code_filter, level2)
-        if code_filter == CODE_CODICE_ISTAT:
+        if code_filter == cfg.CODE_CODICE_ISTAT:
             filter_list = [int(x) for x in filter_list]
-        elif code_filter == CODE_SIGLA:
+        elif code_filter == cfg.CODE_SIGLA:
             filter_list = [x.upper() for x in filter_list]
         else:
             filter_list = pd.DataFrame(columns=[tag_2], data=filter_list)
-            filter_list, anagr_df = __uniform_names(filter_list, shape, tag_2, tag_2, tag_2)
+            filter_list, anagr_df = __uniform_names(filter_list, shape, tag_2, tag_2, tag_2, comune_flag=(level2 == cfg.LEVEL_COMUNE))
             filter_list = filter_list[tag_2].unique()
         anagr_df = anagr_df[anagr_df[tag_2].isin(filter_list)]
-
-    if code == CODE_DENOMINAZIONE:
-        df, shape = __uniform_names(df, shape, geo_tag1, geo_tag2, geo_tag1)
+    log.debug(df.head(5))
+    if code == cfg.CODE_DENOMINAZIONE:
+        df, shape = __uniform_names(df, shape, geo_tag_input, geo_tag_shape, geo_tag_shape, comune_flag=(level == cfg.LEVEL_COMUNE))
+    else:
+        df.rename(columns={geo_tag_input: geo_tag_shape}, inplace=True)
 
     if filter_list is not None:
-        filter_list = __clean_denom_text(anagr_df[geo_tag2]).unique()
-        shape = shape[shape[geo_tag2].isin(filter_list)]
+        filter_list = __clean_denom_text(anagr_df[geo_tag_shape]).unique()
+        shape = shape[shape[geo_tag_shape].isin(filter_list)]
 
     numeric_values = is_numeric_dtype(df[value_tag])
 
     if numeric_values:
-        df = df.groupby(geo_tag1)[value_tag].sum()
+        df = df.groupby(geo_tag_shape)[value_tag].sum()
     else:
         # Test unique values
-        if df[geo_tag1].nunique() == df.shape[0]:
-            df = df.set_index(geo_tag1)[value_tag]
+        if df[geo_tag_shape].nunique() == df.shape[0]:
+            df = df.set_index(geo_tag_shape)[value_tag]
         else:
             raise Exception("When you want to plot a cathegorical values you need to group by your geographical area.")
-
-    shape["count"] = shape[geo_tag2].map(df)
+    log.debug(df.head(5), geo_tag_shape)
+    shape["count"] = shape[geo_tag_shape].map(df)
 
     if numeric_values:
         shape["count"].fillna(0, inplace=True)
     shape = gpd.GeoDataFrame(shape, geometry="geometry")
-    fig, ax = _plot_distribution_on_shape(shape, color, ax, show_colorbar, numeric_values, value_tag)
+    if level == cfg.LEVEL_COMUNE:
+        line_width = 0.2
+    elif level == cfg.LEVEL_PROVINCIA:
+        line_width = 0.4
+    elif level == cfg.LEVEL_REGIONE:
+        line_width = 0.8
+    else:
+        line_width = 0.2
+    log.debug(shape.head(5))
+    fig, ax = _plot_distribution_on_shape(shape, color, ax, show_colorbar, numeric_values, value_tag, linewidth=line_width)
 
     if print_labels:
         _add_labels_on_plot(shape, ax, print_perc, numeric_values)
@@ -234,7 +237,7 @@ def _plot_distribution(df0,
     return fig
 
 
-def plot_region_distribution(df,
+def plot_choropleth_map_regionale(df,
                              region_tag,
                              value_tag,
                              ax=None,
@@ -246,17 +249,17 @@ def plot_region_distribution(df,
     _plot_distribution(df,
                        region_tag,
                        value_tag,
-                       LEVEL_REGIONE,
+                       cfg.LEVEL_REGIONE,
                        color,
                        ax,
                        show_colorbar,
                        print_labels,
                        print_perc,
                        filter_list=filter_regioni,
-                       level2=LEVEL_REGIONE)
+                       level2=cfg.LEVEL_REGIONE)
 
 
-def plot_province_distribution(df,
+def plot_choropleth_map_provinciale(df,
                                province_tag,
                                value_tag,
                                ax=None,
@@ -267,10 +270,10 @@ def plot_province_distribution(df,
                                filter_province=None,
                                print_perc=True):
     if filter_regioni:
-        level_filter = LEVEL_REGIONE
+        level_filter = cfg.LEVEL_REGIONE
         filter_list = filter_regioni
     elif filter_province:
-        level_filter = LEVEL_PROVINCIA
+        level_filter = cfg.LEVEL_PROVINCIA
         filter_list = filter_province
     else:
         level_filter = None
@@ -278,7 +281,7 @@ def plot_province_distribution(df,
     _plot_distribution(df,
                        province_tag,
                        value_tag,
-                       LEVEL_PROVINCIA,
+                       cfg.LEVEL_PROVINCIA,
                        color,
                        ax,
                        show_colorbar,
@@ -288,7 +291,7 @@ def plot_province_distribution(df,
                        level2=level_filter)
 
 
-def plot_comuni_distribution(df,
+def plot_choropleth_map_comunale(df,
                              comuni_tag,
                              value_tag,
                              ax=None,
@@ -300,13 +303,13 @@ def plot_comuni_distribution(df,
                              filter_comuni=None,
                              print_perc=True):
     if filter_regioni:
-        level_filter = LEVEL_REGIONE
+        level_filter = cfg.LEVEL_REGIONE
         filter_list = filter_regioni
     elif filter_province:
-        level_filter = LEVEL_PROVINCIA
+        level_filter = cfg.LEVEL_PROVINCIA
         filter_list = filter_province
     elif filter_comuni:
-        level_filter = LEVEL_COMUNE
+        level_filter = cfg.LEVEL_COMUNE
         filter_list = filter_comuni
     else:
         level_filter = None
@@ -314,7 +317,7 @@ def plot_comuni_distribution(df,
     _plot_distribution(df,
                        comuni_tag,
                        value_tag,
-                       LEVEL_COMUNE,
+                       cfg.LEVEL_COMUNE,
                        color,
                        ax,
                        show_colorbar,
@@ -345,18 +348,18 @@ def _plot_distribution_interactive(df0,
     if filter_list is not None:
         code_filter = _code_or_desc(filter_list)
         tag_2 = _get_tag_anag(code_filter, level2)
-        if code_filter == CODE_CODICE_ISTAT:
+        if code_filter == cfg.CODE_CODICE_ISTAT:
             filter_list = [int(x) for x in filter_list]
-        elif code_filter == CODE_SIGLA:
+        elif code_filter == cfg.CODE_SIGLA:
             filter_list = [x.upper() for x in filter_list]
         else:
             filter_list = pd.DataFrame(columns=[tag_2], data=filter_list)
-            filter_list, anagr_df = __uniform_names(filter_list, shape, tag_2, tag_2, tag_2)
+            filter_list, anagr_df = __uniform_names(filter_list, shape, tag_2, tag_2, tag_2, comune_flag=(level2 == cfg.LEVEL_COMUNE))
             filter_list = filter_list[tag_2].unique()
         anagr_df = anagr_df[anagr_df[tag_2].isin(filter_list)]
 
-    if code == CODE_DENOMINAZIONE:
-        df, shape = __uniform_names(df, shape, geo_tag1, geo_tag2, geo_tag1)
+    if code == cfg.CODE_DENOMINAZIONE:
+        df, shape = __uniform_names(df, shape, geo_tag1, geo_tag2, geo_tag1, comune_flag=(level == cfg.LEVEL_COMUNE))
 
     df = shape.merge(df, how="left", on=geo_tag1, suffixes=["", "_original"])
 
@@ -383,13 +386,13 @@ def plot_choropleth_map_comunale_interactive(df_comunale,
                                              filter_comuni=None,
                                              save_path=None):
     if filter_regioni:
-        level_filter = LEVEL_REGIONE
+        level_filter = cfg.LEVEL_REGIONE
         filter_list = filter_regioni
     elif filter_province:
-        level_filter = LEVEL_PROVINCIA
+        level_filter = cfg.LEVEL_PROVINCIA
         filter_list = filter_province
     elif filter_comuni:
-        level_filter = LEVEL_COMUNE
+        level_filter = cfg.LEVEL_COMUNE
         filter_list = filter_comuni
     else:
         level_filter = None
@@ -397,7 +400,7 @@ def plot_choropleth_map_comunale_interactive(df_comunale,
     plot = _plot_distribution_interactive(df_comunale,
                                           comuni_tag,
                                           dict_values,
-                                          LEVEL_COMUNE,
+                                          cfg.LEVEL_COMUNE,
                                           title=title,
                                           filter_list=filter_list,
                                           level2=level_filter)
@@ -417,10 +420,10 @@ def plot_choropleth_map_provinciale_interactive(df_provinciale,
                                                 filter_province=None,
                                                 save_path=None):
     if filter_regioni:
-        level_filter = LEVEL_REGIONE
+        level_filter = cfg.LEVEL_REGIONE
         filter_list = filter_regioni
     elif filter_province:
-        level_filter = LEVEL_PROVINCIA
+        level_filter = cfg.LEVEL_PROVINCIA
         filter_list = filter_province
     else:
         level_filter = None
@@ -428,7 +431,7 @@ def plot_choropleth_map_provinciale_interactive(df_provinciale,
     plot = _plot_distribution_interactive(df_provinciale,
                                           province_tag,
                                           dict_values,
-                                          LEVEL_PROVINCIA,
+                                          cfg.LEVEL_PROVINCIA,
                                           title=title,
                                           filter_list=filter_list,
                                           level2=level_filter)
@@ -447,7 +450,7 @@ def plot_choropleth_map_regionale_interactive(df_regionale,
                                               filter_regioni=None,
                                               save_path=None):
     if filter_regioni:
-        level_filter = LEVEL_REGIONE
+        level_filter = cfg.LEVEL_REGIONE
         filter_list = filter_regioni
     else:
         level_filter = None
@@ -455,7 +458,7 @@ def plot_choropleth_map_regionale_interactive(df_regionale,
     plot = _plot_distribution_interactive(df_regionale,
                                           regioni_tag,
                                           dict_values,
-                                          LEVEL_REGIONE,
+                                          cfg.LEVEL_REGIONE,
                                           title=title,
                                           filter_list=filter_list,
                                           level2=level_filter)
@@ -512,11 +515,11 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title=""):
     p.yaxis.major_label_text_font_size = '0pt'  # preferred method for removing tick labels
 
     # Add patch renderer to figure.
-    if level == LEVEL_COMUNE:
+    if level == cfg.LEVEL_COMUNE:
         line_width = 0.1
-    elif level == LEVEL_PROVINCIA:
+    elif level == cfg.LEVEL_PROVINCIA:
         line_width = 0.24
-    elif level == LEVEL_REGIONE:
+    elif level == cfg.LEVEL_REGIONE:
         line_width = 0.5
     else:
         line_width = 0.1
