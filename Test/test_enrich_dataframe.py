@@ -13,37 +13,93 @@ def test_add_geographic_info():
     test_df = pd.read_excel(path)
     n_tot = test_df.shape[0]
 
-    test_df1 = add_geographic_info(test_df, comuni_tag="Citta", unique_flag=False)
-    n_right1 = (test_df1[cfg.TAG_COMUNE].fillna('-').eq(test_df1["comune"].fillna('-'))).sum()
-    n_right2 = (test_df1[cfg.TAG_PROVINCIA].fillna('-').eq(test_df1["provincia"].fillna('-'))).sum()
-    perc_success = n_right1 / n_tot
-    log.info("Test1 get_province_from_city: {}, {}".format(round(perc_success * 100, 1), (n_right2 == n_tot - 1)))
+    geoInf = AddGeographicalInfo(test_df)
+    geoInf.set_comuni_tag("Citta")
+    geoInf.run_simple_match()
+    geoInf.run_find_frazioni()
+    #geoInf.run_similarity_match(unique_flag=False)
+    #geoInf.accept_similarity_result()
+    result = geoInf.get_result()
+
+    n_right = (result[cfg.TAG_COMUNE].fillna('-').eq(result["comune"].fillna('-'))).sum()
+    n_right2 = (result[cfg.TAG_PROVINCIA].fillna('-').eq(result["provincia"].fillna('-'))).sum()
+    perc_success = n_right / n_tot
+    log.info("Test1: {}, {}".format(round(perc_success * 100, 1), (n_right2 == n_tot - 1)))
     if perc_success != 1:
-        log.warning("\n" + test_df1.to_string())
+        log.warning("\n" + result.to_string())
 
-    test_df2 = add_geographic_info(test_df, comuni_tag="Citta", province_tag="sl", unique_flag=False)
-    n_right = ((test_df2[cfg.TAG_COMUNE].fillna('-').eq(test_df2["comune"].fillna('-'))) &
-               (test_df2[cfg.TAG_PROVINCIA].fillna('-').eq(test_df2["provincia"].fillna('-')))).sum()
-    perc_success = n_right / n_tot
-    log.info("Test2 get_province_from_city:{}".format(round(perc_success * 100, 1)))
-    if perc_success < 1:
-        log.warning("\n" + test_df2.to_string())
+    geoInf = AddGeographicalInfo(test_df)
+    geoInf.set_comuni_tag("Citta")
+    geoInf.set_province_tag("sl")
+    geoInf.run_simple_match()
+    geoInf.run_find_frazioni()
+    geoInf.run_similarity_match(unique_flag=False)
+    geoInf.accept_similarity_result()
+    result = geoInf.get_result()
 
-    test_df2 = add_geographic_info(test_df, comuni_tag="Citta", province_tag="provincia", unique_flag=False)
-    n_right = ((test_df2[cfg.TAG_COMUNE].fillna('-').eq(test_df2["comune"].fillna('-'))) &
-               (test_df2[cfg.TAG_PROVINCIA].fillna('-').eq(test_df2["provincia"].fillna('-')))).sum()
+    n_right = ((result[cfg.TAG_COMUNE].fillna('-').eq(result["comune"].fillna('-'))) &
+                (result[cfg.TAG_PROVINCIA].fillna('-').eq(result["provincia"].fillna('-')))).sum()
     perc_success = n_right / n_tot
-    log.info("Test3 get_province_from_city:{}".format(round(perc_success * 100, 1)))
+    log.info("Test2:{}".format(round(perc_success * 100, 1)))
     if perc_success < 1:
-        log.warning("\n" + test_df2.to_string())
+        log.warning("\n" + result.to_string())
 
-    test_df3 = add_geographic_info(test_df, comuni_tag="Citta", regioni_tag="regione", unique_flag=False)
-    n_right = ((test_df3[cfg.TAG_COMUNE].fillna('-').eq(test_df3["comune"].fillna('-'))) &
-               (test_df3[cfg.TAG_PROVINCIA].fillna('-').eq(test_df3["provincia"].fillna('-')))).sum()
+    geoInf = AddGeographicalInfo(test_df)
+    geoInf.set_comuni_tag("Citta")
+    geoInf.set_province_tag("provincia")
+    geoInf.run_simple_match()
+    geoInf.run_find_frazioni()
+    geoInf.run_similarity_match(unique_flag=False)
+    geoInf.accept_similarity_result()
+    result = geoInf.get_result()
+
+    n_right = ((result[cfg.TAG_COMUNE].fillna('-').eq(result["comune"].fillna('-'))) &
+               (result[cfg.TAG_PROVINCIA].fillna('-').eq(result["provincia"].fillna('-')))).sum()
     perc_success = n_right / n_tot
-    log.info("Test4 get_province_from_city:{}".format(round(perc_success * 100, 1)))
+    log.info("Test3:{}".format(round(perc_success * 100, 1)))
     if perc_success < 1:
-        log.warning("\n" + test_df3.to_string())
+        log.warning("\n" + result.to_string())
+
+    geoInf = AddGeographicalInfo(test_df)
+    geoInf.set_comuni_tag("Citta")
+    geoInf.set_regioni_tag("regione")
+    geoInf.run_simple_match()
+    geoInf.run_find_frazioni()
+    geoInf.run_similarity_match(unique_flag=False)
+    geoInf.accept_similarity_result()
+    result = geoInf.get_result()
+
+    n_right = ((result[cfg.TAG_COMUNE].fillna('-').eq(result["comune"].fillna('-'))) &
+               (result[cfg.TAG_PROVINCIA].fillna('-').eq(result["provincia"].fillna('-')))).sum()
+    perc_success = n_right / n_tot
+    log.info("Test4:{}".format(round(perc_success * 100, 1)))
+    if perc_success < 1:
+        log.warning("\n" + result.to_string())
+
+    geoInf = AddGeographicalInfo(test_df)
+    geoInf.set_province_tag("sl")
+    geoInf.set_regioni_tag("regione")
+    geoInf.run_simple_match()
+    result = geoInf.get_result()
+
+    n_right = (result[cfg.TAG_PROVINCIA].fillna('-').eq(result["provincia"].fillna('-')) |
+               result["provincia"].isna() | result["sl"].isna()).sum()
+    perc_success = n_right / n_tot
+    log.info("Test5:{}".format(round(perc_success * 100, 1)))
+    if perc_success < 1:
+        log.warning("\n" + result.to_string())
+
+    geoInf = AddGeographicalInfo(test_df)
+    geoInf.set_province_tag("provincia")
+    geoInf.run_simple_match()
+    result = geoInf.get_result()
+
+    n_right = (result[cfg.TAG_SIGLA].fillna('-').eq(result["sl"].fillna('-')) |
+               result["provincia"].isna() | result["sl"].isna()).sum()
+    perc_success = n_right / n_tot
+    log.info("Test6:{}".format(round(perc_success * 100, 1)))
+    if perc_success < 1:
+        log.warning("\n" + result.to_string())
 
 
 def test_get_city_from_coordinates():

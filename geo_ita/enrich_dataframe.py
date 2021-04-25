@@ -25,133 +25,413 @@ ctx.verify_mode = ssl.CERT_NONE
 geopy.geocoders.options.default_ssl_context = ctx
 
 
-def add_geographic_info(df0, comuni_tag=None, province_tag=None, regioni_tag=None,
-                        unique_flag=True, add_missing=False, drop_not_match=False):
-    log.info("Add geo info: Start adding geographic info")
+class AddGeographicalInfo:
 
-    keys = [x for x in [comuni_tag, province_tag, regioni_tag] if x is not None]
+    def __init__(self, df):
+        self.original_df = df
+        self.keys = None
+        self.df = None
+        self.comuni, self.province, self.sigle, self.regioni = _get_list()
+        self._find_info()
+        self.comuni_tag = None
+        self.comuni_code = None
+        self.province_tag = None
+        self.province_code = None
+        self.regioni_tag = None
+        self.regioni_code = None
+        self.level = None
+        self.code = None
+        self.geo_tag_input = None
+        self.geo_tag_anag = None
+        self.info_df = None
+        self.list_anag = None
+        self.not_match = None
+        self.frazioni_dict = None
+        self.similarity_dict = None
 
-    df = df0[keys].copy().drop_duplicates()
+    def _find_info(self):
+        pass
+        #for col in self.df.select_dtypes(include='object').columns:
 
-    if comuni_tag:
-        level = cfg.LEVEL_COMUNE
-        geo_tag_input = comuni_tag
-    elif province_tag:
-        level = cfg.LEVEL_PROVINCIA
-        geo_tag_input = province_tag
-    elif regioni_tag:
-        geo_tag_input = regioni_tag
-        level = cfg.LEVEL_REGIONE
-    else:
-        raise Exception("You need to pass al least one betweeen comuni_tag, province_tag or regioni_tag")
+    def set_comuni_tag(self, col_name):
+        self.comuni_tag = col_name
+        self.comuni_code = self._code_or_desc(list(self.original_df[col_name].unique()))
+        self.level = cfg.LEVEL_COMUNE
+        self.geo_tag_input = col_name
+        self.code = self.comuni_code
 
-    code_type = _code_or_desc(list(df[geo_tag_input].unique()))
+    def set_province_tag(self, col_name):
+        self.province_tag = col_name
+        self.province_code = self._code_or_desc(list(self.original_df[col_name].unique()))
+        if self.level != cfg.LEVEL_COMUNE:
+            self.level = cfg.LEVEL_PROVINCIA
+            self.geo_tag_input = col_name
+            self.code = self.province_code
 
-    geo_tag_anag = _get_tag_anag(code_type, level)
+    def set_regioni_tag(self, col_name):
+        self.regioni_tag = col_name
+        self.regioni_code = self._code_or_desc(list(self.original_df[col_name].unique()))
+        if self.level is None:
+            self.level = cfg.LEVEL_REGIONE
+            self.geo_tag_input = col_name
+            self.code = self.regioni_code
 
-    log.debug("Add geo info: The most granular info is a {}".format(geo_tag_anag))
+    def reset_tag(self):
+        self.comuni_tag = None
+        self.comuni_code = None
+        self.province_tag = None
+        self.province_code = None
+        self.regioni_tag = None
+        self.regioni_code = None
+        self.level = None
+        self.geo_tag_input = None
+        self.code = None
 
-    info_df = get_df(level)
-    info_df[cfg.KEY_UNIQUE] = info_df[geo_tag_anag]
+    @staticmethod
+    def _code_or_desc(list_values):
+        list_values = [x for x in list_values if str(x) != 'nan']
+        n_tot = len(list_values)
+        if (sum([isinstance(item, int) or item.isdigit() for item in list_values]) / n_tot) > 0.8:
+            result = cfg.CODE_CODICE_ISTAT
+        elif (sum([isinstance(item, str) and item.isalpha() and len(item) == 2 for item in list_values]) / n_tot) > 0.8:
+            result = cfg.CODE_SIGLA
+        else:
+            result = cfg.CODE_DENOMINAZIONE
+        return result
 
-    df[cfg.KEY_UNIQUE] = df[geo_tag_input]
+    @staticmethod
+    def _get_tag_anag(code, level):
+        if level == cfg.LEVEL_COMUNE:
+            if code == cfg.CODE_CODICE_ISTAT:
+                result = cfg.TAG_CODICE_COMUNE
+            else:
+                result = cfg.TAG_COMUNE
+        elif level == cfg.LEVEL_PROVINCIA:
+            if code == cfg.CODE_CODICE_ISTAT:
+                result = cfg.TAG_CODICE_PROVINCIA
+            elif code == cfg.CODE_SIGLA:
+                result = cfg.TAG_SIGLA
+            else:
+                result = cfg.TAG_PROVINCIA
+        elif level == cfg.LEVEL_REGIONE:
+            if code == cfg.CODE_CODICE_ISTAT:
+                result = cfg.TAG_CODICE_REGIONE
+            else:
+                result = cfg.TAG_REGIONE
+        else:
+            raise Exception("Level UNKNOWN")
+        return result
 
-    if (level == cfg.LEVEL_COMUNE) and (code_type == cfg.CODE_DENOMINAZIONE):
-        log.debug("Add geo info: The dataset could contains an homonym comune")
+    def run_simple_match(self):
+
+        self.keys = [x for x in [self.comuni_tag, self.province_tag, self.regioni_tag] if x is not None]
+        if len(self.keys) == 0:
+            raise Exception("You need to set al least one betweeen comuni_tag, province_tag or regioni_tag.")
+        self.df = self.original_df[self.keys].copy().drop_duplicates()
+        self.df = self.df[self.df[self.geo_tag_input].notnull()]
+        self.df[cfg.KEY_UNIQUE] = self.df[self.geo_tag_input]
+
+
+        self.info_df = get_df(self.level)
+        self.geo_tag_anag = self._get_tag_anag(self.code, self.level)
+        self.info_df[cfg.KEY_UNIQUE] = self.info_df[self.geo_tag_anag]
+
+        if self.code == cfg.CODE_SIGLA:
+            if self.level != cfg.LEVEL_PROVINCIA:
+                raise Exception("SIGLA ERROR")
+            else:
+                self._run_sigla()
+        elif self.code == cfg.CODE_CODICE_ISTAT:
+            self._run_codice()
+        else:
+            self._run_denominazione()
+
+    def _run_sigla(self):
+        self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].str.lower()
+        self.info_df[cfg.KEY_UNIQUE] = self.info_df[cfg.KEY_UNIQUE].str.lower()
+        list_input = self.df[self.df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique()
+        self.list_anag = self.info_df[self.info_df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique()
+        n_tot = len(list_input)
+        self.not_match = list(set(list_input) - set(self.list_anag))
+        n_not_match = len(self.not_match)
+
+        if n_not_match == 0:
+            log.info("Matching completed, found {} different sigle.".format(n_tot))
+        else:
+            log.warning("Matched {} over {}.".format(n_tot - n_not_match, n_tot))
+
+    def _run_codice(self):
+        self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].astype(int, errors='coerce')
+        self.info_df[cfg.KEY_UNIQUE] = self.info_df[cfg.KEY_UNIQUE].astype(int, errors='coerce')
+        list_input = self.df[self.df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique()
+        self.list_anag = self.info_df[self.info_df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique()
+        n_tot = len(list_input)
+        self.not_match = list(set(list_input) - set(self.list_anag))
+        n_not_match = len(self.not_match)
+
+        if n_not_match == 0:
+            log.info("Matching completed, found {} different codes.".format(n_tot))
+        else:
+            log.warning("Matched {} over {}.".format(n_tot - n_not_match, n_tot))
+
+    def _run_denominazione(self):
+        self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].str.lower()
+        if self.level == cfg.LEVEL_COMUNE:
+            self._test_if_df_contains_homonym_comuni()
+
+        self._find_any_bilingual_name()
+
+        self.df[cfg.KEY_UNIQUE] = self._clean_denom_text(self.df[cfg.KEY_UNIQUE])
+        self.info_df[cfg.KEY_UNIQUE] = self._clean_denom_text(self.info_df[cfg.KEY_UNIQUE])
+
+        if self.level == cfg.LEVEL_COMUNE:
+            self._rename_any_english_name()
+            self._find_any_variation_from_istat_history()
+
+        list_den_input = self.df[self.df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique()
+        self.list_anag = self.info_df[self.info_df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique()
+
+        n_tot = len(list_den_input)
+
+        self.not_match = list(set(list_den_input) - set(self.list_anag))
+
+        self._try_custom_replace_denom()
+
+        n_not_match = len(self.not_match)
+
+        if n_not_match == 0:
+            log.info("Matching completed, found {} different names.".format(n_tot))
+        else:
+            log.warning("Matched {} over {}.".format(n_tot - n_not_match, n_tot))
+
+    def get_not_matched(self):
+        return self.not_match
+
+    def _test_if_df_contains_homonym_comuni(self):
         info_tag_details = cfg.TAG_SIGLA
-        if province_tag is not None:
-            code_province = _code_or_desc(list(df[province_tag].unique()))
-            geo_tag_anag2 = _get_tag_anag(code_province, cfg.LEVEL_PROVINCIA)
-            log.debug("Add geo info: The user has specified the {} so we can use in order to correctly match homonym comuni".format(geo_tag_anag2))
-            info_tag_details = geo_tag_anag2
-            split_denom_comuni_omonimi(df, cfg.KEY_UNIQUE, province_tag, geo_tag_anag2)
-        elif regioni_tag is not None:
-            code_regioni = _code_or_desc(list(df[regioni_tag].unique()))
-            geo_tag_anag2 = _get_tag_anag(code_regioni, cfg.LEVEL_REGIONE)
-            log.debug(
-                "Add geo info: The user has specified the {} so we can use in order to correctly match homonym comuni".format(
-                    geo_tag_anag2))
-            info_tag_details = geo_tag_anag2
-            split_denom_comuni_omonimi(df, cfg.KEY_UNIQUE, regioni_tag, geo_tag_anag2)
-        split_denom_comuni_omonimi(info_df, cfg.KEY_UNIQUE, info_tag_details, info_tag_details)
-
-    df, info_df = __uniform_names(df, info_df,
-                                  cfg.KEY_UNIQUE,
-                                  cfg.KEY_UNIQUE,
-                                  cfg.KEY_UNIQUE,
-                                  unique_flag=unique_flag,
-                                  comune_flag=(level == cfg.LEVEL_COMUNE))
-
-    if add_missing:
-        if drop_not_match:
-            how = "left"
+        if self.province_code is not None:
+            info_tag_details = self._get_tag_anag(self.province_code, cfg.LEVEL_PROVINCIA)
+            self.df = self._split_denom_comuni_omonimi(self.df, cfg.KEY_UNIQUE, self.province_tag, info_tag_details)
+        elif self.regioni_code is not None:
+            info_tag_details = self._get_tag_anag(self.regioni_code, cfg.LEVEL_REGIONE)
+            self.df = self._split_denom_comuni_omonimi(self.df, cfg.KEY_UNIQUE, self.regioni_tag, info_tag_details)
         else:
-            how = "outer"
-        df = info_df.merge(df, on=cfg.KEY_UNIQUE, how=how)
-    else:
-        if drop_not_match:
-            how = "inner"
+            # TODO Loggare warning che se ci sono comuni omonimi non sarà in grado di abbinarli correttamente
+            pass
+        self.info_df = self._split_denom_comuni_omonimi(self.info_df, cfg.KEY_UNIQUE, info_tag_details, info_tag_details, log_flag=False)
+
+    @staticmethod
+    def _split_denom_comuni_omonimi(df, den_tag, details_tag1, details_tag2, log_flag=True):
+        split_df = pd.DataFrame.from_dict(cfg.comuni_omonimi)
+        split_df[cfg.TAG_COMUNE] = split_df[cfg.TAG_COMUNE].str.lower()
+        split_df[details_tag2] = split_df[details_tag2].astype(str).str.lower()
+        split_df["key"] = split_df[cfg.TAG_COMUNE] + split_df[details_tag2]
+        pos = df[den_tag].str.lower().isin(split_df[cfg.TAG_COMUNE].unique())
+        if (pos.sum() > 0) & log_flag:
+            homonimus_coumni = df[pos][den_tag].unique()
+            log.info(
+                "Found {} homonimus comuni in dataset: {}. Those will correctly matched by {}".format(
+                    len(homonimus_coumni),
+                    homonimus_coumni,
+                    details_tag1))
+        df[den_tag] = np.where(pos, df[den_tag].str.lower() + df[details_tag1].astype(str).str.lower(),
+                                    df[den_tag])
+        df[den_tag] = df[den_tag].replace(split_df.set_index("key")["new_name"])
+        return df
+
+    def _find_any_bilingual_name(self):
+        if self.comuni_code == cfg.CODE_DENOMINAZIONE:
+            replace_multilanguage_name = create_double_languages_mapping()
+            for k, v in replace_multilanguage_name.items():
+                self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].str.replace(r"\b{}\b".format(k),
+                                                                              v,
+                                                                              regex=True)
+            self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].str.replace(r"([A-Za-z](?s).*) ?[-\/] ?\1",
+                                                                          r"\1",
+                                                                          regex=True)
         else:
-            how = "left"
-        df = df.merge(info_df,  on=cfg.KEY_UNIQUE, how=how)
+            # TODO Gestire pulizia pure per province e regioni
+            pass
 
-    list_col = keys + [cfg.TAG_COMUNE, cfg.TAG_CODICE_COMUNE,
-                       cfg.TAG_PROVINCIA, cfg.TAG_CODICE_PROVINCIA,
-                       cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE,
-                       cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]
+    @staticmethod
+    def _clean_denom_text(series):
+        series = series.str.lower()  # All strig in lowercase
+        series = series.str.replace(r'[^\w\s]', ' ', regex=True)  # Remove non alphabetic characters
+        series = series.str.strip()
+        series = series.str.replace(r'\s+', ' ', regex=True)
+        series = series.replace(cfg.comuni_exceptions)
+        series = series.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')  # Remove accent
+        series = series.replace(cfg.comuni_exceptions)
+        #for v in cfg.clear_den_replace:
+        #    series = series.str.replace(v[0], v[1])
+        return series
 
-    list_col = [col for col in list_col if col in df.columns]
+    @staticmethod
+    def _clean_denom_text_value(value):
+        value = value.lower()  # All strig in lowercase
+        value = re.sub(r'[^\w\s]', ' ', value)  # Remove non alphabetic characters
+        value = value.strip()
+        value = re.sub(r'\s+', ' ', value)
+        cfg.comuni_exceptions.get(value, value)
+        value = unidecode.unidecode(value)
+        cfg.comuni_exceptions.get(value, value)
+        return value
 
-    df = df0.merge(df[list_col], on=keys, how="left")
+    def _rename_any_english_name(self):
+        s = self.df[cfg.KEY_UNIQUE].replace(cfg.rename_comuni_nomi)
+        if (s != self.df[cfg.KEY_UNIQUE]).any():
+            replaces = self.df[(s != self.df[cfg.KEY_UNIQUE])][cfg.KEY_UNIQUE].unique()
+            log.info("Replaced {} comuni written in english:{}".format(len(replaces), replaces))
+            self.df[cfg.KEY_UNIQUE] = s
 
-    return df
+    def _find_any_variation_from_istat_history(self):
+        df_variazioni = get_variazioni_amministrative_df()
+        df_variazioni[cfg.TAG_COMUNE] = self._clean_denom_text(df_variazioni[cfg.TAG_COMUNE])
+        df_variazioni["new_denominazione_comune"] = self._clean_denom_text(df_variazioni["new_denominazione_comune"])
+        df_variazioni["data_decorrenza"] = pd.to_datetime(df_variazioni["data_decorrenza"])
+        df_variazioni.sort_values([cfg.TAG_COMUNE, "data_decorrenza"], ascending=False, inplace=True)
+        df_variazioni = df_variazioni.groupby(cfg.TAG_COMUNE)["new_denominazione_comune"].last().to_dict()
+        s = self.df[cfg.KEY_UNIQUE].replace(df_variazioni)
+        if (s != self.df[cfg.KEY_UNIQUE]).any():
+            replaces = self.df[(s != self.df[cfg.KEY_UNIQUE])][cfg.KEY_UNIQUE].unique()
+            log.info("Match {} name that are no longer comuni:\n{}".format(len(replaces), replaces))
+            self.df[cfg.KEY_UNIQUE] = s
 
+    def _try_custom_replace_denom(self):
+        list_den_anagrafica = self.list_anag
+        list_den_not_found = self.not_match
 
-def split_denom_comuni_omonimi(df, den_tag, details_tag1, details_tag2):
-    split_df = pd.DataFrame.from_dict(cfg.comuni_omonimi)
-    split_df[cfg.TAG_COMUNE] = split_df[cfg.TAG_COMUNE].str.lower()
-    split_df[details_tag2] = split_df[details_tag2].astype(str).str.lower()
-    split_df["key"] = split_df[cfg.TAG_COMUNE] + split_df[details_tag2]
-    pos = df[den_tag].str.lower().isin(split_df[cfg.TAG_COMUNE].unique())
-    df[den_tag] = np.where(pos, df[den_tag].str.lower() + df[details_tag1].astype(str).str.lower(),
-                                 df[den_tag])
-    df[den_tag] = df[den_tag].replace(split_df.set_index("key")["new_name"])
-    return df
+        dict_den_anag = {self._custom_replace_denom(a): a for a in list_den_anagrafica}
+        dict_den_not_found = {a: self._custom_replace_denom(a) for a in list_den_not_found}
+        dict_den_not_found = {k: dict_den_anag[v] for k, v in dict_den_not_found.items() if v in dict_den_anag.keys()}
 
+        self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].replace(dict_den_not_found)
 
-def _code_or_desc(list_values):
-    list_values = [x for x in list_values if str(x) != 'nan']
-    n_tot = len(list_values)
-    if (sum([isinstance(item, int) or item.isdigit() for item in list_values]) / n_tot) > 0.8:
-        result = cfg.CODE_CODICE_ISTAT
-    elif (sum([isinstance(item, str) and item.isalpha() and len(item) == 2 for item in list_values]) / n_tot) > 0.8:
-        result = cfg.CODE_SIGLA
-    else:
-        result = cfg.CODE_DENOMINAZIONE
-    return result
+        self.not_match = [a for a in self.not_match if a not in dict_den_not_found.keys()]
 
+    @staticmethod
+    def _custom_replace_denom(value):
+        for v in cfg.clear_den_replace:
+            value = value.replace(v[0], v[1])
+        return value
 
-def _get_tag_anag(code, level):
-    if level == cfg.LEVEL_COMUNE:
-        if code == cfg.CODE_CODICE_ISTAT:
-            result = cfg.TAG_CODICE_COMUNE
+    def run_find_frazioni(self):
+        geolocator = Nominatim(user_agent="trial")  # "trial"
+        geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+        regioni = [self._clean_denom_text_value(a) for a in self.regioni]
+        province = [self._clean_denom_text_value(a) for a in self.province]
+        comuni = [self._clean_denom_text_value(a) for a in self.comuni]
+        match_dict = {}
+        for el in self.not_match:
+            p = geocode(el + ", italia")
+            if p is not None:
+                address = p.address
+                extract = re.search(
+                    '(?P<comune2>[^,]+, )?(?P<comune1>[^,]+), (?P<provincia>[^,]+), (?P<regione>[^,0-9]+)(?P<cap>, [0-9]{5})?, Italia',
+                    address)
+                if extract:
+                    regione = self._clean_denom_text_value(extract.group("regione"))
+                    provincia = extract.group("provincia")
+                    provincia = self._clean_denom_text_value(provincia.replace("Roma Capitale", "Roma"))
+                    comune = self._clean_denom_text_value(extract.group("comune1"))
+                    comune2 = extract.group("comune2")
+                    if comune2:
+                        comune2 = self._clean_denom_text_value(comune2[:-2])
+                    if (regione in regioni) & (provincia in province):
+                        if comune in comuni:
+                            match_dict[el] = comune
+                        elif (comune2 is not None) and (comune2 in comuni):
+                            match_dict[el] = comune2
+                        elif provincia in comuni:
+                            match_dict[el] = provincia
+        if len(match_dict) > 0:
+            log.info("Match {} name that corrisponds to a possible frazione of a comune:\n{}".format(len(match_dict), match_dict))
+            self.not_match = [x for x in self.not_match if x not in match_dict.keys()]
+            self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].replace(match_dict)
+        if self.frazioni_dict is not None:
+            self.frazioni_dict.update(match_dict)
         else:
-            result = cfg.TAG_COMUNE
-    elif level == cfg.LEVEL_PROVINCIA:
-        if code == cfg.CODE_CODICE_ISTAT:
-            result = cfg.TAG_CODICE_PROVINCIA
-        elif code == cfg.CODE_SIGLA:
-            result = cfg.TAG_SIGLA
+            self.frazioni_dict = match_dict
+
+    def get_result_frazioni(self):
+        return self.frazioni_dict
+
+    def get_result(self, add_missing=False, drop_not_match=False):
+        if len(self.not_match) > 0:
+            log.warning("Unable to find {} {}: {}".format(len(self.not_match), self.geo_tag_anag, self.not_match))
         else:
-            result = cfg.TAG_PROVINCIA
-    elif level == cfg.LEVEL_REGIONE:
-        if code == cfg.CODE_CODICE_ISTAT:
-            result = cfg.TAG_CODICE_REGIONE
+            log.info("Found every {}".format(self.geo_tag_anag))
+        if add_missing:
+            if drop_not_match:
+                how = "left"
+            else:
+                how = "outer"
+            result = self.info_df.merge(self.df, on=cfg.KEY_UNIQUE, how=how)
         else:
-            result = cfg.TAG_REGIONE
-    else:
-        raise Exception("Level UNKNOWN")
-    return result
+            if drop_not_match:
+                how = "inner"
+            else:
+                how = "left"
+            result = self.df.merge(self.info_df, on=cfg.KEY_UNIQUE, how=how)
+
+        list_col = self.keys + [cfg.TAG_COMUNE, cfg.TAG_CODICE_COMUNE,
+                           cfg.TAG_PROVINCIA, cfg.TAG_CODICE_PROVINCIA, cfg.TAG_SIGLA,
+                           cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE,
+                           cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]
+
+        list_col = [col for col in list_col if col in result.columns]
+
+        result = self.original_df.merge(result[list_col], on=self.keys, how="left")
+
+        return result
+
+    def run_similarity_match(self, unique_flag=False):
+        if unique_flag:
+            input_den = self.df[cfg.KEY_UNIQUE].values()
+            not_match2 = [a for a in self.list_anag if a not in input_den]
+            match_dict = self._find_match(not_match2, self.not_match, unique=True)
+            self.similarity_dict = {v[0]: (k, v[1]) for k, v in match_dict.items()}
+        else:
+            self.similarity_dict = self._find_match(self.not_match, self.list_anag)
+        n = len(self.similarity_dict)
+        if n > 1:
+            log.info("Match {} name by similarity:\n{}".format(n, self.similarity_dict))
+        else:
+            log.info("No match by similarity")
+
+    def get_similairty_result(self):
+        return self.similarity_dict
+
+    def accept_similarity_result(self):
+        if self.similarity_dict is not None:
+            self.not_match = [x for x in self.not_match if x not in self.similarity_dict.keys()]
+            self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].replace({k: v[0] for k, v in self.similarity_dict.items()})
+        else:
+            raise Exception("Run  run_similarity_match before accept_similarity_result.")
+
+    @staticmethod
+    def _find_match(not_match1, not_match2, unique=False):
+        """
+        Parameters
+        ----------
+        not_match1: Lista di nomi da abbinare ad un valore della lista not_match2
+        not_match2: Lista dei nomi a cui abbinare un valore della lista not_match1
+
+        Returns
+        Restituisce un dizionario contenente per ogni parola di not_match1 la parola più simile di not_match2 con il
+        relativo punteggio
+        """
+        match_dict = {}
+        for a in not_match1:
+            best_match = difflib.get_close_matches(a, not_match2, 1)
+            if len(best_match) > 0:
+                best_match = best_match[0]
+                score = difflib.SequenceMatcher(None, a, best_match).ratio()
+                if score > cfg.min_acceptable_similarity:
+                    match_dict[a] = (best_match, score)
+                    if unique:
+                        not_match2.remove(best_match)
+        return match_dict
 
 
 def __find_coord_columns(df):
@@ -249,162 +529,6 @@ def get_city_from_coordinates(df0, rename_col_comune=None, rename_col_provincia=
         rename_col[cfg.TAG_REGIONE] = rename_col_regione
     map_city.rename(columns=rename_col, inplace=True)
     return df0.merge(map_city, on=["key_mapping"], how="left").drop(["key_mapping"], axis=1)
-
-
-def __clean_denom_text(series):
-    series = series.str.lower()  # All strig in lowercase
-    series = series.str.replace(r'[^\w\s]', ' ', regex=True)  # Remove non alphabetic characters
-    series = series.str.strip()
-    series = series.str.replace(r'\s+', ' ', regex=True)
-    series = series.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8') # Remove accent
-    for v in cfg.clear_den_replace:
-        series = series.str.replace(v[0], v[1])
-    return series
-
-
-def __clear_denom_text_single(value):
-    value = value.lower()  # All strig in lowercase
-    value = re.sub(r'[^\w\s]', ' ', value)  # Remove non alphabetic characters
-    value = value.strip()
-    value = re.sub(r'\s+', ' ', value)
-    value = unidecode.unidecode(value)
-    for v in cfg.clear_den_replace:
-        value = value.replace(v[0], v[1])
-    return value
-
-
-def __find_match(not_match1, not_match2, unique=False):
-    """
-    Parameters
-    ----------
-    not_match1: Lista di nomi da abbinare ad un valore della lista not_match2
-    not_match2: Lista dei nomi a cui abbinare un valore della lista not_match1
-
-    Returns
-    Restituisce un dizionario contenente per ogni parola di not_match1 la parola più simile di not_match2 con il
-    relativo punteggio
-    """
-    match_dict = {}
-    for a in not_match1:
-        best_match = difflib.get_close_matches(a, not_match2, 1)
-        if len(best_match) > 0:
-            best_match = best_match[0]
-            score = difflib.SequenceMatcher(None, a, best_match).ratio()
-            if score > cfg.min_acceptable_similarity:
-                match_dict[a] = (best_match, score)
-                if unique:
-                    not_match2.remove(best_match)
-    return match_dict
-
-
-def __uniform_names(df1, df2, tag_1, tag_2, tag, unique_flag=True, comune_flag=False):
-    # TODO add split (/)
-    """
-    Parameters
-    ----------
-    df1: dataset Principale
-    df2: dataset Secondario usato come anagrafica
-    tag_1: nome della colonna del dataset df1 contenente i nomi da uniformare
-    tag_2: nome della colonna del dataset df2 contenente i nomi da uniformare
-    tag: Tag di output dei nomi uniformati
-
-    Returns
-    Restituisce i dataset di partenza con l'aggiunta della colonna uniformata, l'elenco dei valori non abbinati,
-    l'elenco dei valori del dataset2 che no nsono stati utilizzati, un dizionario contenente la mappatura dei valori
-    non abbinati al vaore più simile.
-    """
-    if tag_1 == tag:
-        df1[tag_1 + "_original"] = df1[tag_1]
-    if tag_2 == tag:
-        df2[tag_2 + "_original"] = df2[tag_2]
-    if comune_flag:
-        df1[tag_1] = df1[tag_1].str.lower().replace(cfg.comuni_exceptions)
-        df2[tag_2] = df2[tag_2].str.lower().replace(cfg.comuni_exceptions)
-        replace_multilanguage_name = create_double_languages_mapping()
-        for k, v in replace_multilanguage_name.items():
-            df1[tag_1] = df1[tag_1].str.replace(r"\b{}\b".format(k), v, regex=True)
-        df1[tag_1] = df1[tag_1].str.replace(r"([A-Za-z](?s).*) ?[-\/] ?\1", r"\1", regex=True)
-
-    df1[tag] = __clean_denom_text(df1[tag_1])
-    df2[tag] = __clean_denom_text(df2[tag_2])
-    if comune_flag:
-        df1[tag] = df1[tag].replace(cfg.comuni_exceptions)
-        df2[tag] = df2[tag].replace(cfg.comuni_exceptions)
-        # Replace found manually
-        replaces = df1[df1[tag].isin(cfg.rename_comuni_nomi.keys())][tag].unique()
-        if len(replaces) > 0:
-            log.info("Match {} comuni by manual replace:\n{}".format(len(replaces), replaces))
-        df1[tag] = df1[tag].replace(cfg.rename_comuni_nomi)
-        # replace variazioni amministrative nella storia
-        df_variazioni = get_variazioni_amministrative_df()
-        df_variazioni[cfg.TAG_COMUNE] = __clean_denom_text(df_variazioni[cfg.TAG_COMUNE])
-        df_variazioni["new_denominazione_comune"] = __clean_denom_text(df_variazioni["new_denominazione_comune"])
-        df_variazioni["data_decorrenza"] = pd.to_datetime(df_variazioni["data_decorrenza"])
-        df_variazioni.sort_values([cfg.TAG_COMUNE, "data_decorrenza"], ascending=False, inplace=True)
-        df_variazioni = df_variazioni.groupby(cfg.TAG_COMUNE)["new_denominazione_comune"].last().to_dict()
-        replaces = df1[df1[tag].isin(df_variazioni.keys())][tag].unique()
-        if len(replaces) > 0:
-            log.info("Match {} name that are no longer comuni:\n{}".format(len(replaces), replaces))
-        df1[tag] = df1[tag].replace(df_variazioni)
-
-    den1 = df1[df1[tag].notnull()][tag].unique()
-    den2 = df2[df2[tag].notnull()][tag].unique()
-    not_match1 = list(set(den1) - set(den2))
-    if unique_flag:
-        not_match2 = list(set(den2) - set(den1))
-        match_dict = __find_match(not_match2, not_match1, unique=True)
-        match_dict = {v[0]: (k, v[1]) for k, v in match_dict.items()}
-        not_match1 = [x for x in not_match1 if x not in match_dict.keys()]
-    else:
-        not_match2 = den2
-        match_dict = __find_match(not_match1, not_match2)
-
-    not_match1 = [x for x in not_match1 if x not in match_dict.keys()]
-    n = len(match_dict)
-    if n > 1:
-        log.info("Match {} name by similarity:\n{}".format(n, match_dict))
-    df1[tag] = df1[tag].replace({k: v[0] for k, v in match_dict.items()})
-
-    #
-
-    if comune_flag & (len(not_match1) > 0):
-        geolocator = Nominatim(user_agent="trial")  # "trial"
-        geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
-        regioni, province, comuni = _get_list([cfg.LEVEL_REGIONE, cfg.LEVEL_PROVINCIA, cfg.LEVEL_COMUNE])
-        regioni = [__clear_denom_text_single(a) for a in regioni]
-        province = [__clear_denom_text_single(a) for a in province]
-        comuni = [__clear_denom_text_single(a) for a in comuni]
-        match_dict2 = {}
-        for el in not_match1:
-            p = geocode(el)
-            if p is not None:
-                address = p.address
-                extract = re.search('(?P<comune2>[^,]+, )?(?P<comune1>[^,]+), (?P<provincia>[^,]+), (?P<regione>[^,0-9]+)(?P<cap>, [0-9]{5})?, Italia', address)
-                if extract:
-                    regione = __clear_denom_text_single(extract.group("regione"))
-                    provincia = extract.group("provincia")
-                    provincia = __clear_denom_text_single(provincia.replace("Roma Capitale", "Roma"))
-                    comune = __clear_denom_text_single(extract.group("comune1"))
-                    comune2 = extract.group("comune2")
-                    if comune2:
-                        comune2 = __clear_denom_text_single(comune2[:-2])
-                    if (regione in regioni) & (provincia in province):
-                        if comune in comuni:
-                            match_dict2[el] = comune
-                        elif (comune2 is not None) and (comune2 in comuni):
-                            match_dict2[el] = comune2
-                        elif provincia in comuni:
-                            match_dict2[el] = provincia
-        not_match1 = [x for x in not_match1 if x not in match_dict2.keys()]
-        log.info("Match {} name that corrisponds to a possible frazione of a comune:\n{}".format(len(match_dict2), match_dict2))
-        df1[tag] = df1[tag].replace(match_dict2)
-
-    if len(not_match1) == 0:
-        log.info("All name have been matched")
-    else:
-        log.warning("Unable to match {} name: {}".format(len(not_match1), not_match1))
-    return df1, df2
-
 
 def __test_city_in_address(df, city_tag, address_tag):
     return df.apply(lambda x: x[city_tag].lower() in x[address_tag] if x[address_tag] else False, axis=1)

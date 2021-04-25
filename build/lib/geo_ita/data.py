@@ -13,16 +13,12 @@ import geo_ita.config as cfg
 # Todo Remove multiple file in folder
 # Todo Print Last date update
 
-def _get_list(level_list):
+def _get_list():
     df = get_anagrafica_df()
-    result = []
-    for el in level_list:
-        if el == cfg.LEVEL_COMUNE:
-            result.append(list(df[cfg.TAG_COMUNE].values))
-        elif el == cfg.LEVEL_PROVINCIA:
-            result.append(list(df[cfg.TAG_PROVINCIA].unique()))
-        elif el == cfg.LEVEL_REGIONE:
-            result.append(list(df[cfg.TAG_REGIONE].unique()))
+    result = [list(df[cfg.TAG_COMUNE].values),
+              list(df[cfg.TAG_PROVINCIA].unique()),
+              list(df[cfg.TAG_SIGLA].unique()),
+              list(df[cfg.TAG_REGIONE].unique())]
     return result
 
 

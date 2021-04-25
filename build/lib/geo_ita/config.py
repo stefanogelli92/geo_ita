@@ -83,7 +83,10 @@ clear_den_replace = [(" di ", " "),
                      ("l ", "l"),
                      ("d ", "d"),
                      ("sant ", "sant"),
-                     ("s ", "san ")]
+                     ("s ", "san "),
+                     ("santa", "san"),
+                     ("santo", "san"),
+                     ("sant", "san")]
 
 rename_comuni_nomi = {"rome": "roma",
                       "milan": "milano",
