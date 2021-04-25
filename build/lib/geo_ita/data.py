@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 from pathlib import PureWindowsPath
 
+import numpy as np
 import pandas as pd
 import geopandas as gpd
 
@@ -11,6 +12,36 @@ import geo_ita.config as cfg
 
 # Todo Remove multiple file in folder
 # Todo Print Last date update
+
+def _get_list(level_list):
+    df = get_anagrafica_df()
+    result = []
+    for el in level_list:
+        if el == cfg.LEVEL_COMUNE:
+            result.append(list(df[cfg.TAG_COMUNE].values))
+        elif el == cfg.LEVEL_PROVINCIA:
+            result.append(list(df[cfg.TAG_PROVINCIA].unique()))
+        elif el == cfg.LEVEL_REGIONE:
+            result.append(list(df[cfg.TAG_REGIONE].unique()))
+    return result
+
+
+def get_list_comuni():
+    df = get_anagrafica_df()
+    result = list(df[cfg.TAG_COMUNE].values)
+    return result
+
+
+def get_list_province():
+    df = get_anagrafica_df()
+    result = list(df[cfg.TAG_PROVINCIA].unique())
+    return result
+
+
+def get_list_regioni():
+    df = get_anagrafica_df()
+    result = list(df[cfg.TAG_REGIONE].unique())
+    return result
 
 
 def __get_last_file_from_folder(path):
@@ -66,6 +97,26 @@ def get_anagrafica_df():
     return df
 
 
+def create_double_languages_mapping():
+    path = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"])
+    last_files, _ = __get_last_file_from_folder(path)
+
+    df = pd.read_excel(path / PureWindowsPath(last_files))
+    tag_ita = "Denominazione in italiano"
+    tag_2 = "Denominazione (Italiana e straniera)"
+    df = df[[tag_ita, tag_2]]
+    df = df[df[tag_ita] != df[tag_2]]
+    sep = "&&"
+    df[tag_2] = np.where(df[tag_2].str.contains("/"), df[tag_2].str.replace("/", sep), df[tag_2].str.replace("-", sep))
+    df[tag_2] = df[tag_2].str.split(sep)
+    df = df.explode(tag_2)
+    df[tag_2] = df[tag_2].str.lower()
+    df[tag_ita] = df[tag_ita].str.lower()
+    df = df[df[tag_ita] != df[tag_2]]
+    df = df.set_index(tag_2)[tag_ita].to_dict()
+    return df
+
+
 def get_variazioni_amministrative_df():
     path = root_path / PureWindowsPath(cfg.variazioni_amministrative["path"])
     last_files, _ = __get_last_file_from_folder(path)
@@ -73,6 +124,8 @@ def get_variazioni_amministrative_df():
     df = pd.read_csv(path / PureWindowsPath(last_files), encoding='latin-1', sep=";")
 
     __rename_col(df, cfg.variazioni_amministrative["column_rename"])
+    df = df[df["tipo_variazione"].isin(["ES", "CD"])]
+    df = df[~df["Contenuto del provvedimento"].str.contains("accanto alla denominazione in lingua italiana")]
     return df
 
 
@@ -153,6 +206,18 @@ def get_dimensioni_df():
     df = df[df[cfg.TAG_CODICE_COMUNE].notnull()]
     df[cfg.TAG_CODICE_COMUNE] = df[cfg.TAG_CODICE_COMUNE].astype(int)
     return df
+
+
+def get_df(level):
+    if level == cfg.LEVEL_COMUNE:
+        result = create_df_comuni()
+    elif level == cfg.LEVEL_PROVINCIA:
+        result = create_df_province()
+    elif level == cfg.LEVEL_REGIONE:
+        result = create_df_regioni()
+    else:
+        raise Exception("Unknown level")
+    return result
 
 
 def create_df_comuni():

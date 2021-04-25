@@ -48,15 +48,14 @@ def test_add_geographic_info():
 
 def test_get_city_from_coordinates():
     test_df = create_df_comuni()
-    test_df.rename(columns={"center_x": "lat",
-                            "center_y": "lon"}, inplace=True)
+    test_df.rename(columns={"center_x": "lon",
+                            "center_y": "lat"}, inplace=True)
+    #test_df = pd.read_pickle(r"C:\Users\A470222\Documents\Python Scripts\ex_mobility\data\processed\cu_anagrafica.pkl")
     result = get_city_from_coordinates(test_df)
     n_tot = result.shape[0]
     n_right = (result["denominazione_comune_x"] == result["denominazione_comune_y"]).sum()
     perc_success = n_right / n_tot
     log.warning("Test get_city_from_coordinates: {}".format(round(perc_success * 100, 1)))
-
-
 
 
 def test_get_coordinates_from_address():

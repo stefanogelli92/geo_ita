@@ -9,3 +9,5 @@ matplotlib>=3.1.1
 numpy>=1.16.5
 descartes
 xlrd==1.2.0
+bokeh~=2.3.1
+unidecode

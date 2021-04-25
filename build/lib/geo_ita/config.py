@@ -8,6 +8,13 @@ TAG_REGIONE = "denominazione_regione"
 TAG_CODICE_REGIONE = "codice_regione"
 TAG_POPOLAZIONE = "popolazione"
 TAG_SUPERFICIE = "superficie_km2"
+LEVEL_COMUNE = 0
+LEVEL_PROVINCIA = 1
+LEVEL_REGIONE = 2
+CODE_CODICE_ISTAT = 0
+CODE_SIGLA = 1
+CODE_DENOMINAZIONE = 2
+KEY_UNIQUE = "key_geo_ita"
 
 anagrafica_comuni = {
     "path": r"data_sources/Anagrafica",
@@ -68,22 +75,63 @@ plot_italy_margins_4326 = [[36.4, 47.35], [6.5, 18.6]]
 plot_italy_margins_32632 = [[723576.6901562785, 2070542.52875489], [4355801.264971882, 5999391.278141545]]
 
 
-min_acceptable_similarity = 0.8
+min_acceptable_similarity = 0.85
+
+clear_den_replace = [(" di ", " "),
+                     (" nel ", " "),
+                     (" in ", " "),
+                     ("l ", "l"),
+                     ("d ", "d"),
+                     ("sant ", "sant"),
+                     ("s ", "san ")]
 
 rename_comuni_nomi = {"rome": "roma",
-                      "milano": "milano",
+                      "milan": "milano",
                       "naples": "napoli",
                       "turin": "torino",
                       "florence": "firenze",
                       "venice": "venezia",
                       "padua": "padova",
                       "syracuse": "siracusa",
-                      "figline valdarno": "figline e incisa valdarno",
-                      "incisa in val darno": "figline e incisa valdarno",
-                      "presicce": "presicce acquarica",
-                      "acquarica del capo": "presicce acquarica",
-                      "corigliano calabro": "corigliano rossano",
-                      "rossano calabro": "corigliano rossano",
-                      "montoro inferiore": "montoro",
-                      "montoro superiore": "montoro",
+                      "bozen": "bolzano"
                       }
+
+comuni_exceptions = {
+    "paterno paterno": "paternò",
+    "paternò": "paterno paterno"
+}
+
+
+comuni_omonimi = {
+    TAG_COMUNE: ["Livo", "Livo",
+                 "Peglio", "Peglio",
+                 "Castro", "Castro",
+                 "Samone", "Samone",
+                 "Calliano", "Calliano",
+                 "San Teodoro", "San Teodoro"],
+    TAG_SIGLA: ["CO", "TN",
+                "CO", "PU",
+                "BG", "LE",
+                "TO", "TN",
+                "AT", "TN",
+                "ME", "SS"],
+    TAG_PROVINCIA: ["Como", "Trento",
+                    "Como", "Pesaro e Urbino",
+                    "Bergamo", "Lecce",
+                    "Torino", "Trento",
+                    "Asti", "Trento",
+                    "Messina", "Sassari"],
+    TAG_REGIONE: ["Lombardia", "Trentino-Alto Adige",
+                  "Lombardia", "Marche",
+                  "Lombardia", "Puglia",
+                  "Piemonte", "Trentino-Alto Adige",
+                  "Piemonte", "Trentino-Alto Adige",
+                  "Sicilia", "Sardegna"],
+    "new_name": ["Livo como", "Livo",
+                 "Peglio como", "Peglio",
+                 "Castro bergamo", "Castro",
+                 "Samone", "Samone trento",
+                 "Calliano asti", "Calliano",
+                 "San Teodoro messina", "San Teodoro"]
+}
+

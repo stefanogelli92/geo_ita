@@ -1,7 +1,9 @@
 import difflib
+import re
 import time
 import logging
 import ssl
+import unidecode
 
 import numpy as np
 import pandas as pd
@@ -10,7 +12,7 @@ import geopy.geocoders
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 
-from geo_ita.data import get_df, create_df_comuni, get_variazioni_amministrative_df
+from geo_ita.data import get_df, create_df_comuni, get_variazioni_amministrative_df, _get_list, create_double_languages_mapping
 from geo_ita.config import plot_italy_margins_4326, plot_italy_margins_32632
 import geo_ita.config as cfg
 
@@ -27,7 +29,9 @@ def add_geographic_info(df0, comuni_tag=None, province_tag=None, regioni_tag=Non
                         unique_flag=True, add_missing=False, drop_not_match=False):
     log.info("Add geo info: Start adding geographic info")
 
-    df = df0.copy()
+    keys = [x for x in [comuni_tag, province_tag, regioni_tag] if x is not None]
+
+    df = df0[keys].copy().drop_duplicates()
 
     if comuni_tag:
         level = cfg.LEVEL_COMUNE
@@ -50,6 +54,8 @@ def add_geographic_info(df0, comuni_tag=None, province_tag=None, regioni_tag=Non
     info_df = get_df(level)
     info_df[cfg.KEY_UNIQUE] = info_df[geo_tag_anag]
 
+    df[cfg.KEY_UNIQUE] = df[geo_tag_input]
+
     if (level == cfg.LEVEL_COMUNE) and (code_type == cfg.CODE_DENOMINAZIONE):
         log.debug("Add geo info: The dataset could contains an homonym comune")
         info_tag_details = cfg.TAG_SIGLA
@@ -58,7 +64,7 @@ def add_geographic_info(df0, comuni_tag=None, province_tag=None, regioni_tag=Non
             geo_tag_anag2 = _get_tag_anag(code_province, cfg.LEVEL_PROVINCIA)
             log.debug("Add geo info: The user has specified the {} so we can use in order to correctly match homonym comuni".format(geo_tag_anag2))
             info_tag_details = geo_tag_anag2
-            split_denom_comuni_omonimi(df, geo_tag_input, province_tag, geo_tag_anag2)
+            split_denom_comuni_omonimi(df, cfg.KEY_UNIQUE, province_tag, geo_tag_anag2)
         elif regioni_tag is not None:
             code_regioni = _code_or_desc(list(df[regioni_tag].unique()))
             geo_tag_anag2 = _get_tag_anag(code_regioni, cfg.LEVEL_REGIONE)
@@ -66,11 +72,11 @@ def add_geographic_info(df0, comuni_tag=None, province_tag=None, regioni_tag=Non
                 "Add geo info: The user has specified the {} so we can use in order to correctly match homonym comuni".format(
                     geo_tag_anag2))
             info_tag_details = geo_tag_anag2
-            split_denom_comuni_omonimi(df, geo_tag_input, regioni_tag, geo_tag_anag2)
+            split_denom_comuni_omonimi(df, cfg.KEY_UNIQUE, regioni_tag, geo_tag_anag2)
         split_denom_comuni_omonimi(info_df, cfg.KEY_UNIQUE, info_tag_details, info_tag_details)
 
     df, info_df = __uniform_names(df, info_df,
-                                  geo_tag_input,
+                                  cfg.KEY_UNIQUE,
                                   cfg.KEY_UNIQUE,
                                   cfg.KEY_UNIQUE,
                                   unique_flag=unique_flag,
@@ -89,10 +95,15 @@ def add_geographic_info(df0, comuni_tag=None, province_tag=None, regioni_tag=Non
             how = "left"
         df = df.merge(info_df,  on=cfg.KEY_UNIQUE, how=how)
 
-    drop_col = [cfg.KEY_UNIQUE, geo_tag_input]
-    for col in drop_col:
-        if col in df.columns:
-            df.drop([col], axis=1, inplace=True)
+    list_col = keys + [cfg.TAG_COMUNE, cfg.TAG_CODICE_COMUNE,
+                       cfg.TAG_PROVINCIA, cfg.TAG_CODICE_PROVINCIA,
+                       cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE,
+                       cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]
+
+    list_col = [col for col in list_col if col in df.columns]
+
+    df = df0.merge(df[list_col], on=keys, how="left")
+
     return df
 
 
@@ -172,7 +183,7 @@ def __create_geo_dataframe(df0):
         flag_coord_found, lat_tag, long_tag = __find_coord_columns(df0)
         if flag_coord_found:
             df = gpd.GeoDataFrame(
-                df0, geometry=gpd.points_from_xy(df0[lat_tag], df0[long_tag]))
+                df0, geometry=gpd.points_from_xy(df0[long_tag], df0[lat_tag]))
             coord_system = __find_coordinates_system(df0, lat_tag, long_tag)
             df.crs = {'init': coord_system}
             log.info("Found columns about coordinates: ({}, {})".format(lat_tag, long_tag))
@@ -210,23 +221,25 @@ def __find_coordinates_system(df, lat, lon):
 def get_city_from_coordinates(df0, rename_col_comune=None, rename_col_provincia=None, rename_col_regione=None):
     # TODO GET comune - provincia - regione
     df0 = df0.rename_axis('key_mapping').reset_index()
+    df = df0.copy()
     df_comuni = create_df_comuni()
     df_comuni = gpd.GeoDataFrame(df_comuni)
     df_comuni.crs = {'init': 'epsg:32632'}
     df_comuni = df_comuni.to_crs({'init': 'epsg:4326'})
 
-    df = __create_geo_dataframe(df0)
+    df = __create_geo_dataframe(df)
     df = df[["key_mapping", "geometry"]].drop_duplicates()
     df = df.to_crs({'init': 'epsg:4326'})
 
+    n_tot = df.shape[0]
     map_city = gpd.sjoin(df, df_comuni, op='within')
-    n_tot = map_city.shape[0]
+
     missing = list(map_city[map_city[cfg.TAG_COMUNE].isna()]["geometry"].unique())
-    if len(missing) == n_tot:
+    if len(missing) == 0:
         log.info("Found the correct city for each point")
     else:
         log.warning("Unable to find the city for {} points: {}".format(len(missing), missing))
-    map_city = map_city[["key_mapping", cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_REGIONE]]
+    map_city = map_city[["key_mapping", cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_SIGLA, cfg.TAG_REGIONE]]
     rename_col = {}
     if rename_col_comune is not None:
         rename_col[cfg.TAG_COMUNE] = rename_col_comune
@@ -244,7 +257,20 @@ def __clean_denom_text(series):
     series = series.str.strip()
     series = series.str.replace(r'\s+', ' ', regex=True)
     series = series.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8') # Remove accent
+    for v in cfg.clear_den_replace:
+        series = series.str.replace(v[0], v[1])
     return series
+
+
+def __clear_denom_text_single(value):
+    value = value.lower()  # All strig in lowercase
+    value = re.sub(r'[^\w\s]', ' ', value)  # Remove non alphabetic characters
+    value = value.strip()
+    value = re.sub(r'\s+', ' ', value)
+    value = unidecode.unidecode(value)
+    for v in cfg.clear_den_replace:
+        value = value.replace(v[0], v[1])
+    return value
 
 
 def __find_match(not_match1, not_match2, unique=False):
@@ -265,7 +291,7 @@ def __find_match(not_match1, not_match2, unique=False):
             best_match = best_match[0]
             score = difflib.SequenceMatcher(None, a, best_match).ratio()
             if score > cfg.min_acceptable_similarity:
-                match_dict[a] = best_match
+                match_dict[a] = (best_match, score)
                 if unique:
                     not_match2.remove(best_match)
     return match_dict
@@ -294,23 +320,31 @@ def __uniform_names(df1, df2, tag_1, tag_2, tag, unique_flag=True, comune_flag=F
     if comune_flag:
         df1[tag_1] = df1[tag_1].str.lower().replace(cfg.comuni_exceptions)
         df2[tag_2] = df2[tag_2].str.lower().replace(cfg.comuni_exceptions)
+        replace_multilanguage_name = create_double_languages_mapping()
+        for k, v in replace_multilanguage_name.items():
+            df1[tag_1] = df1[tag_1].str.replace(r"\b{}\b".format(k), v, regex=True)
+        df1[tag_1] = df1[tag_1].str.replace(r"([A-Za-z](?s).*) ?[-\/] ?\1", r"\1", regex=True)
+
     df1[tag] = __clean_denom_text(df1[tag_1])
     df2[tag] = __clean_denom_text(df2[tag_2])
     if comune_flag:
         df1[tag] = df1[tag].replace(cfg.comuni_exceptions)
         df2[tag] = df2[tag].replace(cfg.comuni_exceptions)
         # Replace found manually
+        replaces = df1[df1[tag].isin(cfg.rename_comuni_nomi.keys())][tag].unique()
+        if len(replaces) > 0:
+            log.info("Match {} comuni by manual replace:\n{}".format(len(replaces), replaces))
         df1[tag] = df1[tag].replace(cfg.rename_comuni_nomi)
         # replace variazioni amministrative nella storia
         df_variazioni = get_variazioni_amministrative_df()
-        df_variazioni = df_variazioni[df_variazioni["tipo_variazione"].isin(["ES", "CD"])]
         df_variazioni[cfg.TAG_COMUNE] = __clean_denom_text(df_variazioni[cfg.TAG_COMUNE])
         df_variazioni["new_denominazione_comune"] = __clean_denom_text(df_variazioni["new_denominazione_comune"])
         df_variazioni["data_decorrenza"] = pd.to_datetime(df_variazioni["data_decorrenza"])
         df_variazioni.sort_values([cfg.TAG_COMUNE, "data_decorrenza"], ascending=False, inplace=True)
         df_variazioni = df_variazioni.groupby(cfg.TAG_COMUNE)["new_denominazione_comune"].last().to_dict()
-        log.debug(df_variazioni)
-        log.debug(df1[tag])
+        replaces = df1[df1[tag].isin(df_variazioni.keys())][tag].unique()
+        if len(replaces) > 0:
+            log.info("Match {} name that are no longer comuni:\n{}".format(len(replaces), replaces))
         df1[tag] = df1[tag].replace(df_variazioni)
 
     den1 = df1[df1[tag].notnull()][tag].unique()
@@ -319,19 +353,56 @@ def __uniform_names(df1, df2, tag_1, tag_2, tag, unique_flag=True, comune_flag=F
     if unique_flag:
         not_match2 = list(set(den2) - set(den1))
         match_dict = __find_match(not_match2, not_match1, unique=True)
-        match_dict = {v: k for k, v in match_dict.items()}
+        match_dict = {v[0]: (k, v[1]) for k, v in match_dict.items()}
         not_match1 = [x for x in not_match1 if x not in match_dict.keys()]
     else:
         not_match2 = den2
         match_dict = __find_match(not_match1, not_match2)
 
     not_match1 = [x for x in not_match1 if x not in match_dict.keys()]
-    df1[tag] = df1[tag].replace(match_dict)
+    n = len(match_dict)
+    if n > 1:
+        log.info("Match {} name by similarity:\n{}".format(n, match_dict))
+    df1[tag] = df1[tag].replace({k: v[0] for k, v in match_dict.items()})
+
+    #
+
+    if comune_flag & (len(not_match1) > 0):
+        geolocator = Nominatim(user_agent="trial")  # "trial"
+        geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+        regioni, province, comuni = _get_list([cfg.LEVEL_REGIONE, cfg.LEVEL_PROVINCIA, cfg.LEVEL_COMUNE])
+        regioni = [__clear_denom_text_single(a) for a in regioni]
+        province = [__clear_denom_text_single(a) for a in province]
+        comuni = [__clear_denom_text_single(a) for a in comuni]
+        match_dict2 = {}
+        for el in not_match1:
+            p = geocode(el)
+            if p is not None:
+                address = p.address
+                extract = re.search('(?P<comune2>[^,]+, )?(?P<comune1>[^,]+), (?P<provincia>[^,]+), (?P<regione>[^,0-9]+)(?P<cap>, [0-9]{5})?, Italia', address)
+                if extract:
+                    regione = __clear_denom_text_single(extract.group("regione"))
+                    provincia = extract.group("provincia")
+                    provincia = __clear_denom_text_single(provincia.replace("Roma Capitale", "Roma"))
+                    comune = __clear_denom_text_single(extract.group("comune1"))
+                    comune2 = extract.group("comune2")
+                    if comune2:
+                        comune2 = __clear_denom_text_single(comune2[:-2])
+                    if (regione in regioni) & (provincia in province):
+                        if comune in comuni:
+                            match_dict2[el] = comune
+                        elif (comune2 is not None) and (comune2 in comuni):
+                            match_dict2[el] = comune2
+                        elif provincia in comuni:
+                            match_dict2[el] = provincia
+        not_match1 = [x for x in not_match1 if x not in match_dict2.keys()]
+        log.info("Match {} name that corrisponds to a possible frazione of a comune:\n{}".format(len(match_dict2), match_dict2))
+        df1[tag] = df1[tag].replace(match_dict2)
 
     if len(not_match1) == 0:
         log.info("All name have been matched")
     else:
-        log.warning("Unable to match {} names: {}".format(len(not_match1), not_match1))
+        log.warning("Unable to match {} name: {}".format(len(not_match1), not_match1))
     return df1, df2
 
 
