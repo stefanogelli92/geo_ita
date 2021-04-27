@@ -55,14 +55,14 @@ class AddGeographicalInfo:
 
     def set_comuni_tag(self, col_name):
         self.comuni_tag = col_name
-        self.comuni_code = self._code_or_desc(list(self.original_df[col_name].unique()))
+        self.comuni_code = _code_or_desc(list(self.original_df[col_name].unique()))
         self.level = cfg.LEVEL_COMUNE
         self.geo_tag_input = col_name
         self.code = self.comuni_code
 
     def set_province_tag(self, col_name):
         self.province_tag = col_name
-        self.province_code = self._code_or_desc(list(self.original_df[col_name].unique()))
+        self.province_code = _code_or_desc(list(self.original_df[col_name].unique()))
         if self.level != cfg.LEVEL_COMUNE:
             self.level = cfg.LEVEL_PROVINCIA
             self.geo_tag_input = col_name
@@ -70,7 +70,7 @@ class AddGeographicalInfo:
 
     def set_regioni_tag(self, col_name):
         self.regioni_tag = col_name
-        self.regioni_code = self._code_or_desc(list(self.original_df[col_name].unique()))
+        self.regioni_code = _code_or_desc(list(self.original_df[col_name].unique()))
         if self.level is None:
             self.level = cfg.LEVEL_REGIONE
             self.geo_tag_input = col_name
@@ -87,41 +87,6 @@ class AddGeographicalInfo:
         self.geo_tag_input = None
         self.code = None
 
-    @staticmethod
-    def _code_or_desc(list_values):
-        list_values = [x for x in list_values if str(x) != 'nan']
-        n_tot = len(list_values)
-        if (sum([isinstance(item, int) or item.isdigit() for item in list_values]) / n_tot) > 0.8:
-            result = cfg.CODE_CODICE_ISTAT
-        elif (sum([isinstance(item, str) and item.isalpha() and len(item) == 2 for item in list_values]) / n_tot) > 0.8:
-            result = cfg.CODE_SIGLA
-        else:
-            result = cfg.CODE_DENOMINAZIONE
-        return result
-
-    @staticmethod
-    def _get_tag_anag(code, level):
-        if level == cfg.LEVEL_COMUNE:
-            if code == cfg.CODE_CODICE_ISTAT:
-                result = cfg.TAG_CODICE_COMUNE
-            else:
-                result = cfg.TAG_COMUNE
-        elif level == cfg.LEVEL_PROVINCIA:
-            if code == cfg.CODE_CODICE_ISTAT:
-                result = cfg.TAG_CODICE_PROVINCIA
-            elif code == cfg.CODE_SIGLA:
-                result = cfg.TAG_SIGLA
-            else:
-                result = cfg.TAG_PROVINCIA
-        elif level == cfg.LEVEL_REGIONE:
-            if code == cfg.CODE_CODICE_ISTAT:
-                result = cfg.TAG_CODICE_REGIONE
-            else:
-                result = cfg.TAG_REGIONE
-        else:
-            raise Exception("Level UNKNOWN")
-        return result
-
     def run_simple_match(self):
 
         self.keys = [x for x in [self.comuni_tag, self.province_tag, self.regioni_tag] if x is not None]
@@ -133,7 +98,7 @@ class AddGeographicalInfo:
 
 
         self.info_df = get_df(self.level)
-        self.geo_tag_anag = self._get_tag_anag(self.code, self.level)
+        self.geo_tag_anag = _get_tag_anag(self.code, self.level)
         self.info_df[cfg.KEY_UNIQUE] = self.info_df[self.geo_tag_anag]
 
         if self.code == cfg.CODE_SIGLA:
@@ -181,8 +146,8 @@ class AddGeographicalInfo:
 
         self._find_any_bilingual_name()
 
-        self.df[cfg.KEY_UNIQUE] = self._clean_denom_text(self.df[cfg.KEY_UNIQUE])
-        self.info_df[cfg.KEY_UNIQUE] = self._clean_denom_text(self.info_df[cfg.KEY_UNIQUE])
+        self.df[cfg.KEY_UNIQUE] = _clean_denom_text(self.df[cfg.KEY_UNIQUE])
+        self.info_df[cfg.KEY_UNIQUE] = _clean_denom_text(self.info_df[cfg.KEY_UNIQUE])
 
         if self.level == cfg.LEVEL_COMUNE:
             self._rename_any_english_name()
@@ -210,10 +175,10 @@ class AddGeographicalInfo:
     def _test_if_df_contains_homonym_comuni(self):
         info_tag_details = cfg.TAG_SIGLA
         if self.province_code is not None:
-            info_tag_details = self._get_tag_anag(self.province_code, cfg.LEVEL_PROVINCIA)
+            info_tag_details = _get_tag_anag(self.province_code, cfg.LEVEL_PROVINCIA)
             self.df = self._split_denom_comuni_omonimi(self.df, cfg.KEY_UNIQUE, self.province_tag, info_tag_details)
         elif self.regioni_code is not None:
-            info_tag_details = self._get_tag_anag(self.regioni_code, cfg.LEVEL_REGIONE)
+            info_tag_details = _get_tag_anag(self.regioni_code, cfg.LEVEL_REGIONE)
             self.df = self._split_denom_comuni_omonimi(self.df, cfg.KEY_UNIQUE, self.regioni_tag, info_tag_details)
         else:
             # TODO Loggare warning che se ci sono comuni omonimi non sarà in grado di abbinarli correttamente
@@ -253,30 +218,6 @@ class AddGeographicalInfo:
             # TODO Gestire pulizia pure per province e regioni
             pass
 
-    @staticmethod
-    def _clean_denom_text(series):
-        series = series.str.lower()  # All strig in lowercase
-        series = series.str.replace(r'[^\w\s]', ' ', regex=True)  # Remove non alphabetic characters
-        series = series.str.strip()
-        series = series.str.replace(r'\s+', ' ', regex=True)
-        series = series.replace(cfg.comuni_exceptions)
-        series = series.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')  # Remove accent
-        series = series.replace(cfg.comuni_exceptions)
-        #for v in cfg.clear_den_replace:
-        #    series = series.str.replace(v[0], v[1])
-        return series
-
-    @staticmethod
-    def _clean_denom_text_value(value):
-        value = value.lower()  # All strig in lowercase
-        value = re.sub(r'[^\w\s]', ' ', value)  # Remove non alphabetic characters
-        value = value.strip()
-        value = re.sub(r'\s+', ' ', value)
-        cfg.comuni_exceptions.get(value, value)
-        value = unidecode.unidecode(value)
-        cfg.comuni_exceptions.get(value, value)
-        return value
-
     def _rename_any_english_name(self):
         s = self.df[cfg.KEY_UNIQUE].replace(cfg.rename_comuni_nomi)
         if (s != self.df[cfg.KEY_UNIQUE]).any():
@@ -286,8 +227,8 @@ class AddGeographicalInfo:
 
     def _find_any_variation_from_istat_history(self):
         df_variazioni = get_variazioni_amministrative_df()
-        df_variazioni[cfg.TAG_COMUNE] = self._clean_denom_text(df_variazioni[cfg.TAG_COMUNE])
-        df_variazioni["new_denominazione_comune"] = self._clean_denom_text(df_variazioni["new_denominazione_comune"])
+        df_variazioni[cfg.TAG_COMUNE] = _clean_denom_text(df_variazioni[cfg.TAG_COMUNE])
+        df_variazioni["new_denominazione_comune"] = _clean_denom_text(df_variazioni["new_denominazione_comune"])
         df_variazioni["data_decorrenza"] = pd.to_datetime(df_variazioni["data_decorrenza"])
         df_variazioni.sort_values([cfg.TAG_COMUNE, "data_decorrenza"], ascending=False, inplace=True)
         df_variazioni = df_variazioni.groupby(cfg.TAG_COMUNE)["new_denominazione_comune"].last().to_dict()
@@ -318,9 +259,9 @@ class AddGeographicalInfo:
     def run_find_frazioni(self):
         geolocator = Nominatim(user_agent="trial")  # "trial"
         geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
-        regioni = [self._clean_denom_text_value(a) for a in self.regioni]
-        province = [self._clean_denom_text_value(a) for a in self.province]
-        comuni = [self._clean_denom_text_value(a) for a in self.comuni]
+        regioni = [_clean_denom_text_value(a) for a in self.regioni]
+        province = [_clean_denom_text_value(a) for a in self.province]
+        comuni = [_clean_denom_text_value(a) for a in self.comuni]
         match_dict = {}
         for el in self.not_match:
             p = geocode(el + ", italia")
@@ -330,13 +271,13 @@ class AddGeographicalInfo:
                     '(?P<comune2>[^,]+, )?(?P<comune1>[^,]+), (?P<provincia>[^,]+), (?P<regione>[^,0-9]+)(?P<cap>, [0-9]{5})?, Italia',
                     address)
                 if extract:
-                    regione = self._clean_denom_text_value(extract.group("regione"))
+                    regione = _clean_denom_text_value(extract.group("regione"))
                     provincia = extract.group("provincia")
-                    provincia = self._clean_denom_text_value(provincia.replace("Roma Capitale", "Roma"))
-                    comune = self._clean_denom_text_value(extract.group("comune1"))
+                    provincia = _clean_denom_text_value(provincia.replace("Roma Capitale", "Roma"))
+                    comune = _clean_denom_text_value(extract.group("comune1"))
                     comune2 = extract.group("comune2")
                     if comune2:
-                        comune2 = self._clean_denom_text_value(comune2[:-2])
+                        comune2 = _clean_denom_text_value(comune2[:-2])
                     if (regione in regioni) & (provincia in province):
                         if comune in comuni:
                             match_dict[el] = comune
@@ -361,6 +302,9 @@ class AddGeographicalInfo:
             log.warning("Unable to find {} {}: {}".format(len(self.not_match), self.geo_tag_anag, self.not_match))
         else:
             log.info("Found every {}".format(self.geo_tag_anag))
+
+        if self.geo_tag_anag in self.df.columns:
+            self.df.rename(columns={self.geo_tag_anag: self.geo_tag_anag + "_original"}, inplace=True)
         if add_missing:
             if drop_not_match:
                 how = "left"
@@ -374,14 +318,14 @@ class AddGeographicalInfo:
                 how = "left"
             result = self.df.merge(self.info_df, on=cfg.KEY_UNIQUE, how=how)
 
-        list_col = self.keys + [cfg.TAG_COMUNE, cfg.TAG_CODICE_COMUNE,
+        list_col = list(set(self.keys + [cfg.TAG_COMUNE, cfg.TAG_CODICE_COMUNE,
                            cfg.TAG_PROVINCIA, cfg.TAG_CODICE_PROVINCIA, cfg.TAG_SIGLA,
                            cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE,
-                           cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]
+                           cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]))
 
         list_col = [col for col in list_col if col in result.columns]
 
-        result = self.original_df.merge(result[list_col], on=self.keys, how="left")
+        result = self.original_df.merge(result[list_col], on=self.keys, how="left", suffixes=["", "_new"])
 
         return result
 
@@ -432,6 +376,65 @@ class AddGeographicalInfo:
                     if unique:
                         not_match2.remove(best_match)
         return match_dict
+
+
+def _get_tag_anag(code, level):
+    if level == cfg.LEVEL_COMUNE:
+        if code == cfg.CODE_CODICE_ISTAT:
+            result = cfg.TAG_CODICE_COMUNE
+        else:
+            result = cfg.TAG_COMUNE
+    elif level == cfg.LEVEL_PROVINCIA:
+        if code == cfg.CODE_CODICE_ISTAT:
+            result = cfg.TAG_CODICE_PROVINCIA
+        elif code == cfg.CODE_SIGLA:
+            result = cfg.TAG_SIGLA
+        else:
+            result = cfg.TAG_PROVINCIA
+    elif level == cfg.LEVEL_REGIONE:
+        if code == cfg.CODE_CODICE_ISTAT:
+            result = cfg.TAG_CODICE_REGIONE
+        else:
+            result = cfg.TAG_REGIONE
+    else:
+        raise Exception("Level UNKNOWN")
+    return result
+
+
+def _code_or_desc(list_values):
+    list_values = [x for x in list_values if str(x) != 'nan']
+    n_tot = len(list_values)
+    if (sum([isinstance(item, int) or item.isdigit() for item in list_values]) / n_tot) > 0.8:
+        result = cfg.CODE_CODICE_ISTAT
+    elif (sum([isinstance(item, str) and item.isalpha() and len(item) == 2 for item in list_values]) / n_tot) > 0.8:
+        result = cfg.CODE_SIGLA
+    else:
+        result = cfg.CODE_DENOMINAZIONE
+    return result
+
+
+def _clean_denom_text(series):
+    series = series.str.lower()  # All strig in lowercase
+    series = series.str.replace(r'[^\w\s]', ' ', regex=True)  # Remove non alphabetic characters
+    series = series.str.strip()
+    series = series.str.replace(r'\s+', ' ', regex=True)
+    series = series.replace(cfg.comuni_exceptions)
+    series = series.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')  # Remove accent
+    series = series.replace(cfg.comuni_exceptions)
+    #for v in cfg.clear_den_replace:
+    #    series = series.str.replace(v[0], v[1])
+    return series
+
+
+def _clean_denom_text_value(value):
+    value = value.lower()  # All strig in lowercase
+    value = re.sub(r'[^\w\s]', ' ', value)  # Remove non alphabetic characters
+    value = value.strip()
+    value = re.sub(r'\s+', ' ', value)
+    cfg.comuni_exceptions.get(value, value)
+    value = unidecode.unidecode(value)
+    cfg.comuni_exceptions.get(value, value)
+    return value
 
 
 def __find_coord_columns(df):

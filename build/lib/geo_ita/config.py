@@ -79,6 +79,7 @@ min_acceptable_similarity = 0.85
 
 clear_den_replace = [(" di ", " "),
                      (" nel ", " "),
+                     (" nell ", " "),
                      (" in ", " "),
                      ("l ", "l"),
                      ("d ", "d"),
