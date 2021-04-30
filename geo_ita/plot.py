@@ -20,7 +20,7 @@ from bokeh.models import (Title, ColumnDataSource, Circle,
                           WheelZoomTool, BoxSelectTool, InvertedTriangle, HoverTool, ImageURL, Legend, LegendItem,
                           DataTable, TableColumn, Select,
                           CustomJS, TextInput, GeoJSONDataSource, Diamond, Label, LabelSet, ColorBar,
-                          CategoricalColorMapper)
+                          CategoricalColorMapper, NumberFormatter, NumeralTickFormatter)
 
 import geo_ita.config as cfg
 from geo_ita.data import create_df_comuni, create_df_province, create_df_regioni
@@ -476,12 +476,14 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title=""):
                               Oranges9]
     palette_list = {}
     legend_list = {}
+    is_numeric = {}
     i = 0
     for key, value in dict_values.items():
         if is_numeric_dtype(df0[key]):
             palette_list[key] = {"field": "values_plot", "transform": LinearColorMapper(
                 palette=palette_list_numerical[i % len(palette_list_numerical)][::-1])}
             legend_list[key] = 0
+            is_numeric[key] =True
             i += 1
         elif is_string_dtype(df0[key]):
             values = list(df0[key].unique())
@@ -490,9 +492,12 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title=""):
                                                                                              palette=Category20[
                                                                                                  20] if n_values > 10 else
                                                                                              Category10[10])}
+            is_numeric[key] =False
             legend_list[key] = 1
     geodf["values_plot"] = geodf[field_list[0]]
+    geodf["line_color"] = "gray"
     geosource = GeoJSONDataSource(geojson=geodf.to_json())
+
     mapper = palette_list[field_list[0]]
     p = figure(title=title,
                plot_height=900,
@@ -508,28 +513,39 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title=""):
     p.xaxis.major_label_text_font_size = '0pt'  # preferred method for removing tick labels
     p.yaxis.major_label_text_font_size = '0pt'  # preferred method for removing tick labels
 
+    fmt = NumberFormatter(format="0.[0] a")
+    columns = [TableColumn(field=a, title=b, formatter=fmt) if is_numeric[a] else TableColumn(field=a, title=b) for a, b in dict_values.items()]
     # Add patch renderer to figure.
     if level == cfg.LEVEL_COMUNE:
         line_width = 0.1
+        columns = [TableColumn(field=cfg.TAG_COMUNE, title="Comune")] + columns
     elif level == cfg.LEVEL_PROVINCIA:
         line_width = 0.24
+        columns = [TableColumn(field=cfg.TAG_PROVINCIA, title="Provincia")] + columns
     elif level == cfg.LEVEL_REGIONE:
         line_width = 0.5
+        columns = [TableColumn(field=cfg.TAG_REGIONE, title="Regione")] + columns
     else:
         line_width = 0.1
+
+    data_table = DataTable(source=geosource, columns=columns, selectable=False)
     image = p.patches('xs', 'ys', source=geosource,
                       fill_color=mapper,
                       fill_alpha=0.7,
-                      line_color='gray',
+                      #line_color='gray',
+                      line_color='line_color',
                       line_width=line_width)
     tool_list = [(HEADER_BOKEH[level], '@' + geo_tag)]
     for key, values in dict_values.items():
-        tool_list.append((values, '@' + key))
+        if is_numeric[key]:
+            tool_list.append((values, '@' + key + '{0.[0] a}'))
+        else:
+            tool_list.append((values, '@' + key))
     p.add_tools(HoverTool(renderers=[image],
                           tooltips=tool_list))
     p.toolbar.active_scroll = p.select_one(WheelZoomTool)
 
-    color_bar = ColorBar(color_mapper=mapper["transform"])
+    color_bar = ColorBar(color_mapper=mapper["transform"], formatter=NumeralTickFormatter(format="0.[0] a"))
     p.add_layout(color_bar, 'right')
 
     if legend_list[field_list[0]] != 0:
@@ -557,6 +573,17 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title=""):
     if legend_list[field_list[0]] == 0:
         p.legend.border_line_width = 0
 
+    geosource.selected.js_on_change('indices', CustomJS(
+            args=dict(source=geosource),
+            code="""
+            var f = cb_obj.indices[0];
+            console.log(f);
+            var data = source.data;
+            data["line_color"][f] = "blue";
+            source.change.emit();
+            """
+        ))
+
     if len(field_list) > 1:
         field_select = Select(title="Select:", value=list(dict_values.values())[0], options=list(dict_values.values()))
         callback_code = """
@@ -567,12 +594,12 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title=""):
         data['values_plot'] = data[value_selected];
         image.glyph.fill_color = palette_list[value_selected];
         legend[0].title = selection.value;
+        for (var key in data_legend) {
+                data_legend[key] = [];
+                }
         if (type == 0){
             color_bar.visible=true;
             color_bar.color_mapper = palette_list[value_selected]["transform"];
-            for (var key in data_legend) {
-                data_legend[key] = [];
-                }
             legend[0].border_line_width = 0;
             } else {
             var factors = palette_list[value_selected]["transform"].factors;
@@ -616,9 +643,9 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title=""):
         )
         field_select.js_on_change("value", callback)
 
-        plot = row(p, column(field_select))
+        plot = row(p, column(field_select, data_table))
     else:
-        plot = row(p)
+        plot = row(p, data_table)
     return plot
 
 

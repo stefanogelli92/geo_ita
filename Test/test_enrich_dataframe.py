@@ -117,7 +117,7 @@ def test_get_city_from_coordinates():
 def test_get_coordinates_from_address():
     path = root_path / PureWindowsPath(r"data_sources/Test/farmacie_italiane.csv")
     test_df = pd.read_csv(path, sep=";", engine='python')
-    test_df = test_df.sample(100)
+    test_df = test_df.sample(600)
     result = get_coordinates_from_address(test_df, "INDIRIZZO",
                                           city_tag="DESCRIZIONECOMUNE",
                                           province_tag="DESCRIZIONEPROVINCIA",
@@ -134,5 +134,5 @@ def test_get_coordinates_from_address():
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     test_add_geographic_info()
-    test_get_city_from_coordinates()
-    test_get_coordinates_from_address()
+    #test_get_city_from_coordinates()
+    #test_get_coordinates_from_address()

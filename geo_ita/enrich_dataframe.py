@@ -241,7 +241,6 @@ class AddGeographicalInfo:
     def _try_custom_replace_denom(self):
         list_den_anagrafica = self.list_anag
         list_den_not_found = self.not_match
-
         dict_den_anag = {self._custom_replace_denom(a): a for a in list_den_anagrafica}
         dict_den_not_found = {a: self._custom_replace_denom(a) for a in list_den_not_found}
         dict_den_not_found = {k: dict_den_anag[v] for k, v in dict_den_not_found.items() if v in dict_den_anag.keys()}
@@ -254,6 +253,7 @@ class AddGeographicalInfo:
     def _custom_replace_denom(value):
         for v in cfg.clear_den_replace:
             value = value.replace(v[0], v[1])
+        value = " ".join(value.split())
         return value
 
     def run_find_frazioni(self):
@@ -270,7 +270,7 @@ class AddGeographicalInfo:
                 extract = re.search(
                     '(?P<comune2>[^,]+, )?(?P<comune1>[^,]+), (?P<provincia>[^,]+), (?P<regione>[^,0-9]+)(?P<cap>, [0-9]{5})?, Italia',
                     address)
-                if extract:
+                if extract and not any(word.lower() in address.lower() for word in ["via", "viale", "piazza"]):
                     regione = _clean_denom_text_value(extract.group("regione"))
                     provincia = extract.group("provincia")
                     provincia = _clean_denom_text_value(provincia.replace("Roma Capitale", "Roma"))
@@ -533,21 +533,26 @@ def get_city_from_coordinates(df0, rename_col_comune=None, rename_col_provincia=
     map_city.rename(columns=rename_col, inplace=True)
     return df0.merge(map_city, on=["key_mapping"], how="left").drop(["key_mapping"], axis=1)
 
+
 def __test_city_in_address(df, city_tag, address_tag):
     return df.apply(lambda x: x[city_tag].lower() in x[address_tag] if x[address_tag] else False, axis=1)
 
 
-def get_coordinates_from_address(df, address_tag, city_tag=None, province_tag=None, regione_tag=None):
+def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=None, regione_tag=None):
     # TODO log
     # TODO add successive tentative (maps api)
-
+    col_list = [address_tag, city_tag, province_tag, regione_tag]
+    col_list = [x for x in col_list if x is not None]
+    df = df0[col_list].drop_duplicates()
+    n = df.shape[0]
     df["address_search"] = df[address_tag].str.lower()
     if city_tag:
-        df["test"] = __test_city_in_address(df, city_tag, "address_search")
-        perc_success = df["test"].sum() / df.shape[0]
+        t = __test_city_in_address(df, city_tag, "address_search")
+        perc_success = t.sum() / n
         if perc_success < 0.1:
             df["address_search"] = df["address_search"] + ", " + df[city_tag].str.lower()
-    geolocator = Nominatim(user_agent="trial")  # "trial"
+    log.info("Needed at least {} seconds".format(n))
+    geolocator = Nominatim(user_agent="geo_ita")
     geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
     start = time.time()
     df["location"] = (df["address_search"]).apply(geocode)

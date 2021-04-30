@@ -78,8 +78,8 @@ plot_italy_margins_32632 = [[723576.6901562785, 2070542.52875489], [4355801.2649
 min_acceptable_similarity = 0.85
 
 clear_den_replace = [(" di ", " "),
-                     (" nel ", " "),
-                     (" nell ", " "),
+                     (" nell", " "),
+                     (" nel", " "),
                      (" in ", " "),
                      ("l ", "l"),
                      ("d ", "d"),

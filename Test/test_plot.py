@@ -31,19 +31,19 @@ def test_2():
     test_df = create_df_comuni().drop(["geometry"], axis=1)
     # Aggiungo una finta categoria per i plot non quantitativi
     test_df["prima_lettera"] = test_df[cfg.TAG_REGIONE].str[0]
-    # plot_choropleth_map_comunale_interactive(test_df.sample(100),
-    #                                          "denominazione_comune",
-    #                                          {"popolazione": "Popolazione",
-    #                                           "superficie_km2": "Superficie",
-    #                                           "prima_lettera": "Prima Lettera"})
-    #
-    # plot_choropleth_map_regionale_interactive(test_df[[cfg.TAG_REGIONE, "prima_lettera"]].drop_duplicates(),
-    #                                           "denominazione_regione",
-    #                                           {"prima_lettera": "Prima Lettera"})
-    # plot_choropleth_map_provinciale_interactive(
-    #     test_df.groupby("denominazione_provincia")["popolazione"].sum().reset_index(),
-    #     "denominazione_provincia",
-    #     {"popolazione": "Popolazione"})
+    plot_choropleth_map_comunale_interactive(test_df.sample(100),
+                                             "denominazione_comune",
+                                             {"popolazione": "Popolazione",
+                                              "superficie_km2": "Superficie",
+                                              "prima_lettera": "Prima Lettera"})
+
+    plot_choropleth_map_regionale_interactive(test_df[[cfg.TAG_REGIONE, "prima_lettera"]].drop_duplicates(),
+                                              "denominazione_regione",
+                                              {"prima_lettera": "Prima Lettera"})
+    plot_choropleth_map_provinciale_interactive(
+        test_df.groupby("denominazione_provincia")["popolazione"].sum().reset_index(),
+        "denominazione_provincia",
+        {"popolazione": "Popolazione"})
     plot_choropleth_map_comunale_interactive(test_df,
                                              "denominazione_comune",
                                              {"popolazione": "Popolazione",
