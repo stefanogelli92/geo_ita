@@ -1,4 +1,4 @@
-from geo_ita.data import *
+from geo_ita.src._data import *
 
 
 def test_run():

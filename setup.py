@@ -10,14 +10,14 @@ requirements = ["pandas", "twine", "geopandas", "geopy",
 
 setup(
     name="geo_ita",
-    version="0.0.69",
+    version="0.0.81",
     author="Stefano Gelli",
     author_email="stefano.mat92@gmail.com",
     description="A package for geo analysis for Italy",
     long_description=readme,
     long_description_content_type="text/markdown",
     url="https://github.com/enelx-customer-business-analytics/geo_ita.git",
-    packages=find_packages(),
+    packages=find_packages(exclude=("geo_ita.src")),
     install_requires=requirements,
     include_package_data=True,
     package_data={

@@ -1,6 +1,6 @@
-from geo_ita.enrich_dataframe import *
-from geo_ita.data import create_df_comuni, get_popolazione_df
-from geo_ita.definition import *
+from geo_ita.src._enrich_dataframe import *
+from geo_ita.src._data import create_df_comuni
+from geo_ita.src.definition import *
 from pathlib import PureWindowsPath
 import logging
 
@@ -134,5 +134,5 @@ def test_get_coordinates_from_address():
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     test_add_geographic_info()
-    #test_get_city_from_coordinates()
-    #test_get_coordinates_from_address()
+    test_get_city_from_coordinates()
+    test_get_coordinates_from_address()

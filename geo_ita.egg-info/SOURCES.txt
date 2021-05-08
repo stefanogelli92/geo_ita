@@ -1,9 +1,7 @@
 README.md
 setup.py
 geo_ita/__init__.py
-geo_ita/config.py
 geo_ita/data.py
-geo_ita/definition.py
 geo_ita/enrich_dataframe.py
 geo_ita/plot.py
 geo_ita.egg-info/PKG-INFO
@@ -11,6 +9,11 @@ geo_ita.egg-info/SOURCES.txt
 geo_ita.egg-info/dependency_links.txt
 geo_ita.egg-info/requires.txt
 geo_ita.egg-info/top_level.txt
+geo_ita/src/_data.py
+geo_ita/src/_enrich_dataframe.py
+geo_ita/src/_plot.py
+geo_ita/src/config.py
+geo_ita/src/definition.py
 test/test_data.py
 test/test_enrich_dataframe.py
 test/test_plot.py

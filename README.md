@@ -32,7 +32,7 @@ Here you can get all the data avaiable in this libraries.
 #### Usage
 You can import all the informations listed before with 3 functions: *create_df_comuni*, *create_df_province* and *create_df_regioni* with the 3 different level of aggregation.
 ```python
-from geo_ita.data import create_df_comuni
+from geo_ita.src._data import create_df_comuni
 
 df_comuni = create_df_comuni()
 
@@ -60,7 +60,7 @@ Here you can find some methods that add some geografical information to your dat
 
 ***
 ```python
-from geo_ita.enrich_dataframe import get_coordinates_from_address
+from geo_ita.src._enrich_dataframe import get_coordinates_from_address
 
 df = get_coordinates_from_address(df, "address")
 ```

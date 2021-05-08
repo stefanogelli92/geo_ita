@@ -1,7 +1,6 @@
-from geo_ita.plot import *
-from geo_ita.plot import _get_margins
-from geo_ita.data import create_df_comuni
-import geo_ita.config as cfg
+from geo_ita.src._plot import *
+from geo_ita.src._data import create_df_comuni
+import geo_ita.src.config as cfg
 
 
 def test_1():
@@ -68,6 +67,6 @@ def test_3():
 
 
 if __name__ == '__main__':
-    #test_1()
-    test_2()
+    test_1()
+    #test_2()
     #test_3()
