@@ -61,7 +61,7 @@ def _linear_colormap(color_name1="white", color_name2=None, minval=0, maxval=1):
     return cmap
 
 
-def _plot_choropleth_map(df, color, ax, show_colorbar, numeric_values, value_tag, line_width=0.8):
+def _plot_choropleth_map(df, color, ax, show_colorbar, numeric_values, value_tag, line_width=0.8, shape_list=[]):
     if numeric_values:
         vmin, vmax = df["count"].min(), df["count"].max()
         cmap = _linear_colormap(color_name2=color)
@@ -92,6 +92,11 @@ def _plot_choropleth_map(df, color, ax, show_colorbar, numeric_values, value_tag
     else:
         df.plot('count', linewidth=line_width, edgecolor='0.8', ax=ax, color=df["color"].values)
         ax.legend(title=value_tag, handles=legend_elements, bbox_to_anchor=(1.02, 1), loc='upper left')
+
+    edgecolor = "0.6"
+    for shape, lw in shape_list:
+        shape.plot(facecolor="none", linewidth=lw, edgecolor=edgecolor, ax=ax)
+        edgecolor = "0.4"
 
     return fig, ax
 
@@ -199,16 +204,30 @@ def _create_choropleth_map(df0,
     if numeric_values:
         shape["count"].fillna(0, inplace=True)
     shape = gpd.GeoDataFrame(shape, geometry="geometry")
+
+    shape_list = []
     if level == cfg.LEVEL_COMUNE:
         line_width = 0.2
+        shape_province = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
+        shape_province = shape_province[shape_province[cfg.TAG_PROVINCIA].isin(shape[cfg.TAG_PROVINCIA].unique())]
+        shape_province = gpd.GeoDataFrame(shape_province, geometry="geometry")
+        shape_list.append((shape_province, 0.4))
+        shape_regioni = _get_shape_from_level(cfg.LEVEL_REGIONE)
+        shape_regioni = shape_regioni[shape_regioni[cfg.TAG_REGIONE].isin(shape[cfg.TAG_REGIONE].unique())]
+        shape_regioni = gpd.GeoDataFrame(shape_regioni, geometry="geometry")
+        shape_list.append((shape_regioni, 0.8))
     elif level == cfg.LEVEL_PROVINCIA:
         line_width = 0.4
+        shape_regioni = _get_shape_from_level(cfg.LEVEL_REGIONE)
+        shape_regioni = shape_regioni[shape_regioni[cfg.TAG_REGIONE].isin(shape[cfg.TAG_REGIONE].unique())]
+        shape_regioni = gpd.GeoDataFrame(shape_regioni, geometry="geometry")
+        shape_list.append((shape_regioni, 0.8))
     elif level == cfg.LEVEL_REGIONE:
         line_width = 0.8
     else:
         line_width = 0.2
     log.debug(shape.head(5))
-    fig, ax = _plot_choropleth_map(shape, color, ax, show_colorbar, numeric_values, value_tag, line_width=line_width)
+    fig, ax = _plot_choropleth_map(shape, color, ax, show_colorbar, numeric_values, value_tag, line_width=line_width, shape_list=shape_list)
 
     if print_labels:
         _add_labels_on_plot(shape, ax, print_perc, numeric_values)
@@ -362,7 +381,23 @@ def _create_choropleth_map_interactive(df0,
         else:
             df[col] = df[col].fillna("-")
 
-    plot = plot_bokeh_choropleth_map(df, geo_tag_anag, level, dict_values, title=title)
+    shape_list = []
+    if level == cfg.LEVEL_COMUNE:
+        shape_province = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
+        shape_province = shape_province[shape_province[cfg.TAG_PROVINCIA].isin(shape[cfg.TAG_PROVINCIA].unique())]
+        shape_province = gpd.GeoDataFrame(shape_province, geometry="geometry")
+        shape_list.append((shape_province, 0.25))
+        shape_regioni = _get_shape_from_level(cfg.LEVEL_REGIONE)
+        shape_regioni = shape_regioni[shape_regioni[cfg.TAG_REGIONE].isin(shape[cfg.TAG_REGIONE].unique())]
+        shape_regioni = gpd.GeoDataFrame(shape_regioni, geometry="geometry")
+        shape_list.append((shape_regioni, 0.5))
+    elif level == cfg.LEVEL_PROVINCIA:
+        shape_regioni = _get_shape_from_level(cfg.LEVEL_REGIONE)
+        shape_regioni = shape_regioni[shape_regioni[cfg.TAG_REGIONE].isin(shape[cfg.TAG_REGIONE].unique())]
+        shape_regioni = gpd.GeoDataFrame(shape_regioni, geometry="geometry")
+        shape_list.append((shape_regioni, 0.5))
+
+    plot = plot_bokeh_choropleth_map(df, geo_tag_anag, level, dict_values, title=title, shape_list=shape_list)
 
     return plot
 
@@ -460,7 +495,7 @@ def plot_choropleth_map_regionale_interactive(df_regionale,
         show(plot)
 
 
-def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title=""):
+def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape_list=[]):
     geodf = gpd.GeoDataFrame(df0)
 
     inverted_dict = {value: key for (key, value) in dict_values.items()}
@@ -519,7 +554,7 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title=""):
         line_width = 0.1
         columns = [TableColumn(field=cfg.TAG_COMUNE, title="Comune")] + columns
     elif level == cfg.LEVEL_PROVINCIA:
-        line_width = 0.24
+        line_width = 0.25
         columns = [TableColumn(field=cfg.TAG_PROVINCIA, title="Provincia")] + columns
     elif level == cfg.LEVEL_REGIONE:
         line_width = 0.5
@@ -534,6 +569,15 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title=""):
                       #line_color='gray',
                       line_color='line_color',
                       line_width=line_width)
+    line_color = "darkgray"
+    for shape, lw in shape_list:
+        shape = GeoJSONDataSource(geojson=shape.to_json())
+        p.patches('xs', 'ys', source=shape,
+                          fill_alpha=0,
+                          line_color=line_color,
+                          line_width=lw)
+        line_color = "black"
+
     tool_list = [(HEADER_BOKEH[level], '@' + geo_tag)]
     for key, values in dict_values.items():
         if is_numeric[key]:

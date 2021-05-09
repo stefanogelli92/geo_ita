@@ -33,6 +33,8 @@ class AddGeographicalInfo:
         self.df = None
         self.comuni, self.province, self.sigle, self.regioni = _get_list()
         self._find_info()
+        self.cap_tag = None
+        self.cap_code = None
         self.comuni_tag = None
         self.comuni_code = None
         self.province_tag = None
@@ -60,10 +62,23 @@ class AddGeographicalInfo:
         self.geo_tag_input = col_name
         self.code = self.comuni_code
 
+    # def set_cap_tag(self, col_name):
+    #     list_values = [x for x in list(self.original_df[col_name].unique()) if (str(x) != 'nan') and (x is not None)]
+    #     wrong_format = [x for x in list_values if (not isinstance(x, int)) & (not x.isdigit())]
+    #     if len(wrong_format) == 0:
+    #         self.cap_tag = col_name
+    #         self.comuni_code = cfg.CODE_CAP
+    #         if self.level != cfg.LEVEL_COMUNE:
+    #             self.level = cfg.LEVEL_CAP
+    #             self.geo_tag_input = col_name
+    #             self.code = self.comuni_code
+    #     else:
+    #         raise Exception("{} values with a wrong format: {}".format(len(wrong_format), wrong_format))
+
     def set_province_tag(self, col_name):
         self.province_tag = col_name
         self.province_code = _code_or_desc(list(self.original_df[col_name].unique()))
-        if self.level != cfg.LEVEL_COMUNE:
+        if (self.level != cfg.LEVEL_COMUNE) & (self.level != cfg.LEVEL_CAP):
             self.level = cfg.LEVEL_PROVINCIA
             self.geo_tag_input = col_name
             self.code = self.province_code
@@ -89,13 +104,17 @@ class AddGeographicalInfo:
 
     def run_simple_match(self):
 
-        self.keys = [x for x in [self.comuni_tag, self.province_tag, self.regioni_tag] if x is not None]
+        self.keys = [x for x in [self.cap_tag, self.comuni_tag, self.province_tag, self.regioni_tag] if x is not None]
         if len(self.keys) == 0:
-            raise Exception("You need to set al least one betweeen comuni_tag, province_tag or regioni_tag.")
+            raise Exception("You need to set al least one betweeen cap_tag, comuni_tag, province_tag or regioni_tag.")
         self.df = self.original_df[self.keys].copy().drop_duplicates()
-        self.df = self.df[self.df[self.geo_tag_input].notnull()]
-        self.df[cfg.KEY_UNIQUE] = self.df[self.geo_tag_input]
 
+        self.df = self.df[self.df[self.geo_tag_input].notnull()]
+
+        if self.level == cfg.LEVEL_CAP:
+            self._map_cap_to_comune()
+
+        self.df[cfg.KEY_UNIQUE] = self.df[self.geo_tag_input]
 
         self.info_df = get_df(self.level)
         self.geo_tag_anag = _get_tag_anag(self.code, self.level)
@@ -110,6 +129,15 @@ class AddGeographicalInfo:
             self._run_codice()
         else:
             self._run_denominazione()
+
+    def _map_cap_to_comune(self):
+        self.df = self.df[self.df[self.geo_tag_input].astype(int) != 0]
+        self.df[cfg.KEY_UNIQUE2] = self.df[self.geo_tag_input].apply(lambda x: x.zfill(5))
+        #self.df[cfg.KEY_UNIQUE2] = self.df[cfg.KEY_UNIQUE2].map(xxx)
+        self.level = cfg.LEVEL_COMUNE
+        self.geo_tag_input = cfg.KEY_UNIQUE2
+        self.code = cfg.CODE_DENOMINAZIONE
+        self.df = self.df[self.df[self.geo_tag_input].notnull()]
 
     def _run_sigla(self):
         self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].str.lower()
@@ -353,6 +381,10 @@ class AddGeographicalInfo:
         else:
             raise Exception("Run  run_similarity_match before accept_similarity_result.")
 
+    def use_manual_match(self, manual_dict):
+        self.not_match = [x for x in self.not_match if x not in manual_dict.keys()]
+        self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].replace(manual_dict)
+
     @staticmethod
     def _find_match(not_match1, not_match2, unique=False):
         """
@@ -548,9 +580,8 @@ def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=N
     df["address_search"] = df[address_tag].str.lower()
     if city_tag:
         t = __test_city_in_address(df, city_tag, "address_search")
-        perc_success = t.sum() / n
-        if perc_success < 0.1:
-            df["address_search"] = df["address_search"] + ", " + df[city_tag].str.lower()
+        df["address_search"] = np.where(t, df["address_search"], df["address_search"] + ", " + df[city_tag].str.lower())
+
     log.info("Needed at least {} seconds".format(n))
     geolocator = Nominatim(user_agent="geo_ita")
     geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
@@ -561,18 +592,21 @@ def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=N
     df["longitude"] = df["location"].apply(lambda loc: loc.longitude if loc else None)
     df["address_test"] = df["location"].apply(lambda loc: loc.address if loc else None).str.lower()
     df["test"] = False
+    n_tot = df.shape[0]
+    n_found = df["location"].notnull().sum()
+    n_not_found = n_tot - n_found
     if city_tag:
         df["test"] = __test_city_in_address(df, city_tag, "address_test")
-        log.info("Found {} location over {} address. But {} are not in the correct city.".format(df["location"].notnull().sum(), df.shape[0], (~df["test"]).sum()))
+        log.info("Found {} location over {} address. But {} are not in the correct city.".format(n_found, n_tot, (~df["test"]).sum() - n_not_found))
     elif province_tag:
         df["test"] = df["test"] | __test_city_in_address(df, province_tag, "address_test")
         log.info("Found {} location over {} address. But {} are not in the correct provincia.".format(
-            df["location"].notnull().sum(), df.shape[0], (~df["test"]).sum()))
+            n_found, n_tot, (~df["test"]).sum() - n_not_found))
     elif regione_tag:
         df["test"] = df["test"] | __test_city_in_address(df, regione_tag, "address_test")
         log.info("Found {} location over {} address. But {} are not in the correct regione.".format(
-            df["location"].notnull().sum(), df.shape[0], (~df["test"]).sum()))
+            n_found, n_tot, (~df["test"]).sum() - n_not_found))
     else:
         df.drop(["test"], axis=1, inplace=True)
-        log.info("Found {} location over {} address.".format(df["location"].notnull().sum(), df.shape[0]))
+        log.info("Found {} location over {} address.".format(n_found, n_tot))
     return df

@@ -8,13 +8,16 @@ TAG_REGIONE = "denominazione_regione"
 TAG_CODICE_REGIONE = "codice_regione"
 TAG_POPOLAZIONE = "popolazione"
 TAG_SUPERFICIE = "superficie_km2"
+LEVEL_CAP = -1
 LEVEL_COMUNE = 0
 LEVEL_PROVINCIA = 1
 LEVEL_REGIONE = 2
 CODE_CODICE_ISTAT = 0
 CODE_SIGLA = 1
 CODE_DENOMINAZIONE = 2
+CODE_CAP = 3
 KEY_UNIQUE = "key_geo_ita"
+KEY_UNIQUE2 = "key_geo_ita2"
 
 anagrafica_comuni = {
     "path": r"data_sources/Anagrafica",
