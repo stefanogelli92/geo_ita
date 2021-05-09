@@ -1,5 +1,5 @@
 from geo_ita.src._enrich_dataframe import *
-from geo_ita.src._data import create_df_comuni
+from geo_ita.src._data import get_df_comuni
 from geo_ita.src.definition import *
 from pathlib import PureWindowsPath
 import logging
@@ -103,7 +103,7 @@ def test_add_geographic_info():
 
 
 def test_get_city_from_coordinates():
-    test_df = create_df_comuni()
+    test_df = get_df_comuni()
     test_df.rename(columns={"center_x": "lon",
                             "center_y": "lat"}, inplace=True)
     #test_df = pd.read_pickle(r"C:\Users\A470222\Documents\Python Scripts\ex_mobility\data\processed\cu_anagrafica.pkl")

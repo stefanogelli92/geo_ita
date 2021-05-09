@@ -21,7 +21,9 @@ KEY_UNIQUE2 = "key_geo_ita2"
 
 anagrafica_comuni = {
     "path": r"data_sources/Anagrafica",
+    "file_name": "anagrafica.pkl",
     "column_rename": {"Denominazione in italiano": TAG_COMUNE,
+                      "Denominazione (Italiana e straniera)": "denominazione_comune_ita_straniera",
                       "Codice Comune formato alfanumerico": TAG_CODICE_COMUNE,
                       """Denominazione dell'Unità territoriale sovracomunale 
 (valida a fini statistici)""": TAG_PROVINCIA,
@@ -72,6 +74,18 @@ dimensioni_comuni = {
     "column_rename": {"Codice Comune": TAG_CODICE_COMUNE,
                       "Superficie totale (Km2)": TAG_SUPERFICIE}
 }
+
+df_comuni = {
+    "path": r"data_sources/df_comuni.pkl"}
+
+df_province = {
+    "path": r"data_sources/df_province.pkl"}
+
+df_regioni = {
+    "path": r"data_sources/df_regioni.pkl"}
+
+df_variazioni_mapping = {
+    "path": r"data_sources/df_variazioni_mapping.pkl"}
 
 
 plot_italy_margins_4326 = [[36.4, 47.35], [6.5, 18.6]]

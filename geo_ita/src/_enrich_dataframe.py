@@ -12,7 +12,7 @@ import geopy.geocoders
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 
-from geo_ita.src._data import get_df, create_df_comuni, get_variazioni_amministrative_df, _get_list, create_double_languages_mapping
+from geo_ita.src._data import get_df, get_df_comuni, get_variazioni_amministrative_df, _get_list, get_double_languages_mapping
 from geo_ita.src.config import plot_italy_margins_4326, plot_italy_margins_32632
 import geo_ita.src.config as cfg
 
@@ -234,7 +234,7 @@ class AddGeographicalInfo:
 
     def _find_any_bilingual_name(self):
         if self.comuni_code == cfg.CODE_DENOMINAZIONE:
-            replace_multilanguage_name = create_double_languages_mapping()
+            replace_multilanguage_name = get_double_languages_mapping()
             for k, v in replace_multilanguage_name.items():
                 self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].str.replace(r"\b{}\b".format(k),
                                                                               v,
@@ -537,7 +537,7 @@ def get_city_from_coordinates(df0, rename_col_comune=None, rename_col_provincia=
     # TODO GET comune - provincia - regione
     df0 = df0.rename_axis('key_mapping').reset_index()
     df = df0.copy()
-    df_comuni = create_df_comuni()
+    df_comuni = get_df_comuni()
     df_comuni = gpd.GeoDataFrame(df_comuni)
     df_comuni.crs = {'init': 'epsg:32632'}
     df_comuni = df_comuni.to_crs({'init': 'epsg:4326'})
@@ -571,7 +571,6 @@ def __test_city_in_address(df, city_tag, address_tag):
 
 
 def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=None, regione_tag=None):
-    # TODO log
     # TODO add successive tentative (maps api)
     col_list = [address_tag, city_tag, province_tag, regione_tag]
     col_list = [x for x in col_list if x is not None]

@@ -10,7 +10,7 @@ requirements = ["pandas", "twine", "geopandas", "geopy",
 
 setup(
     name="geo_ita",
-    version="0.0.81",
+    version="0.0.82",
     author="Stefano Gelli",
     author_email="stefano.mat92@gmail.com",
     description="A package for geo analysis for Italy",
@@ -21,13 +21,7 @@ setup(
     install_requires=requirements,
     include_package_data=True,
     package_data={
-            "geo_ita": ["data_sources/Anagrafica/*.*",
-                        "data_sources/Variazioni/*.*",
-                         "data_sources/Comuni/Dimensioni/*.*",
-                         "data_sources/Comuni/Popolazione/*.*",
-                         "data_sources/Comuni/Shape/*.*",
-                         "data_sources/Province/Shape/*.*",
-                         "data_sources/Regioni/Shape/*.*"]
+            "geo_ita": ["data_sources/*.*"]
         },
     classifiers=[
         "Programming Language :: Python :: 3.7",

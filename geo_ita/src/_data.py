@@ -14,7 +14,7 @@ import geo_ita.src.config as cfg
 # Todo Print Last date update
 
 def _get_list():
-    df = get_anagrafica_df()
+    df = get_df_comuni()
     result = [list(df[cfg.TAG_COMUNE].values),
               list(df[cfg.TAG_PROVINCIA].unique()),
               list(df[cfg.TAG_SIGLA].unique()),
@@ -23,19 +23,19 @@ def _get_list():
 
 
 def get_list_comuni():
-    df = get_anagrafica_df()
+    df = get_df_comuni()
     result = list(df[cfg.TAG_COMUNE].values)
     return result
 
 
 def get_list_province():
-    df = get_anagrafica_df()
+    df = get_df_province()
     result = list(df[cfg.TAG_PROVINCIA].unique())
     return result
 
 
 def get_list_regioni():
-    df = get_anagrafica_df()
+    df = get_df_regioni()
     result = list(df[cfg.TAG_REGIONE].unique())
     return result
 
@@ -72,7 +72,7 @@ def __rename_col(df, rename_dict):
     df.columns = [rename_dict[x] if x in rename_dict else x for x in df.columns]
 
 
-def get_anagrafica_df():
+def _get_anagrafica_df():
     """
     Returns
     Restituisce un dataset contenente un'anagrafica ISTAT dei comuni italiani con il dettaglio delle province di
@@ -93,13 +93,10 @@ def get_anagrafica_df():
     return df
 
 
-def create_double_languages_mapping():
-    path = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"])
-    last_files, _ = __get_last_file_from_folder(path)
-
-    df = pd.read_excel(path / PureWindowsPath(last_files))
-    tag_ita = "Denominazione in italiano"
-    tag_2 = "Denominazione (Italiana e straniera)"
+def get_double_languages_mapping():
+    df = get_df_comuni()
+    tag_ita = cfg.TAG_COMUNE
+    tag_2 = "denominazione_comune_ita_straniera"
     df = df[[tag_ita, tag_2]]
     df = df[df[tag_ita] != df[tag_2]]
     sep = "&&"
@@ -113,7 +110,7 @@ def create_double_languages_mapping():
     return df
 
 
-def get_variazioni_amministrative_df():
+def create_variazioni_amministrative_df():
     path = root_path / PureWindowsPath(cfg.variazioni_amministrative["path"])
     last_files, _ = __get_last_file_from_folder(path)
 
@@ -122,10 +119,15 @@ def get_variazioni_amministrative_df():
     __rename_col(df, cfg.variazioni_amministrative["column_rename"])
     df = df[df["tipo_variazione"].isin(["ES", "CD"])]
     df = df[~df["Contenuto del provvedimento"].str.contains("accanto alla denominazione in lingua italiana")]
-    return df
+    df.to_pickle(root_path / PureWindowsPath(cfg.df_variazioni_mapping["path"]))
+    return
 
 
-def get_popolazione_df():
+def get_variazioni_amministrative_df():
+    return pd.read_pickle(root_path / PureWindowsPath(cfg.df_variazioni_mapping["path"]))
+
+
+def _get_popolazione_df():
     """
     Returns
     Restituisce un dataset contenente la popolazione dei singoli comuni italiani (dato ISTAT)
@@ -139,7 +141,7 @@ def get_popolazione_df():
     return df
 
 
-def get_comuni_shape_df():
+def _get_comuni_shape_df():
     """
     Returns
     Restituisce un dataset con le shape di ciascun comune italiano (Provenienza Istat).
@@ -155,7 +157,7 @@ def get_comuni_shape_df():
     return df
 
 
-def get_province_shape_df():
+def _get_province_shape_df():
     """
     Returns
     Restituisce un dataset con le shape di ciascun comune italiano (Provenienza Istat).
@@ -171,7 +173,7 @@ def get_province_shape_df():
     return df
 
 
-def get_regioni_shape_df():
+def _get_regioni_shape_df():
     """
     Returns
     Restituisce un dataset con le shape di ciascun comune italiano (Provenienza Istat).
@@ -187,7 +189,7 @@ def get_regioni_shape_df():
     return df
 
 
-def get_dimensioni_df():
+def _get_dimensioni_df():
     """
     Returns
     Restituisce un dataset contenente un'anagrafica ISTAT dei comuni italiani con il dettaglio delle province di
@@ -206,11 +208,11 @@ def get_dimensioni_df():
 
 def get_df(level):
     if level == cfg.LEVEL_COMUNE:
-        result = create_df_comuni()
+        result = get_df_comuni()
     elif level == cfg.LEVEL_PROVINCIA:
-        result = create_df_province()
+        result = get_df_province()
     elif level == cfg.LEVEL_REGIONE:
-        result = create_df_regioni()
+        result = get_df_regioni()
     else:
         raise Exception("Unknown level")
     return result
@@ -225,14 +227,19 @@ def create_df_comuni():
      - Shape
      - provincia + Regione
     """
-    anagrafica = get_anagrafica_df()[cfg.anagrafica_comuni["column_rename"].values()]
-    popolazione = get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
+    anagrafica = _get_anagrafica_df()[cfg.anagrafica_comuni["column_rename"].values()]
+    popolazione = _get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
     df = anagrafica.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
-    shape = get_comuni_shape_df()[cfg.shape_comuni["column_rename"].values()]
+    shape = _get_comuni_shape_df()[cfg.shape_comuni["column_rename"].values()]
     df = df.merge(shape, how="left", on=cfg.TAG_CODICE_COMUNE)
-    dimensioni = get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
+    dimensioni = _get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
     df = df.merge(dimensioni, how="left", on=cfg.TAG_CODICE_COMUNE)
-    return df
+    df.to_pickle(root_path / PureWindowsPath(cfg.df_comuni["path"]))
+    return
+
+
+def get_df_comuni():
+    return pd.read_pickle(root_path / PureWindowsPath(cfg.df_comuni["path"]))
 
 
 def create_df_province():
@@ -244,18 +251,23 @@ def create_df_province():
      - Shape
      - Regione
     """
-    anagrafica = get_anagrafica_df()[cfg.anagrafica_comuni["column_rename"].values()]
-    popolazione = get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
+    anagrafica = _get_anagrafica_df()[cfg.anagrafica_comuni["column_rename"].values()]
+    popolazione = _get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
     df = anagrafica.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
     df["sigla"].fillna("NAN", inplace=True)
-    dimensioni = get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
+    dimensioni = _get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
     df = df.merge(dimensioni, how="left", on=cfg.TAG_CODICE_COMUNE)
     df = df.groupby([cfg.TAG_PROVINCIA, cfg.TAG_CODICE_PROVINCIA, cfg.TAG_SIGLA,
                      cfg.TAG_REGIONE])[[cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]].sum().reset_index()
     df = df.replace({'NAN': None})
-    shape = get_province_shape_df()[cfg.shape_province["column_rename"].values()]
+    shape = _get_province_shape_df()[cfg.shape_province["column_rename"].values()]
     df = df.merge(shape, how="left", on=cfg.TAG_CODICE_PROVINCIA)
-    return df
+    df.to_pickle(root_path / PureWindowsPath(cfg.df_province["path"]))
+    return
+
+
+def get_df_province():
+    return pd.read_pickle(root_path / PureWindowsPath(cfg.df_province["path"]))
 
 
 def create_df_regioni():
@@ -266,14 +278,26 @@ def create_df_regioni():
      - Dimensione
      - Shape
     """
-    anagrafica = get_anagrafica_df()[cfg.anagrafica_comuni["column_rename"].values()]
-    popolazione = get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
+    anagrafica = _get_anagrafica_df()[cfg.anagrafica_comuni["column_rename"].values()]
+    popolazione = _get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
     df = anagrafica.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
     df["sigla"].fillna("NAN", inplace=True)
-    dimensioni = get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
+    dimensioni = _get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
     df = df.merge(dimensioni, how="left", on=cfg.TAG_CODICE_COMUNE)
     df = df.groupby([cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE])[
         [cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]].sum().reset_index()
-    shape = get_regioni_shape_df()[cfg.shape_regioni["column_rename"].values()]
+    shape = _get_regioni_shape_df()[cfg.shape_regioni["column_rename"].values()]
     df = df.merge(shape, how="left", on=cfg.TAG_CODICE_REGIONE)
+    df.to_pickle(root_path / PureWindowsPath(cfg.df_regioni["path"]))
     return df
+
+
+def get_df_regioni():
+    return pd.read_pickle(root_path / PureWindowsPath(cfg.df_regioni["path"]))
+
+
+def create_df():
+    create_df_comuni()
+    create_df_province()
+    create_df_regioni()
+    create_variazioni_amministrative_df()
