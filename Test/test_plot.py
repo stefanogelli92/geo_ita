@@ -1,6 +1,8 @@
 from geo_ita.src._plot import *
-from geo_ita.src._data import get_df_comuni
+from geo_ita.src._data import get_df_comuni, _get_shape_italia
 import geo_ita.src.config as cfg
+from geo_ita.src.definition import *
+from pathlib import PureWindowsPath
 
 
 def test_1():
@@ -64,10 +66,31 @@ def test_3():
                             "center_y": "lat"}, inplace=True)
     plot_point_map_interactive(test_df, provincia="Prato")
 
-    prova = "ciao"
+
+
+def test_4():
+
+    # path = root_path / PureWindowsPath(r"data_sources/Test/farmacie_italiane.csv")
+    # test_df = pd.read_csv(path, sep=";", engine='python')
+    # test_df = test_df[test_df["LATITUDINE"] != "-"]
+    # test_df["LATITUDINE"] = test_df["LATITUDINE"].str.replace(",", ".")
+    # test_df["LONGITUDINE"] = test_df["LONGITUDINE"].str.replace(",", ".")
+    # plot_kernel_density_estimation_interactive(test_df, n_grid_x=50, n_grid_y=50, comune="Prato")
+
+    test_df = pd.read_pickle(r"C:\Users\A470222\Documents\Python Scripts\ex_mobility\data\Geo/Densita\population_ita_2019-07-01.pkl")
+    plot_kernel_density_estimation_interactive(test_df)
+    test_df = test_df[test_df["denominazione_comune"] == "Milano"]
+    #plot_point_map_interactive(test_df, comune="Milano", columns_dict={"Population": "Popolazione"})
+    plot_kernel_density_estimation_interactive(test_df, value_tag="Population", comune="Milano")
+    #plot_kernel_density_estimation(test_df)
+
+
+    #plot_kernel_density_estimation_interactive(test_df, value_tag="Population", regione="Toscana")
 
 
 if __name__ == '__main__':
-    test_1()
-    test_2()
-    test_3()
+    logging.basicConfig(level=logging.INFO)
+    #test_1()
+    #test_2()
+    #test_3()
+    test_4()

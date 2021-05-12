@@ -12,7 +12,8 @@ import geopy.geocoders
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 
-from geo_ita.src._data import get_df, get_df_comuni, get_variazioni_amministrative_df, _get_list, get_double_languages_mapping
+from geo_ita.src._data import get_df, get_df_comuni, get_variazioni_amministrative_df, _get_list, \
+    get_double_languages_mapping, _get_shape_italia
 from geo_ita.src.config import plot_italy_margins_4326, plot_italy_margins_32632
 import geo_ita.src.config as cfg
 
@@ -515,26 +516,40 @@ def __create_geo_dataframe(df0):
 
 
 def __find_coordinates_system(df, lat, lon):
-    # TODO Controllo correttezza margini italia
-    center_lat = df[lat].median()
-    center_lon = df[lon].median()
+    n_test = min(100, df.shape[0])
+    test = df.sample(n=n_test)
+    test = gpd.GeoDataFrame(
+        test, geometry=gpd.points_from_xy(test[lon], test[lat]))
 
-    if (plot_italy_margins_4326[0][0] <= center_lat <= plot_italy_margins_4326[0][1]) & \
-            (plot_italy_margins_4326[1][0] <= center_lon <= plot_italy_margins_4326[1][1]):
-        result = "epsg:4326"
-        log.info("Found coord system: {}".format(result))
-    elif (plot_italy_margins_32632[0][0] <= center_lat <= plot_italy_margins_32632[0][1]) & \
-            (plot_italy_margins_32632[1][0] <= center_lon <= plot_italy_margins_32632[1][1]):
-        result = "epsg:32632"
-        log.info("Found coord system: {}".format(result))
-    else:
-        result = "epsg:32632"
-        log.warning("Unable to find coord system so the default is used: {}".format(result))
-    return result
+    italy = _get_shape_italia()
+    italy.crs = {'init': "epsg:32632"}
+    italy = italy.to_crs({'init': "epsg:4326"})
+    test_join = gpd.tools.sjoin(test, italy, op='within')
+
+    if test_join.shape[0] / n_test >= 0.8:
+        log.info("Found coord system: epsg:4326")
+        return "epsg:4326"
+
+    italy = italy.to_crs({'init': "epsg:32632"})
+    test_join = gpd.tools.sjoin(test, italy, op='within')
+
+    if test_join.shape[0] / n_test >= 0.8:
+        log.info("Found coord system: epsg:32632")
+        return "epsg:32632"
+
+    italy = italy.to_crs({'init': "epsg:3857"})
+    test_join = gpd.tools.sjoin(test, italy, op='within')
+
+    if test_join.shape[0] / n_test >= 0.8:
+        log.info("Found coord system: epsg:3857")
+        return "epsg:3857"
+
+    log.warning("Unable to find coord system so the default is used epsg:4326")
+
+    return "epsg:4326"
 
 
 def get_city_from_coordinates(df0, rename_col_comune=None, rename_col_provincia=None, rename_col_regione=None):
-    # TODO GET comune - provincia - regione
     df0 = df0.rename_axis('key_mapping').reset_index()
     df = df0.copy()
     df_comuni = get_df_comuni()

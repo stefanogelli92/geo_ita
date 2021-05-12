@@ -296,6 +296,13 @@ def get_df_regioni():
     return pd.read_pickle(root_path / PureWindowsPath(cfg.df_regioni["path"]))
 
 
+def _get_shape_italia():
+    df = create_df_regioni()
+    df["key"] = "Italia"
+    df = gpd.GeoDataFrame(df, geometry="geometry")
+    df = df.dissolve(by='key')
+    return df
+
 def create_df():
     create_df_comuni()
     create_df_province()

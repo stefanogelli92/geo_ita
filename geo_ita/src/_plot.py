@@ -8,6 +8,8 @@ from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+from sklearn.neighbors import KernelDensity
+import scipy.ndimage.filters
 from pandas.api.types import is_numeric_dtype, is_string_dtype
 from bokeh.palettes import Blues9, Greens9, Reds9, Greys9, Purples9, Oranges9, Category10, \
     Category20
@@ -22,9 +24,9 @@ from bokeh.models import (ColumnDataSource, Circle,
                           CategoricalColorMapper, NumberFormatter, NumeralTickFormatter)
 
 import geo_ita.src.config as cfg
-from geo_ita.src._data import get_df_comuni, get_df_province, get_df_regioni
+from geo_ita.src._data import get_df_comuni, get_df_province, get_df_regioni, _get_shape_italia
 from geo_ita.src._enrich_dataframe import _clean_denom_text_value, _clean_denom_text, _get_tag_anag, _code_or_desc, \
-    AddGeographicalInfo, __create_geo_dataframe, __find_coord_columns
+    AddGeographicalInfo, __create_geo_dataframe, __find_coord_columns, __find_coordinates_system
 from pyproj import Proj, transform
 
 HEADER_BOKEH = {cfg.LEVEL_COMUNE: 'Comune',
@@ -68,7 +70,6 @@ def _plot_choropleth_map(df, color, ax, show_colorbar, numeric_values, value_tag
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
         sm._A = []
     else:
-
         color_map = df["count"].value_counts(dropna=False).reset_index()
         if color_map.shape[0] <= 10:
             cmap = get_cmap('tab10')
@@ -257,7 +258,7 @@ def plot_choropleth_map_regionale(df,
                                   print_labels=True,
                                   filter_regioni=None,
                                   print_perc=True,
-                                    labels_size=None):
+                                  labels_size=None):
     _create_choropleth_map(df,
                            region_tag,
                            value_tag,
@@ -533,7 +534,7 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape_
             palette_list[key] = {"field": "values_plot", "transform": LinearColorMapper(
                 palette=palette_list_numerical[i % len(palette_list_numerical)][::-1])}
             legend_list[key] = 0
-            is_numeric[key] =True
+            is_numeric[key] = True
             i += 1
         elif is_string_dtype(df0[key]):
             values = list(df0[key].unique())
@@ -542,7 +543,7 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape_
                                                                                              palette=Category20[
                                                                                                  20] if n_values > 10 else
                                                                                              Category10[10])}
-            is_numeric[key] =False
+            is_numeric[key] = False
             legend_list[key] = 1
     geodf["values_plot"] = geodf[field_list[0]]
     geodf["line_color"] = "gray"
@@ -564,7 +565,8 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape_
     p.yaxis.major_label_text_font_size = '0pt'  # preferred method for removing tick labels
 
     fmt = NumberFormatter(format="0.[0] a")
-    columns = [TableColumn(field=a, title=b, formatter=fmt) if is_numeric[a] else TableColumn(field=a, title=b) for a, b in dict_values.items()]
+    columns = [TableColumn(field=a, title=b, formatter=fmt) if is_numeric[a] else TableColumn(field=a, title=b) for a, b
+               in dict_values.items()]
     # Add patch renderer to figure.
     if level == cfg.LEVEL_COMUNE:
         line_width = 0.1
@@ -582,16 +584,16 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape_
     image = p.patches('xs', 'ys', source=geosource,
                       fill_color=mapper,
                       fill_alpha=0.7,
-                      #line_color='gray',
+                      # line_color='gray',
                       line_color='line_color',
                       line_width=line_width)
     line_color = "darkgray"
     for shape, lw in shape_list:
         shape = GeoJSONDataSource(geojson=shape.to_json())
         p.patches('xs', 'ys', source=shape,
-                          fill_alpha=0,
-                          line_color=line_color,
-                          line_width=lw)
+                  fill_alpha=0,
+                  line_color=line_color,
+                  line_width=lw)
         line_color = "black"
 
     tool_list = [(HEADER_BOKEH[level], '@' + geo_tag)]
@@ -633,15 +635,15 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape_
         p.legend.border_line_width = 0
 
     geosource.selected.js_on_change('indices', CustomJS(
-            args=dict(source=geosource),
-            code="""
+        args=dict(source=geosource),
+        code="""
             var f = cb_obj.indices[0];
             console.log(f);
             var data = source.data;
             data["line_color"][f] = "blue";
             source.change.emit();
             """
-        ))
+    ))
 
     if len(field_list) > 1:
         field_select = Select(title="Select:", value=list(dict_values.values())[0], options=list(dict_values.values()))
@@ -760,12 +762,19 @@ def plot_point_map_interactive(df0,
     else:
         columns = [TableColumn(field=a, title=a) for a in table_columns if a not in [long_tag, lat_tag]]
 
-
+    if columns_dict != None:
+        exp_cmap = LinearColorMapper(palette=Reds9[::-1], low=0,
+                                 high=df[list(columns_dict.keys())[0]].max())
+        fill_color = {'field': list(columns_dict.keys())[0], 'transform': exp_cmap}
+    else:
+        fill_color = "lime"
 
     image1 = Circle(x="x", y="y",
-                    size=7,
-                    fill_color="lime",
-                    line_color="green", line_width=0.5)
+                        size=7,
+                        fill_color=fill_color,
+                        line_width=0.5)
+
+
     plot1 = plot.add_glyph(source, image1)
 
     if columns_dict != None:
@@ -806,7 +815,6 @@ def _get_margins(comune=None,
         margins = shape.loc[shape[tag_shape] == comune, "geometry"].values
         if len(margins) > 0:
             margins = margins[0].bounds
-            margins = [[margins[0], margins[2]], [margins[1], margins[3]]]
     elif provincia is not None:
         provincia = _clean_denom_text_value(provincia)
         code = _code_or_desc([provincia])
@@ -816,7 +824,6 @@ def _get_margins(comune=None,
         margins = shape.loc[shape[tag_shape] == provincia, "geometry"].values
         if len(margins) > 0:
             margins = margins[0].bounds
-            margins = [[margins[0], margins[2]], [margins[1], margins[3]]]
     elif regione is not None:
         regione = _clean_denom_text_value(regione)
         code = _code_or_desc([regione])
@@ -826,12 +833,199 @@ def _get_margins(comune=None,
         margins = shape.loc[shape[tag_shape] == regione, "geometry"].values
         if len(margins) > 0:
             margins = margins[0].bounds
-            margins = [[margins[0], margins[2]], [margins[1], margins[3]]]
     else:
-        margins = cfg.plot_italy_margins_32632
+        df = _get_shape_from_level(cfg.LEVEL_REGIONE)
+        df["key"] = "Italia"
+        df = gpd.GeoDataFrame(df, geometry="geometry")
+        df = df.dissolve(by='key')
+        margins = df["geometry"].values[0].bounds
+
+    margins = [[margins[0], margins[2]], [margins[1], margins[3]]]
 
     inProj, outProj = Proj(init='epsg:32632'), Proj(init='epsg:3857')
     margins_coord = [[], []]
     margins_coord[0], margins_coord[1] = transform(inProj, outProj, margins[0], margins[1])
 
     return margins_coord
+
+
+def plot_kernel_density_estimation(df0,
+                                   value_tag=None,
+                                   comune=None,
+                                   provincia=None,
+                                   regione=None,
+                                   n_grid_x=1000,
+                                   n_grid_y=1000,
+                                   ax=None,
+                                   title=None):
+    df = df0.copy()
+    flag_coord_found, lat_tag, long_tag = __find_coord_columns(df)
+    df[lat_tag] = df[lat_tag].astype(float)
+    df[long_tag] = df[long_tag].astype(float)
+    coord_system_input = __find_coordinates_system(df, lat_tag, long_tag)
+
+    shape_list = []
+
+    if regione:
+        polygon_df = get_df_regioni()
+        polygon_df = polygon_df[polygon_df[cfg.TAG_REGIONE] == regione][["geometry"]]
+        polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
+        polygon_df.crs = {'init': "epsg:32632"}
+        polygon_df = polygon_df.to_crs({'init': coord_system_input})
+        df = gpd.GeoDataFrame(
+            df, geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
+        df = gpd.tools.sjoin(df, polygon_df, op='within')
+        shape_list.append((polygon_df, 0.4, "0.6"))
+        shape = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
+        shape = shape[shape[cfg.TAG_REGIONE] == regione]
+        shape = gpd.GeoDataFrame(shape, geometry="geometry")
+        shape.crs = {'init': "epsg:32632"}
+        shape = shape.to_crs({'init': coord_system_input})
+        shape_list.append((shape, 0.2, "0.8"))
+    elif provincia:
+        polygon_df = get_df_province()
+        polygon_df = polygon_df[polygon_df[cfg.TAG_PROVINCIA] == provincia][["geometry"]]
+        polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
+        polygon_df.crs = {'init': "epsg:32632"}
+        polygon_df = polygon_df.to_crs({'init': coord_system_input})
+        df = gpd.GeoDataFrame(
+            df, geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
+        df = gpd.tools.sjoin(df, polygon_df, op='within')
+        shape_list.append((polygon_df, 0.4, "0.6"))
+        shape = _get_shape_from_level(cfg.LEVEL_COMUNE)
+        shape = shape[shape[cfg.TAG_PROVINCIA] == provincia]
+        shape = gpd.GeoDataFrame(shape, geometry="geometry")
+        shape.crs = {'init': "epsg:32632"}
+        shape = shape.to_crs({'init': coord_system_input})
+        shape_list.append((shape, 0.2, "0.8"))
+    elif comune:
+        polygon_df = get_df_comuni()
+        polygon_df = polygon_df[polygon_df[cfg.TAG_COMUNE] == comune][["geometry"]]
+        polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
+        polygon_df.crs = {'init': "epsg:32632"}
+        polygon_df = polygon_df.to_crs({'init': coord_system_input})
+        df = gpd.GeoDataFrame(
+            df, geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
+        df = gpd.tools.sjoin(df, polygon_df, op='within')
+        shape_list.append((polygon_df, 0.4, "0.6"))
+    else:
+        shape = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
+        shape = gpd.GeoDataFrame(shape, geometry="geometry")
+        shape.crs = {'init': "epsg:32632"}
+        shape = shape.to_crs({'init': coord_system_input})
+        shape_list.append((shape, 0.2, "0.8"))
+        shape = _get_shape_from_level(cfg.LEVEL_REGIONE)
+        shape = gpd.GeoDataFrame(shape, geometry="geometry")
+        shape.crs = {'init': "epsg:32632"}
+        shape = shape.to_crs({'init': coord_system_input})
+        shape_list.append((shape, 0.4, "0.6"))
+
+    x, y = df[long_tag].values, df[lat_tag].values
+    x0, y0 = df[long_tag].min(), df[lat_tag].min()
+    x1, y1 = df[long_tag].max(), df[lat_tag].max()
+
+    if value_tag:
+        weights = df[value_tag].clip(0.00001, None).values
+    else:
+        weights = np.ones(df.shape[0])
+
+    h, _, _ = np.histogram2d(x, y, bins=(np.linspace(x0, x1, n_grid_x), np.linspace(y0, y1, n_grid_y)), weights=weights)
+    h[h == 0] = 1
+
+    z = scipy.ndimage.filters.gaussian_filter(np.log(h.T), 1)
+
+    z[z <= 0] = np.nan
+
+    fig = None
+    if ax is None:
+        fig, ax = plt.subplots()
+    ax.imshow(z, origin='lower', extent=[x0, x1, y0, y1], cmap=get_cmap('Reds'))
+    if title:
+        ax.set_title(title)
+
+    for shape, lw, ec in shape_list:
+        shape.plot(facecolor="none", linewidth=lw, edgecolor=ec, ax=ax)
+    if fig is not None:
+        plt.show()
+    return ax
+
+
+def plot_kernel_density_estimation_interactive(df0,
+                                               value_tag=None,
+                                               comune=None,
+                                               provincia=None,
+                                               regione=None,
+                                               n_grid_x=1000,
+                                               n_grid_y=1000,
+                                               title=None,
+                                               plot_width=1500,
+                                               plot_height=800,
+                                               save_in_path=None,
+                                               show_flag=True):
+    df = df0.copy()
+    flag_coord_found, lat_tag, long_tag = __find_coord_columns(df)
+    df[lat_tag] = df[lat_tag].astype(float)
+    df[long_tag] = df[long_tag].astype(float)
+    coord_system_input = __find_coordinates_system(df, lat_tag, long_tag)
+    margins = _get_margins(comune=comune,
+                           provincia=provincia,
+                           regione=regione)
+    inProj, outProj = Proj(init=coord_system_input), Proj(init='epsg:3857')
+    df[long_tag], df[lat_tag] = transform(inProj, outProj, df[long_tag].values, df[lat_tag].values)
+    if (regione is not None) | (provincia is not None) |(comune is not None):
+        df = df[(df[long_tag] >= margins[0][0]) &
+                (df[long_tag] <= margins[0][1]) &
+                (df[lat_tag] >= margins[1][0]) &
+                (df[lat_tag] <= margins[1][1])
+                ]
+
+
+    x0, y0 = df[long_tag].min(), df[lat_tag].min()
+    x1, y1 = df[long_tag].max(), df[lat_tag].max()
+
+    if value_tag:
+        weights = df[value_tag].clip(0.00001, None).values
+    else:
+        weights = np.ones(df.shape[0])
+
+    h, _, _ = np.histogram2d(df[long_tag], df[lat_tag], bins=(np.linspace(x0, x1, n_grid_x), np.linspace(y0, y1, n_grid_y)), weights=weights)
+    h[h == 0] = 1
+
+    z = scipy.ndimage.filters.gaussian_filter(np.log(h.T), 1)
+
+    z[z <= 0] = 0
+
+    tile_provider = get_provider(CARTODBPOSITRON)
+
+    plot = figure(x_range=(margins[0][0], margins[0][1]),
+                  y_range=(margins[1][0], margins[1][1]),
+                  x_axis_type="mercator", y_axis_type="mercator", plot_width=plot_width, plot_height=plot_height)
+    plot.add_tile(tile_provider)
+    plot.xgrid.grid_line_color = None
+    plot.ygrid.grid_line_color = None
+    plot.yaxis.visible = False
+    plot.grid.visible = False
+    plot.toolbar.logo = None
+    plot.outline_line_color = None
+    plot.xaxis.major_tick_line_color = None
+    plot.xaxis.minor_tick_line_color = None
+    plot.xaxis.major_label_text_font_size = '0pt'
+    plot.toolbar.active_scroll = plot.select_one(WheelZoomTool)
+    if title is not None:
+        plot.title.text = title
+        plot.title.align = 'center'
+    palette = list(Reds9[::-1])
+    palette[0] = 'rgba(0, 0, 0, 0)'
+    palette = tuple(palette)
+    plot.image(image=[z],
+               x=x0, y=y0, dw=x1 - x0, dh=y1 - y0,
+               palette=palette, level="image", global_alpha=0.5)
+    if save_in_path is not None:
+        output_file(save_in_path, mode='inline')
+        save(plot)
+    if show_flag:
+        if save_in_path is None:
+            show(plot)
+        else:
+            os.startfile(save_in_path)
+    return plot

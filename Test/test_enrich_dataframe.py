@@ -1,3 +1,5 @@
+from geo_ita.src._enrich_dataframe import __find_coordinates_system
+
 from geo_ita.src._enrich_dataframe import *
 from geo_ita.src._data import get_df_comuni
 from geo_ita.src.definition import *
@@ -131,8 +133,25 @@ def test_get_coordinates_from_address():
         print("KO ", round(perc_success * 100, 1))
 
 
+def test_find_coordinates_system():
+    test_df = get_df_comuni()
+    result = __find_coordinates_system(test_df, "center_y", "center_x")
+    log.info("Test1: {}".format(result == "epsg:32632"))
+
+    path = root_path / PureWindowsPath(r"data_sources/Test/farmacie_italiane.csv")
+    test_df = pd.read_csv(path, sep=";", engine='python')
+    test_df = test_df[test_df["LATITUDINE"] != "-"]
+    test_df["LATITUDINE"] = test_df["LATITUDINE"].str.replace(",", ".")
+    test_df["LONGITUDINE"] = test_df["LONGITUDINE"].str.replace(",", ".")
+    test_df["LATITUDINE"] = test_df["LATITUDINE"].astype(float)
+    test_df["LONGITUDINE"] = test_df["LONGITUDINE"].astype(float)
+    result = __find_coordinates_system(test_df, "LATITUDINE", "LONGITUDINE")
+    log.info("Test2: {}".format(result == "epsg:4326"))
+
+
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     test_add_geographic_info()
     test_get_city_from_coordinates()
     test_get_coordinates_from_address()
+    test_find_coordinates_system()
