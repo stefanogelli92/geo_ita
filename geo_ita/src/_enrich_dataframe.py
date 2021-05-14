@@ -14,7 +14,6 @@ from geopy.extra.rate_limiter import RateLimiter
 
 from geo_ita.src._data import get_df, get_df_comuni, get_variazioni_amministrative_df, _get_list, \
     get_double_languages_mapping, _get_shape_italia
-from geo_ita.src.config import plot_italy_margins_4326, plot_italy_margins_32632
 import geo_ita.src.config as cfg
 
 log = logging.getLogger(__name__)

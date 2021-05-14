@@ -5,7 +5,7 @@ from geo_ita.src.definition import *
 from pathlib import PureWindowsPath
 
 
-def test_1():
+def test_plot_choropleth_map():
     test_df = get_df_comuni()
     # Aggiungo una finta categoria per i plot non quantitativi
     test_df["prima_lettera"] = test_df[cfg.TAG_REGIONE].str[0]
@@ -64,6 +64,8 @@ def test_3():
     test_df = get_df_comuni()
     test_df.rename(columns={"center_x": "lon",
                             "center_y": "lat"}, inplace=True)
+    plot_point_map(test_df, size=1)
+    plot_point_map(test_df, color_tag="popolazione", provincia="Prato")
     plot_point_map_interactive(test_df, provincia="Prato")
 
 
@@ -90,7 +92,7 @@ def test_4():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    #test_1()
+    #test_plot_choropleth_map()
     #test_2()
-    #test_3()
-    test_4()
+    test_3()
+    #test_4()
