@@ -10,9 +10,6 @@ from geo_ita.src.definition import *
 import geo_ita.src.config as cfg
 
 
-# Todo Remove multiple file in folder
-# Todo Print Last date update
-
 def _get_list():
     df = get_df_comuni()
     result = [list(df[cfg.TAG_COMUNE].values),
@@ -297,11 +294,12 @@ def get_df_regioni():
 
 
 def _get_shape_italia():
-    df = create_df_regioni()
+    df = get_df_regioni()
     df["key"] = "Italia"
     df = gpd.GeoDataFrame(df, geometry="geometry")
     df = df.dissolve(by='key')
     return df
+
 
 def create_df():
     create_df_comuni()

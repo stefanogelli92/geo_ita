@@ -11,6 +11,7 @@ import geopandas as gpd
 import geopy.geocoders
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
+from sklearn.neighbors import KernelDensity
 
 from geo_ita.src._data import get_df, get_df_comuni, get_variazioni_amministrative_df, _get_list, \
     get_double_languages_mapping, _get_shape_italia
@@ -154,8 +155,8 @@ class AddGeographicalInfo:
             log.warning("Matched {} over {}.".format(n_tot - n_not_match, n_tot))
 
     def _run_codice(self):
-        self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].astype(int, errors='coerce')
-        self.info_df[cfg.KEY_UNIQUE] = self.info_df[cfg.KEY_UNIQUE].astype(int, errors='coerce')
+        self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].astype(int, errors='ignore')
+        self.info_df[cfg.KEY_UNIQUE] = self.info_df[cfg.KEY_UNIQUE].astype(int, errors='ignore')
         list_input = self.df[self.df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique()
         self.list_anag = self.info_df[self.info_df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique()
         n_tot = len(list_input)
@@ -436,7 +437,7 @@ def _get_tag_anag(code, level):
 def _code_or_desc(list_values):
     list_values = [x for x in list_values if (str(x) != 'nan') and (x is not None)]
     n_tot = len(list_values)
-    if (sum([isinstance(item, int) or item.isdigit() for item in list_values]) / n_tot) > 0.8:
+    if (sum([isinstance(item, np.integer) or item.isdigit() for item in list_values]) / n_tot) > 0.8:
         result = cfg.CODE_CODICE_ISTAT
     elif (sum([isinstance(item, str) and item.isalpha() and len(item) == 2 for item in list_values]) / n_tot) > 0.8:
         result = cfg.CODE_SIGLA
@@ -623,3 +624,38 @@ def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=N
         df.drop(["test"], axis=1, inplace=True)
         log.info("Found {} location over {} address.".format(n_found, n_tot))
     return df
+
+
+class KDEDensity:
+
+    def __init__(self, df_density, lat_tag, long_tag, value_tag=None):
+        self.df_density = df_density
+        self.lat_tag = lat_tag
+        self.long_tag = long_tag
+        self.value_tag = value_tag
+        self.kde = None
+        self.run_kde()
+
+    def run_kde(self):
+        Xtrain = np.vstack([self.df_density[self.lat_tag],
+                            self.df_density[self.long_tag]]).T
+        #Xtrain *= np.pi / 180.
+
+        self.kde = KernelDensity(bandwidth=0.05, metric='haversine',
+                            kernel='gaussian', algorithm='ball_tree')
+
+        if self.value_tag is not None:
+            Ytrain = self.df_density[self.value_tag].values.T
+            Ytrain[Ytrain <= 0] = 0.0001
+            self.kde.fit(Xtrain, sample_weight=Ytrain)
+        else:
+            self.kde.fit(Xtrain)
+
+    def evaluate_in_point(self, lat, long):
+        xy = np.vstack([[lat], [long]]).T
+        #xy *= np.pi / 180.
+        Z = np.exp(self.kde.score_samples(xy))
+        return Z[0]
+
+
+

@@ -149,9 +149,21 @@ def test_find_coordinates_system():
     log.info("Test2: {}".format(result == "epsg:4326"))
 
 
+def test_KDEDensity():
+    test_df = pd.read_pickle(
+        r"C:\Users\A470222\Documents\Python Scripts\ex_mobility\data\Geo/Densita\population_ita_2019-07-01.pkl")
+    test_df = test_df[test_df["denominazione_comune"] == "Prato"]
+
+    kde = KDEDensity(test_df, "Lat", "Lon", value_tag="Population")
+    prova1 = kde.evaluate_in_point(43.89243338039644, 11.07762361613304)
+    prova2 = kde.evaluate_in_point(43.874280169137386, 11.065771494973662)
+    prova = "Ciao"
+
+
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    test_add_geographic_info()
-    test_get_city_from_coordinates()
-    test_get_coordinates_from_address()
-    test_find_coordinates_system()
+    #test_add_geographic_info()
+    #test_get_city_from_coordinates()
+    #test_get_coordinates_from_address()
+    #test_find_coordinates_system()
+    test_KDEDensity()

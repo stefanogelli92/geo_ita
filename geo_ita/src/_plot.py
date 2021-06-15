@@ -8,7 +8,6 @@ from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from sklearn.neighbors import KernelDensity
 import scipy.ndimage.filters
 from pandas.api.types import is_numeric_dtype, is_string_dtype
 from bokeh.palettes import Blues9, Greens9, Reds9, Greys9, Purples9, Oranges9, Category10, \
@@ -853,20 +852,35 @@ def plot_point_map_interactive(df0,
     else:
         columns = [TableColumn(field=a, title=a) for a in table_columns if a not in [long_tag, lat_tag]]
 
+    legend = False
     if color_tag is not None:
-        exp_cmap = LinearColorMapper(palette=Reds9[::-1], low=0,
-                                 high=df[color_tag].max())
-        fill_color = {'field': color_tag, 'transform': exp_cmap}
+        if is_numeric_dtype(df[color_tag]):
+            exp_cmap = LinearColorMapper(palette=Reds9[::-1], low=0,
+                                         high=df[color_tag].max())
+            fill_color = {'field': color_tag, 'transform': exp_cmap}
+        elif is_string_dtype(df[color_tag]):
+            values = list(df[color_tag].unique())
+            n_values = len(values)
+            fill_color = {"field": color_tag, "transform": CategoricalColorMapper(factors=values,
+                                                                                 palette=Category20[
+                                                                                     20] if n_values > 10 else
+                                                                                 Category10[10])}
+            legend = True
+        else:
+            fill_color = "lime"
     else:
         fill_color = "lime"
 
-    image1 = Circle(x="x", y="y",
-                        size=7,
-                        fill_color=fill_color,
-                        line_width=0.5)
-
-
-    plot1 = plot.add_glyph(source, image1)
+    if legend:
+        plot1 = plot.circle(x="x", y="y", size=7, fill_color=fill_color, line_width=0.5,
+                            legend=color_tag,
+                            source=source)
+        plot.legend.title = color_tag
+        plot.legend.title_text_font_size = "20px"
+        plot.legend.title_text_font_style = "bold"
+    else:
+        plot1 = plot.circle(x="x", y="y", size=7, fill_color=fill_color, line_width=0.5,
+                            source=source)
 
     if info_dict != None:
         tooltips1 = [(b, "@{" + a + "}") for a, b in info_dict.items()]
