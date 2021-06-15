@@ -66,6 +66,7 @@ def test_point_map():
                             "center_y": "lat"}, inplace=True)
     plot_point_map(test_df, size=1)
     plot_point_map(test_df, color_tag="popolazione", provincia="Prato")
+    plot_point_map(test_df, color_tag="denominazione_regione", legend_font=5)
     plot_point_map_interactive(test_df, color_tag="denominazione_regione")
     plot_point_map_interactive(test_df, provincia="Prato")
 

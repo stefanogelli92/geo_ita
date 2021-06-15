@@ -716,7 +716,9 @@ def plot_point_map(df0,
                    color_tag=None,
                    ax=None,
                    title=None,
-                   size=None):
+                   legend_font=None,
+                   size=None,
+                   save_in_path=None):
 
     df = df0.copy()
     flag_coord_found, lat_tag, long_tag = __find_coord_columns(df)
@@ -787,12 +789,36 @@ def plot_point_map(df0,
         ax.set_title(title)
 
     if color_tag:
-        ax.scatter(df[long_tag], df[lat_tag], c=df[color_tag], cmap=get_cmap("Reds"), alpha=0.5, linewidth=0.5, s=size)
+        if is_numeric_dtype(df[color_tag]):
+            ax.scatter(df[long_tag], df[lat_tag], c=df[color_tag], cmap=get_cmap("Reds"), alpha=0.5, linewidth=0.5, s=size)
+        elif is_string_dtype(df[color_tag]):
+            color_labels = list(df[color_tag].unique())
+            n_color = len(list(color_labels))
+            if n_color <= 10:
+                rgb_values = get_cmap("tab10")
+                rgb_values = [rgb_values(i) for i in range(10)]
+            else:
+                rgb_values = get_cmap("tab20")
+                rgb_values = [rgb_values(i) for i in range(20)]
+
+            color_map = dict(zip(color_labels, rgb_values))
+            for c in color_labels:
+                df_plot = df[df[color_tag]==c]
+                ax.scatter(df_plot[long_tag], df_plot[lat_tag], color=color_map[c], label=c, alpha=0.5, linewidth=0.5,
+                       s=size)
+            if legend_font:
+                ax.legend(loc="lower left", title=color_tag, prop={'size': legend_font}, title_fontsize=legend_font*1.1)
+            else:
+                ax.legend(loc="lower left", title=color_tag)
+
     else:
         ax.scatter(df[long_tag], df[lat_tag], c='red', alpha=0.5, s=size)
 
     for shape, lw, ec in shape_list:
         shape.plot(facecolor="none", linewidth=lw, edgecolor=ec, ax=ax)
+    ax.axis('off')
+    if save_in_path:
+        plt.savefig(save_in_path)
     if fig is not None:
         plt.show()
     return ax
