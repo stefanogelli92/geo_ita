@@ -8,3 +8,4 @@ descartes
 xlrd==1.2.0
 unidecode
 pyproj
+bokeh

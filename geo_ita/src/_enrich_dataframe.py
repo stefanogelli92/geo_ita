@@ -11,7 +11,7 @@ import geopandas as gpd
 import geopy.geocoders
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
-from sklearn.neighbors import KernelDensity
+# from sklearn.neighbors import KernelDensity
 
 from geo_ita.src._data import get_df, get_df_comuni, get_variazioni_amministrative_df, _get_list, \
     get_double_languages_mapping, _get_shape_italia
@@ -626,36 +626,36 @@ def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=N
     return df
 
 
-class KDEDensity:
-
-    def __init__(self, df_density, lat_tag, long_tag, value_tag=None):
-        self.df_density = df_density
-        self.lat_tag = lat_tag
-        self.long_tag = long_tag
-        self.value_tag = value_tag
-        self.kde = None
-        self.run_kde()
-
-    def run_kde(self):
-        Xtrain = np.vstack([self.df_density[self.lat_tag],
-                            self.df_density[self.long_tag]]).T
-        #Xtrain *= np.pi / 180.
-
-        self.kde = KernelDensity(bandwidth=0.05, metric='haversine',
-                            kernel='gaussian', algorithm='ball_tree')
-
-        if self.value_tag is not None:
-            Ytrain = self.df_density[self.value_tag].values.T
-            Ytrain[Ytrain <= 0] = 0.0001
-            self.kde.fit(Xtrain, sample_weight=Ytrain)
-        else:
-            self.kde.fit(Xtrain)
-
-    def evaluate_in_point(self, lat, long):
-        xy = np.vstack([[lat], [long]]).T
-        #xy *= np.pi / 180.
-        Z = np.exp(self.kde.score_samples(xy))
-        return Z[0]
+# class KDEDensity:
+#
+#     def __init__(self, df_density, lat_tag, long_tag, value_tag=None):
+#         self.df_density = df_density
+#         self.lat_tag = lat_tag
+#         self.long_tag = long_tag
+#         self.value_tag = value_tag
+#         self.kde = None
+#         self.run_kde()
+#
+#     def run_kde(self):
+#         Xtrain = np.vstack([self.df_density[self.lat_tag],
+#                             self.df_density[self.long_tag]]).T
+#         #Xtrain *= np.pi / 180.
+#
+#         self.kde = KernelDensity(bandwidth=0.05, metric='haversine',
+#                             kernel='gaussian', algorithm='ball_tree')
+#
+#         if self.value_tag is not None:
+#             Ytrain = self.df_density[self.value_tag].values.T
+#             Ytrain[Ytrain <= 0] = 0.0001
+#             self.kde.fit(Xtrain, sample_weight=Ytrain)
+#         else:
+#             self.kde.fit(Xtrain)
+#
+#     def evaluate_in_point(self, lat, long):
+#         xy = np.vstack([[lat], [long]]).T
+#         #xy *= np.pi / 180.
+#         Z = np.exp(self.kde.score_samples(xy))
+#         return Z[0]
 
 
 

@@ -11,7 +11,7 @@ import geopandas as gpd
 import scipy.ndimage.filters
 from pandas.api.types import is_numeric_dtype, is_string_dtype
 from bokeh.palettes import Blues9, Greens9, Reds9, Greys9, Purples9, Oranges9, Category10, \
-    Category20
+    Category20, RdYlGn11
 from bokeh.plotting import save, figure
 from bokeh.layouts import column, row
 from bokeh.io import output_file, show
@@ -62,9 +62,12 @@ def _linear_colormap(color_name1="white", color_name2=None, minval=0, maxval=1):
     return cmap
 
 
-def _plot_choropleth_map(df, color, ax, show_colorbar, numeric_values, value_tag, line_width=0.8, shape_list=[]):
+def _plot_choropleth_map(df, color, ax, title, show_colorbar, vmin, vmax, numeric_values, value_tag, line_width=0.8, shape_list=[]):
     if numeric_values:
-        vmin, vmax = df["count"].min(), df["count"].max()
+        if vmin is None:
+            vmin = df["count"].min()
+        if vmax is None:
+            vmax = df["count"].max()
         cmap = _linear_colormap(color_name2=color)
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
         sm._A = []
@@ -83,6 +86,8 @@ def _plot_choropleth_map(df, color, ax, show_colorbar, numeric_values, value_tag
     fig = None
     if ax is None:
         fig, ax = plt.subplots(1, figsize=(20, 10))
+        if title:
+            ax.set_title(title)
         if show_colorbar & numeric_values:
             cbar = fig.colorbar(sm)
             cbar.ax.tick_params(labelsize=10)
@@ -101,7 +106,7 @@ def _plot_choropleth_map(df, color, ax, show_colorbar, numeric_values, value_tag
     return fig, ax
 
 
-def _add_labels_on_plot(df, ax, print_perc, numeric_values, labels_size):
+def _add_labels_on_plot(df, ax, print_perc, numeric_values, prefix, suffix, labels_size):
     if labels_size is None:
         labels_size = 'large'
     if numeric_values:
@@ -116,7 +121,7 @@ def _add_labels_on_plot(df, ax, print_perc, numeric_values, labels_size):
 
             else:
                 if row['count'] > threshold:
-                    ax.annotate(text=_human_format(row['count']), xy=(row['center_x'], row['center_y']),
+                    ax.annotate(text=str(prefix) + _human_format(row['count']) + str(suffix), xy=(row['center_x'], row['center_y']),
                                 horizontalalignment='center', color='black', wrap=True, fontsize=labels_size)
     else:
         for idx, row in df.iterrows():
@@ -143,8 +148,13 @@ def _create_choropleth_map(df0,
                            level,
                            color,
                            ax,
+                           title,
                            show_colorbar,
+                           vmin,
+                           vmax,
                            print_labels,
+                           prefix,
+                           suffix,
                            print_perc,
                            filter_list=None,
                            level2=None,
@@ -233,14 +243,17 @@ def _create_choropleth_map(df0,
     fig, ax = _plot_choropleth_map(shape,
                                    color,
                                    ax,
+                                   title,
                                    show_colorbar,
+                                   vmin,
+                                   vmax,
                                    numeric_values,
                                    value_tag,
                                    line_width=line_width,
                                    shape_list=shape_list)
 
     if print_labels:
-        _add_labels_on_plot(shape, ax, print_perc, numeric_values, labels_size=labels_size)
+        _add_labels_on_plot(shape, ax, print_perc, numeric_values, prefix, suffix, labels_size=labels_size)
 
     if fig is not None:
         plt.show()
@@ -252,9 +265,14 @@ def plot_choropleth_map_regionale(df,
                                   region_tag,
                                   value_tag,
                                   ax=None,
+                                  title=None,
                                   color="b",
                                   show_colorbar=True,
+                                  vmin=None,
+                                  vmax=None,
                                   print_labels=True,
+                                  prefix="",
+                                  suffix="",
                                   filter_regioni=None,
                                   print_perc=True,
                                   labels_size=None):
@@ -264,8 +282,13 @@ def plot_choropleth_map_regionale(df,
                            cfg.LEVEL_REGIONE,
                            color,
                            ax,
+                           title,
                            show_colorbar,
+                           vmin,
+                           vmax,
                            print_labels,
+                           prefix,
+                           suffix,
                            print_perc,
                            filter_list=filter_regioni,
                            level2=cfg.LEVEL_REGIONE,
@@ -276,9 +299,14 @@ def plot_choropleth_map_provinciale(df,
                                     province_tag,
                                     value_tag,
                                     ax=None,
+                                    title=None,
                                     color="b",
                                     show_colorbar=True,
+                                    vmin=None,
+                                    vmax=None,
                                     print_labels=False,
+                                    prefix="",
+                                    suffix="",
                                     filter_regioni=None,
                                     filter_province=None,
                                     print_perc=True,
@@ -298,8 +326,13 @@ def plot_choropleth_map_provinciale(df,
                            cfg.LEVEL_PROVINCIA,
                            color,
                            ax,
+                           title,
                            show_colorbar,
+                           vmin,
+                           vmax,
                            print_labels,
+                           prefix,
+                           suffix,
                            print_perc,
                            filter_list=filter_list,
                            level2=level_filter,
@@ -310,9 +343,14 @@ def plot_choropleth_map_comunale(df,
                                  comuni_tag,
                                  value_tag,
                                  ax=None,
+                                 title=None,
                                  color="b",
                                  show_colorbar=True,
+                                 vmin=None,
+                                 vmax=None,
                                  print_labels=False,
+                                 prefix="",
+                                 suffix="",
                                  filter_regioni=None,
                                  filter_province=None,
                                  filter_comuni=None,
@@ -336,8 +374,13 @@ def plot_choropleth_map_comunale(df,
                            cfg.LEVEL_COMUNE,
                            color,
                            ax,
+                           title,
                            show_colorbar,
+                           vmin,
+                           vmax,
                            print_labels,
+                           prefix,
+                           suffix,
                            print_perc,
                            filter_list=filter_list,
                            level2=level_filter,
@@ -881,8 +924,15 @@ def plot_point_map_interactive(df0,
     legend = False
     if color_tag is not None:
         if is_numeric_dtype(df[color_tag]):
-            exp_cmap = LinearColorMapper(palette=Reds9[::-1], low=0,
-                                         high=df[color_tag].max())
+            min_values = df[color_tag].min()
+            max_values = df[color_tag].max()
+            if min_values >= 0:
+                exp_cmap = LinearColorMapper(palette=Reds9[::-1], low=0,
+                                             high=max_values)
+            else:
+                palette_max = max(np.abs(min_values), max_values)
+                exp_cmap = LinearColorMapper(palette=RdYlGn11[::-1], low=-palette_max,
+                                             high=palette_max)
             fill_color = {'field': color_tag, 'transform': exp_cmap}
         elif is_string_dtype(df[color_tag]):
             values = list(df[color_tag].unique())
@@ -908,11 +958,20 @@ def plot_point_map_interactive(df0,
         plot1 = plot.circle(x="x", y="y", size=7, fill_color=fill_color, line_width=0.5,
                             source=source)
 
-    if info_dict != None:
-        tooltips1 = [(b, "@{" + a + "}") for a, b in info_dict.items()]
-
+    tooltips1 = []
+    if info_dict is not None:
+        for key, values in info_dict.items():
+            if is_numeric_dtype(df[key]):
+                tooltips1.append((values, '@' + key + '{0.[0] a}'))
+            else:
+                tooltips1.append((values, '@' + key))
     else:
-        tooltips1 = [(a, "@{" + a + "}") for a in table_columns if a not in [long_tag, lat_tag]]
+        for values in table_columns:
+            if values not in [long_tag, lat_tag]:
+                if is_numeric_dtype(df[values]):
+                    tooltips1.append((values, '@' + values + '{0.[0] a}'))
+                else:
+                    tooltips1.append((values, '@' + values))
     tooltips1.append(("Coords", "(@" + lat_tag + "{0,0.0000000},@" + long_tag + "{0,0.0000000})"))
 
     plot.add_tools(HoverTool(renderers=[plot1], tooltips=tooltips1))
