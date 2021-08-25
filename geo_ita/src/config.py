@@ -8,6 +8,7 @@ TAG_REGIONE = "denominazione_regione"
 TAG_CODICE_REGIONE = "codice_regione"
 TAG_POPOLAZIONE = "popolazione"
 TAG_SUPERFICIE = "superficie_km2"
+TAG_RIPARTIZIONE_GEOGRAFICA = "ripartizione_geografica"
 LEVEL_CAP = -1
 LEVEL_COMUNE = 0
 LEVEL_PROVINCIA = 1
@@ -30,7 +31,8 @@ anagrafica_comuni = {
                        "Codice Provincia (Storico)(1)": TAG_CODICE_PROVINCIA,
                        "Denominazione Regione": TAG_REGIONE,
                        "Codice Regione": TAG_CODICE_REGIONE,
-                       "Sigla automobilistica": TAG_SIGLA}}
+                       "Sigla automobilistica": TAG_SIGLA,
+                       "Ripartizione geografica": TAG_RIPARTIZIONE_GEOGRAFICA}}
 
 variazioni_amministrative = {
     "path": r"data_sources/Variazioni",

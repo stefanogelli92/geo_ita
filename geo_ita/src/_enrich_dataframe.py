@@ -338,6 +338,7 @@ class AddGeographicalInfo:
         list_col = list(set(self.keys + [cfg.TAG_COMUNE, cfg.TAG_CODICE_COMUNE,
                                          cfg.TAG_PROVINCIA, cfg.TAG_CODICE_PROVINCIA, cfg.TAG_SIGLA,
                                          cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE,
+                                         cfg.TAG_RIPARTIZIONE_GEOGRAFICA,
                                          cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]))
         if add_missing:
             if drop_not_match:

@@ -162,8 +162,8 @@ def test_KDEDensity():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    #test_add_geographic_info()
+    test_add_geographic_info()
     #test_get_city_from_coordinates()
     #test_get_coordinates_from_address()
     #test_find_coordinates_system()
-    test_KDEDensity()
+    #test_KDEDensity()
