@@ -11,6 +11,10 @@ log.addHandler(logging.NullHandler())
 
 
 def test_add_geographic_info():
+
+    prova = get_geo_info_from_comune("Prato")
+    prova2 = get_geo_info_from_regione("emilia romagna")
+
     path = root_path / PureWindowsPath(r"data_sources/Test/uniform_name.xlsx")
     test_df = pd.read_excel(path)
     n_tot = test_df.shape[0]

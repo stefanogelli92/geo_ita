@@ -338,7 +338,7 @@ class AddGeographicalInfo:
         list_col = list(set(self.keys + [cfg.TAG_COMUNE, cfg.TAG_CODICE_COMUNE,
                                          cfg.TAG_PROVINCIA, cfg.TAG_CODICE_PROVINCIA, cfg.TAG_SIGLA,
                                          cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE,
-                                         cfg.TAG_RIPARTIZIONE_GEOGRAFICA,
+                                         cfg.TAG_AREA_GEOGRAFICA,
                                          cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]))
         if add_missing:
             if drop_not_match:
@@ -548,6 +548,71 @@ def __find_coordinates_system(df, lat, lon):
     log.warning("Unable to find coord system so the default is used epsg:4326")
 
     return "epsg:4326"
+
+
+def get_geo_info_from_comune(comune, provincia=None, regione=None):
+    df = pd.DataFrame(data=[[comune, provincia, regione]], columns=["comune", "provincia", "regione"])
+    addInfo = AddGeographicalInfo(df)
+    addInfo.set_comuni_tag("comune")
+    if provincia:
+        addInfo.set_province_tag("provincia")
+    elif regione:
+        addInfo.set_regioni_tag("regione")
+    addInfo.run_simple_match()
+    addInfo.run_find_frazioni()
+    df = addInfo.get_result()
+    if df[cfg.TAG_COMUNE].values[0] is None:
+        raise Exception("Unable to find the city {}".format(comune))
+    result_dict = {
+        "comune": df[cfg.TAG_COMUNE].values[0],
+        "provincia": df[cfg.TAG_PROVINCIA].values[0],
+        "sigla": df[cfg.TAG_SIGLA].values[0],
+        "regione": df[cfg.TAG_REGIONE].values[0],
+        "area_geografica": df[cfg.TAG_AREA_GEOGRAFICA].values[0],
+        "popolazione": df[cfg.TAG_POPOLAZIONE].values[0],
+        "superficie": df[cfg.TAG_SUPERFICIE].values[0]
+    }
+    return result_dict
+
+
+def get_geo_info_from_regione(regione):
+    df = pd.DataFrame(data=[[regione]], columns=["regione"])
+    addInfo = AddGeographicalInfo(df)
+    addInfo.set_regioni_tag("regione")
+    addInfo.run_simple_match()
+    addInfo.run_find_frazioni()
+    df = addInfo.get_result()
+    if pd.isna(df[cfg.TAG_REGIONE].values[0]):
+        raise Exception("Unable to find the region {}".format(regione))
+    result_dict = {
+        "regione": df[cfg.TAG_REGIONE].values[0],
+        "area_geografica": df[cfg.TAG_AREA_GEOGRAFICA].values[0],
+        "popolazione": df[cfg.TAG_POPOLAZIONE].values[0],
+        "superficie": df[cfg.TAG_SUPERFICIE].values[0]
+    }
+    return result_dict
+
+
+def get_geo_info_from_provincia(provincia, regione=None):
+    df = pd.DataFrame(data=[[provincia, regione]], columns=["provincia", "regione"])
+    addInfo = AddGeographicalInfo(df)
+    addInfo.set_province_tag("provincia")
+    if regione:
+        addInfo.set_regioni_tag("regione")
+    addInfo.run_simple_match()
+    addInfo.run_find_frazioni()
+    df = addInfo.get_result()
+    if df[cfg.TAG_PROVINCIA].values[0] is None:
+        raise Exception("Unable to find the city {}".format(provincia))
+    result_dict = {
+        "provincia": df[cfg.TAG_PROVINCIA].values[0],
+        "sigla": df[cfg.TAG_SIGLA].values[0],
+        "regione": df[cfg.TAG_REGIONE].values[0],
+        "area_geografica": df[cfg.TAG_AREA_GEOGRAFICA].values[0],
+        "popolazione": df[cfg.TAG_POPOLAZIONE].values[0],
+        "superficie": df[cfg.TAG_SUPERFICIE].values[0]
+    }
+    return result_dict
 
 
 def get_city_from_coordinates(df0, rename_col_comune=None, rename_col_provincia=None, rename_col_regione=None):

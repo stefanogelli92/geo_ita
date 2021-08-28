@@ -111,10 +111,11 @@ def create_variazioni_amministrative_df():
     path = root_path / PureWindowsPath(cfg.variazioni_amministrative["path"])
     last_files, _ = __get_last_file_from_folder(path)
 
-    df = pd.read_csv(path / PureWindowsPath(last_files), encoding='latin-1', sep=";")
+    df = pd.read_csv(path / PureWindowsPath(last_files), encoding='latin-1') #, sep=";"
 
     __rename_col(df, cfg.variazioni_amministrative["column_rename"])
     df = df[df["tipo_variazione"].isin(["ES", "CD"])]
+    df["Contenuto del provvedimento"].fillna("", inplace=True)
     df = df[~df["Contenuto del provvedimento"].str.contains("accanto alla denominazione in lingua italiana")]
     df.to_pickle(root_path / PureWindowsPath(cfg.df_variazioni_mapping["path"]))
     return
@@ -255,7 +256,7 @@ def create_df_province():
     dimensioni = _get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
     df = df.merge(dimensioni, how="left", on=cfg.TAG_CODICE_COMUNE)
     df = df.groupby([cfg.TAG_PROVINCIA, cfg.TAG_CODICE_PROVINCIA, cfg.TAG_SIGLA,
-                     cfg.TAG_REGIONE])[[cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]].sum().reset_index()
+                     cfg.TAG_REGIONE, cfg.TAG_AREA_GEOGRAFICA])[[cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]].sum().reset_index()
     df = df.replace({'NAN': None})
     shape = _get_province_shape_df()[cfg.shape_province["column_rename"].values()]
     df = df.merge(shape, how="left", on=cfg.TAG_CODICE_PROVINCIA)
@@ -281,7 +282,7 @@ def create_df_regioni():
     df["sigla"].fillna("NAN", inplace=True)
     dimensioni = _get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
     df = df.merge(dimensioni, how="left", on=cfg.TAG_CODICE_COMUNE)
-    df = df.groupby([cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE])[
+    df = df.groupby([cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE, cfg.TAG_AREA_GEOGRAFICA])[
         [cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]].sum().reset_index()
     shape = _get_regioni_shape_df()[cfg.shape_regioni["column_rename"].values()]
     df = df.merge(shape, how="left", on=cfg.TAG_CODICE_REGIONE)
