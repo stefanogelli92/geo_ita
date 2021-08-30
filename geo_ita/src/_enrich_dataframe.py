@@ -689,6 +689,13 @@ def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=N
     else:
         df.drop(["test"], axis=1, inplace=True)
         log.info("Found {} location over {} address.".format(n_found, n_tot))
+
+    df.loc[~df["test"], "latitude"] = None
+    df.loc[~df["test"], "longitude"] = None
+    # drop columns
+    df.drop(["address_search", "location", "address_test", "test"], axis=1, inplace=True)
+    ## Join df0
+    df = df0.merge(df, how="left", on=col_list)
     return df
 
 
