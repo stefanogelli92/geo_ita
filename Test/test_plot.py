@@ -82,11 +82,11 @@ def test_4():
     # plot_kernel_density_estimation_interactive(test_df, n_grid_x=50, n_grid_y=50, comune="Prato")
 
     test_df = pd.read_pickle(r"C:\Users\A470222\Documents\Python Scripts\ex_mobility\data\Geo/Densita\population_ita_2019-07-01.pkl")
-    plot_kernel_density_estimation_interactive(test_df)
+    #plot_kernel_density_estimation_interactive(test_df)
     test_df = test_df[test_df["denominazione_comune"] == "Prato"]
     pop_total = test_df["Population"].sum()
-    plot_point_map_interactive(test_df, comune="Prato", info_dict={"Population": "Popolazione"})
-    plot_kernel_density_estimation_interactive(test_df, value_tag="Population", comune="Milano")
+    #plot_point_map_interactive(test_df, comune="Prato", info_dict={"Population": "Popolazione"})
+    plot_kernel_density_estimation_interactive(test_df, value_tag="Population", provincia="Roma")
     #plot_kernel_density_estimation(test_df)
 
 
@@ -97,5 +97,5 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     #test_plot_choropleth_map()
     #test_2()
-    test_point_map()
-    #test_4()
+    #test_point_map()
+    test_4()

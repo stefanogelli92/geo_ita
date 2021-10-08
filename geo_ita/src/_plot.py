@@ -1042,9 +1042,9 @@ def _get_margins(comune=None,
 def _filter_margins(df, margins, long_tag=None, lat_tag=None):
     if long_tag:
         result = df[(df[long_tag] >= margins[0][0]) &
-                (df[long_tag] <= margins[0][1]) &
-                (df[lat_tag] >= margins[1][0]) &
-                (df[lat_tag] <= margins[1][1])
+                    (df[long_tag] <= margins[0][1]) &
+                    (df[lat_tag] >= margins[1][0]) &
+                    (df[lat_tag] <= margins[1][1])
                 ]
     else:
         result = df[(df.geometry.x >= margins[0][0]) &
@@ -1170,6 +1170,7 @@ def plot_kernel_density_estimation_interactive(df0,
                                                show_flag=True):
     df = df0.copy()
     flag_coord_found, lat_tag, long_tag = __find_coord_columns(df)
+    log.info("Found columns about coordinates: ({}, {})".format(lat_tag, long_tag))
     df[lat_tag] = df[lat_tag].astype(float)
     df[long_tag] = df[long_tag].astype(float)
     coord_system_input = __find_coordinates_system(df, lat_tag, long_tag)
@@ -1178,8 +1179,8 @@ def plot_kernel_density_estimation_interactive(df0,
                            regione=regione)
     inProj, outProj = Proj(init=coord_system_input), Proj(init='epsg:3857')
     df[long_tag], df[lat_tag] = transform(inProj, outProj, df[long_tag].values, df[lat_tag].values)
-    if (regione is not None) | (provincia is not None) |(comune is not None):
-        df = _filter_margins(df, long_tag, lat_tag, margins)
+    if (regione is not None) | (provincia is not None) | (comune is not None):
+        df = _filter_margins(df, margins, long_tag=long_tag, lat_tag=lat_tag)
 
 
     x0, y0 = df[long_tag].min(), df[lat_tag].min()
@@ -1219,9 +1220,10 @@ def plot_kernel_density_estimation_interactive(df0,
     palette = list(Reds9[::-1])
     palette[0] = 'rgba(0, 0, 0, 0)'
     palette = tuple(palette)
-    plot.image(image=[z],
-               x=x0, y=y0, dw=x1 - x0, dh=y1 - y0,
-               palette=palette, level="image", global_alpha=0.5)
+    if df.shape[0] > 0:
+        plot.image(image=[z],
+                   x=x0, y=y0, dw=x1 - x0, dh=y1 - y0,
+                   palette=palette, level="image", global_alpha=0.5)
     if save_in_path is not None:
         output_file(save_in_path, mode='inline')
         save(plot)

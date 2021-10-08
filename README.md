@@ -32,7 +32,7 @@ Here you can get all the data avaiable in this libraries.
 #### Usage
 You can import all the informations listed before with 3 functions: *create_df_comuni*, *create_df_province* and *create_df_regioni* with the 3 different level of aggregation.
 ```python
-from geo_ita.src._data import create_df_comuni
+from geo_ita.data import create_df_comuni
 
 df_comuni = create_df_comuni()
 
@@ -42,6 +42,7 @@ denominazione_comune  codice_comune denominazione_provincia  codice_provincia de
                Agliè           1001                  Torino                 1              Piemonte               1    TO         2621  POLYGON ((404703.558 5026682.655, 404733.559 5...  404137.448470  5.024327e+06         13.1464
              Airasca           1002                  Torino                 1              Piemonte               1    TO         3598  POLYGON ((380700.909 4977305.520, 380702.627 4...  380324.100684  4.975382e+06         15.7395 
 ```
+You can also get the list of *Comuni*, *Province* and *Regioni* with *get_list_comuni*, *get_list_province* and *get_list_regioni*.
 ***
 ### Enrich Dataset
 ***
