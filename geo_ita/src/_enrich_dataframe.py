@@ -13,8 +13,8 @@ from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 # from sklearn.neighbors import KernelDensity
 
-from geo_ita.src._data import get_df, get_df_comuni, get_variazioni_amministrative_df, _get_list, \
-    get_double_languages_mapping, _get_shape_italia
+from geo_ita.src._data import (get_df, get_df_comuni, get_variazioni_amministrative_df, _get_list,
+    get_double_languages_mapping, _get_shape_italia)
 import geo_ita.src.config as cfg
 
 log = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ class AddGeographicalInfo:
 
     def __init__(self, df):
         self.original_df = df
+        self._test_dataframe()
         self.keys = None
         self.df = None
         self.comuni, self.province, self.sigle, self.regioni = _get_list()
@@ -52,11 +53,20 @@ class AddGeographicalInfo:
         self.frazioni_dict = None
         self.similarity_dict = None
 
+    def _test_dataframe(self):
+        if not isinstance(self.original_df, pd.DataFrame):
+            raise Exception("Call AddGeographicalInfo with a dataframe as parameter.")
+
+    def _test_column_in_dataframe(self, col):
+        if col not in self.original_df.columns:
+            raise Exception("Column not found in dataframe.")
+
     def _find_info(self):
         pass
         #for col in self.df.select_dtypes(include='object').columns:
 
     def set_comuni_tag(self, col_name):
+        self._test_column_in_dataframe(col_name)
         self.comuni_tag = col_name
         self.comuni_code = _code_or_desc(list(self.original_df[col_name].unique()))
         self.level = cfg.LEVEL_COMUNE
@@ -77,6 +87,7 @@ class AddGeographicalInfo:
     #         raise Exception("{} values with a wrong format: {}".format(len(wrong_format), wrong_format))
 
     def set_province_tag(self, col_name):
+        self._test_column_in_dataframe(col_name)
         self.province_tag = col_name
         self.province_code = _code_or_desc(list(self.original_df[col_name].unique()))
         if (self.level != cfg.LEVEL_COMUNE) & (self.level != cfg.LEVEL_CAP):
@@ -85,6 +96,7 @@ class AddGeographicalInfo:
             self.code = self.province_code
 
     def set_regioni_tag(self, col_name):
+        self._test_column_in_dataframe(col_name)
         self.regioni_tag = col_name
         self.regioni_code = _code_or_desc(list(self.original_df[col_name].unique()))
         if self.level is None:
@@ -199,6 +211,8 @@ class AddGeographicalInfo:
             log.warning("Matched {} over {}.".format(n_tot - n_not_match, n_tot))
 
     def get_not_matched(self):
+        if self.not_match is None:
+            raise Exception("Run simple match before get list of not matched values.")
         return self.not_match
 
     def _test_if_df_contains_homonym_comuni(self):
@@ -286,7 +300,7 @@ class AddGeographicalInfo:
         return value
 
     def run_find_frazioni(self):
-        geolocator = Nominatim(user_agent="trial")  # "trial"
+        geolocator = Nominatim(timeout=10, user_agent=cfg.USER_AGENT)  # "trial"
         geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
         regioni = [_clean_denom_text_value(a) for a in self.regioni]
         province = [_clean_denom_text_value(a) for a in self.province]
@@ -384,6 +398,8 @@ class AddGeographicalInfo:
             raise Exception("Run  run_similarity_match before accept_similarity_result.")
 
     def use_manual_match(self, manual_dict):
+        if not isinstance(manual_dict, dict):
+           raise Exception("Pass a dictionary (name -> replace).")
         self.not_match = [x for x in self.not_match if x not in manual_dict.keys()]
         self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].replace(manual_dict)
 
@@ -438,7 +454,9 @@ def _get_tag_anag(code, level):
 def _code_or_desc(list_values):
     list_values = [x for x in list_values if (str(x) != 'nan') and (x is not None)]
     n_tot = len(list_values)
-    if (sum([isinstance(item, np.integer) or item.isdigit() for item in list_values]) / n_tot) > 0.8:
+    if n_tot == 0:
+        result = cfg.CODE_DENOMINAZIONE
+    elif (sum([isinstance(item, np.integer) or item.isdigit() for item in list_values]) / n_tot) > 0.8:
         result = cfg.CODE_CODICE_ISTAT
     elif (sum([isinstance(item, str) and item.isalpha() and len(item) == 2 for item in list_values]) / n_tot) > 0.8:
         result = cfg.CODE_SIGLA
@@ -500,7 +518,8 @@ def __create_geo_dataframe(df0):
         flag_coord_found, lat_tag, long_tag = __find_coord_columns(df0)
         if flag_coord_found:
             df = gpd.GeoDataFrame(
-                df0, geometry=gpd.points_from_xy(df0[long_tag], df0[lat_tag]))
+                df0, geometry=gpd.points_from_xy(df0[long_tag].astype('float32'), df0[lat_tag].astype('float32')))
+            df.loc[(df[long_tag].isna()) | (df[lat_tag].isna()), "geometry"] = None
             coord_system = __find_coordinates_system(df0, lat_tag, long_tag)
             df.crs = {'init': coord_system}
             log.info("Found columns about coordinates: ({}, {})".format(lat_tag, long_tag))
@@ -624,6 +643,7 @@ def get_city_from_coordinates(df0, rename_col_comune=None, rename_col_provincia=
     df_comuni = df_comuni.to_crs({'init': 'epsg:4326'})
 
     df = __create_geo_dataframe(df)
+    df = df[df["geometry"].notnull()]
     df = df[["key_mapping", "geometry"]].drop_duplicates()
     df = df.to_crs({'init': 'epsg:4326'})
 
@@ -648,11 +668,13 @@ def get_city_from_coordinates(df0, rename_col_comune=None, rename_col_provincia=
 
 
 def __test_city_in_address(df, city_tag, address_tag):
-    return df.apply(lambda x: x[city_tag].lower() in x[address_tag] if x[address_tag] else False, axis=1)
+    return df.apply(lambda x: x[city_tag].lower() in x[address_tag] if (x[address_tag] and x[city_tag]) else False, axis=1)
 
 
 def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=None, regione_tag=None):
     # TODO add successive tentative (maps api)
+    if not isinstance(df0, pd.DataFrame) or not isinstance(address_tag, str) or address_tag not in df0.columns:
+        raise Exception("Insert a Pandas DataFrame as first parameter and the name of the column with the info of the address.")
     col_list = [address_tag, city_tag, province_tag, regione_tag]
     col_list = [x for x in col_list if x is not None]
     df = df0[col_list].drop_duplicates()
@@ -660,44 +682,88 @@ def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=N
     df["address_search"] = df[address_tag].str.lower()
     if city_tag:
         t = __test_city_in_address(df, city_tag, "address_search")
+        t = t | df[city_tag].isna()
         df["address_search"] = np.where(t, df["address_search"], df["address_search"] + ", " + df[city_tag].str.lower())
 
     log.info("Needed at least {} seconds".format(n))
-    geolocator = Nominatim(user_agent="geo_ita")
+    geolocator = Nominatim(timeout=10, user_agent=cfg.USER_AGENT)
     geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
     start = time.time()
     df["location"] = (df["address_search"]).apply(geocode)
-    log.info("Finding of location from address ended in {} seconds".format(time.time() - start))
+    log.info("Finding locations from address ended in {} seconds".format(time.time() - start))
     df["latitude"] = df["location"].apply(lambda loc: loc.latitude if loc else None)
     df["longitude"] = df["location"].apply(lambda loc: loc.longitude if loc else None)
     df["address_test"] = df["location"].apply(lambda loc: loc.address if loc else None).str.lower()
-    df["test"] = False
+    df = df.assign(test=False)
     n_tot = df.shape[0]
     n_found = df["location"].notnull().sum()
     n_not_found = n_tot - n_found
     if city_tag:
         df["test"] = __test_city_in_address(df, city_tag, "address_test")
+        df.loc[~df["test"], "latitude"] = None
+        df.loc[~df["test"], "longitude"] = None
         log.info("Found {} location over {} address. But {} are not in the correct city.".format(n_found, n_tot, (~df["test"]).sum() - n_not_found))
     elif province_tag:
         df["test"] = df["test"] | __test_city_in_address(df, province_tag, "address_test")
+        df.loc[~df["test"], "latitude"] = None
+        df.loc[~df["test"], "longitude"] = None
         log.info("Found {} location over {} address. But {} are not in the correct provincia.".format(
             n_found, n_tot, (~df["test"]).sum() - n_not_found))
     elif regione_tag:
         df["test"] = df["test"] | __test_city_in_address(df, regione_tag, "address_test")
+        df.loc[~df["test"], "latitude"] = None
+        df.loc[~df["test"], "longitude"] = None
         log.info("Found {} location over {} address. But {} are not in the correct regione.".format(
             n_found, n_tot, (~df["test"]).sum() - n_not_found))
     else:
-        df.drop(["test"], axis=1, inplace=True)
         log.info("Found {} location over {} address.".format(n_found, n_tot))
 
-    df.loc[~df["test"], "latitude"] = None
-    df.loc[~df["test"], "longitude"] = None
+
     # drop columns
     df.drop(["address_search", "location", "address_test", "test"], axis=1, inplace=True)
     ## Join df0
     df = df0.merge(df, how="left", on=col_list)
     return df
 
+
+def get_address_from_coordinates(df0, latitude_columns=None, longitude_columns=None):
+    if not isinstance(df0, pd.DataFrame):
+        raise Exception("Insert a Pandas DataFrame as first parameter.")
+    if latitude_columns is None or longitude_columns is None:
+        flag_coord_found, latitude_columns, longitude_columns = __find_coord_columns(df0)
+        if not flag_coord_found:
+            raise Exception("Unable to find the latitude and longitude columns. Please specify them in latitude_columns and longitude_columns")
+    try:
+        df0[latitude_columns] = df0[latitude_columns].astype(float)
+        df0[latitude_columns] = df0[latitude_columns].astype(float)
+    except:
+        raise Exception("Use columns with float type for coordinates.")
+    if (latitude_columns is not None and latitude_columns not in df0.columns) or\
+        (longitude_columns is not None and longitude_columns not in df0.columns):
+        raise Exception("Use latitude_columns and longitude_column to specify the columns where to find the coordinates.")
+    df = df0[[latitude_columns, longitude_columns]].drop_duplicates()
+    df['geom'] = df[latitude_columns].map(str) + ', ' + df[longitude_columns].map(str)
+    n = df.shape[0]
+    log.info("Needed at least {} seconds".format(n))
+    geolocator = Nominatim(timeout=10, user_agent=cfg.USER_AGENT)
+    reverse = RateLimiter(geolocator.reverse, min_delay_seconds=1)
+    start = time.time()
+    df["location"] = (df["geom"]).apply(reverse)
+    log.info("Finding address from coordinates ended in {} seconds".format(time.time() - start))
+
+    address_col = "address"
+    if address_col in df0.columns:
+        address_col = "address_geo_ita"
+    city_col = "city"
+    if city_col in df0.columns:
+        city_col = "city_geo_ita"
+    # TODO Ripulire address estraendo solo informazioni utili e uniformi
+    df[address_col] = df["location"].apply(lambda loc: loc.address if loc else None).str.lower()
+    df[city_col] = df["location"].apply(lambda loc: loc.raw["address"]["city"] if (loc and "city" in loc.raw["address"]) else None).str.lower()
+    df = df.drop(["geom", "location"], axis=1)
+    ## Join df0
+    df = df0.merge(df, how="left", on=[latitude_columns, longitude_columns])
+    return df
 
 # class KDEDensity:
 #

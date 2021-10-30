@@ -1,3 +1,4 @@
+USER_AGENT = "geo_ita"
 
 TAG_COMUNE = "denominazione_comune"
 TAG_CODICE_COMUNE = "codice_comune"

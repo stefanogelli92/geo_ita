@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: geo-ita
-Version: 0.1.6
+Version: 0.1.8
 Summary: A package for geo analysis for Italy
 Home-page: https://github.com/enelx-customer-business-analytics/geo_ita.git
 Author: Stefano Gelli
@@ -23,7 +23,7 @@ Description: # Geo Ita
         
         ## Documentation
         1. [Data](#data)
-        2. [Enrich Dataset](#enrich_dataset)
+        2. [Enrich Dataframe](#Enrich Dataframe)
         3. [Plot](#plot)
         
         ### Data
@@ -52,17 +52,75 @@ Description: # Geo Ita
         ```
         You can also get the list of *Comuni*, *Province* and *Regioni* with *get_list_comuni*, *get_list_province* and *get_list_regioni*.
         ***
-        ### Enrich Dataset
+        ### Enrich Dataframe
         ***
         Here you can find some methods that add some geografical information to your dataset.
-        - **get_province_from_city**: 
-                <br>From a given columns with the information of *Comune* (works both with Codice ISTAT or denominazione), add the hierarchical structure of *Province* and *Regioni*.
-                <br>Warning: If you use the name of *Comune* it is not always possible to match the name present in the anagrafica ISTAT (See FAQ).
-        - **get_city_from_coordinates**:    
-                From each pair of coordinates (the library try to atomatically detect the coord system used) add the informations of *Comune*, *Provincia* and *Regione*.
-        - **get_coordinates_from_address**: 
-                <br>This will return the coordinates of a place from the address. You can add information of *Comune*, *Provincia* or *Regione* in order to help the search and test the result.
-                <br>Warning: This process cannot always determine the coordinates. Read the FAQ to better understand limitation and tips for a better result.
+        - **[Geocoding](https://en.wikipedia.org/wiki/Address_geocoding)**: 
+                <br>This method will return the coordinates of a place from the address. It will also add informations about *Comune*, *Provincia* or *Regione* in order to help the search and test the result.
+                <br>Warning: This process cannot always determinate the coordinates. Read the FAQ to better understand limitation and tips for a better result.
+        ```python
+        # Usage
+        from geo_ita.enrich_dataframe import get_coordinates_from_address
+        
+        df = pd.DataFrame(data=[["Corso di Francia, Roma"],
+                                ["Via Larga, Milano"],
+                                ["Via NUova Marina, Napoli"]], columns=["address"])
+        
+        df = get_coordinates_from_address(df, "address")
+        
+        # Output
+        
+                            address   latitude  longitude
+             Corso di Francia, Roma  41.939965  12.470965
+                  Via Larga, Milano  45.460908   9.191498
+           Via NUova Marina, Napoli  40.846269  14.267525 
+        ```
+        - **[Reverse Geocoding](https://en.wikipedia.org/wiki/Reverse_geocoding)**: 
+                <br>This method will return the address of a place from the coordinates.
+        ```python
+        # Usage
+        from geo_ita.enrich_dataframe import get_address_from_coordinates
+        
+        df = pd.DataFrame(data=[[41.939965,  12.470965],
+                                [45.460908,   9.191498],
+                                [40.846269,  14.267525]], columns=["latitide", "longitude"])
+        
+        df = get_address_from_coordinates(df, latitude_columns="latitide", longitude_columns="longitude")
+        
+        # Output
+        
+           latitude  longitude                     address      city
+          41.939965  12.470965    'corso di francia, roma'    'Roma'
+          45.460908   9.191498         'via larga, Milano'  'Milano'
+          40.846269  14.267525  'via nuova marina, Napoli'  'Napoli'
+        ```
+        - **AddGeographicalInfo**:
+                <br>From a given columns with the information of *Comune*, *Provincia* or *Regione* (works both with Codice ISTAT, denominazione or sigla), add the hierarchical structure of *Province* and *Regioni* and the value of population and area.
+                <br>Warning: If you use the name of *Comune* it is not always possible to match the name present in the anagrafica ISTAT, this method try to clean the value and find possible localitÃ  used instead of the name of *comune*.
+        ```python
+        # Usage
+        from geo_ita.enrich_dataframe import AddGeographicalInfo
+        
+        df = pd.DataFrame(data=[["Milano", "Milano", "Milano", "MI", "Lombardia"],
+                                ["Florence", "Firenze", "Firenze", "FI", "Toscana"],
+                                ["florence", "Firenze", "Firenze", "FI", "Toscana"],
+                                ["porretta terme", "Alto Reno Terme", "Bologna", "BO", "Emilia romagna"]], columns=["Citta", "comune", "provincia", "sl", "regione"])
+        
+        addinfo = AddGeographicalInfo(df)
+        addinfo.set_comuni_tag("Citta")
+        addinfo.run_simple_match()
+        addinfo.run_find_frazioni()
+        result = addinfo.get_result()
+        
+        # Output
+        
+                   Citta           comune provincia  sl         regione  popolazione    codice_comune  codice_provincia denominazione_comune  superficie_km2  denominazione_provincia  codice_regione area_geografica sigla  denominazione_regione
+                  Milano           Milano    Milano  MI       Lombardia      1406242            15146                15               Milano        181.6727                   Milano               3      Nord-ovest    MI              Lombardia
+                Florence          Firenze   Firenze  FI         Toscana       366927            48017                48              Firenze        102.3187                  Firenze               9          Centro    FI                Toscana
+                florence          Firenze   Firenze  FI         Toscana       366927            48017                48              Firenze        102.3187                  Firenze               9          Centro    FI                Toscana
+          porretta terme  Alto Reno Terme   Bologna  BO  Emilia romagna         6953            37062                37      Alto Reno Terme             NaN                  Bologna               8        Nord-est    BO         Emilia-Romagna
+        ```
+        
         ***
         ### Plot
         ***
