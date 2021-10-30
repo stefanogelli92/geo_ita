@@ -30,11 +30,11 @@ Here you can get all the data avaiable in this libraries.
 - **Shape** (source [ISTAT](https://www.istat.it/it/archivio/222527) - updated to 01-01-2020): 
        <br> Contains the shapes of each *Comune*, *Provincia* and *Regione*. The main use of the shapes is to plot the [Choropleth map](https://en.wikipedia.org/wiki/Choropleth_map#:~:text=A%20choropleth%20map%20(from%20Greek,each%20area%2C%20such%20as%20population)).
 #### Usage
-You can import all the informations listed before with 3 functions: *create_df_comuni*, *create_df_province* and *create_df_regioni* with the 3 different level of aggregation.
+You can import all the informations listed before with 3 functions: *get_df_comuni*, *get_df_province* and *get_df_regioni* with the 3 different level of aggregation.
 ```python
-from geo_ita.data import create_df_comuni
+from geo_ita.data import get_df_comuni
 
-df_comuni = create_df_comuni()
+df_comuni = get_df_comuni()
 
 df_comuni.head(2)
 
@@ -139,11 +139,11 @@ Here you can find some methods that show some useful plot from a dataframe with 
 
 ```python
 # Usage
-from geo_ita.data import create_df_regioni
+from geo_ita.data import get_df_regioni
 from geo_ita.plot import plot_choropleth_map_regionale, plot_choropleth_map_comunale_interactive
 
 # Get the dataframe you want to use
-df = create_df_regioni()
+df = get_df_regioni()
 
 
 
