@@ -139,15 +139,33 @@ Here you can find some methods that show some useful plot from a dataframe with 
 
 ```python
 # Usage
-from geo_ita.data import get_df_regioni
-from geo_ita.plot import plot_choropleth_map_regionale, plot_choropleth_map_comunale_interactive
+from geo_ita.data import get_df_regioni, get_df_province
+from geo_ita.plot import plot_choropleth_map_regionale, plot_choropleth_map_provinciale_interactive
 
 # Get the dataframe you want to use
 df = get_df_regioni()
+   denominazione_regione  superficie_km2  popolazione
+                 Abruzzo      10831.8388      1293941
+              Basilicata      10073.3226       553254
+                Calabria      14706.3858      1894110
 
-
-
+# Simple use plot
+plot_choropleth_map_regionale(df, region_tag='denominazione_regione', value_tag='popolazione')
 ```
+![plot](./Test/usage_choropleth_regionale.png?raw=true)
+```python
+# Get the dataframe you want to use
+df = get_df_province()
+
+# Simple use plot
+plot_choropleth_map_provinciale_interactive(df, 'denominazione_regione', {"popolazione": "Popolazione",
+                                                                          "superficie_km2": "Superficie"},
+                                                filter_regioni=["Toscana"],
+                                                title="Toscana")
+```
+![plot](./Test/usage_choropleth_provinciale_interactive.png?raw=true)
+
+
 
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)

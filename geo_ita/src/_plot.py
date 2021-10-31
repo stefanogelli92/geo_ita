@@ -117,17 +117,20 @@ def _add_labels_on_plot(df, ax, print_perc, numeric_values, prefix, suffix, labe
                 if row['count'] > threshold:
                     ax.annotate(text=round(row['count'] / total * 100, 1).astype(str) + "%",
                                 xy=(row['center_x'], row['center_y']),
-                                horizontalalignment='center', fontsize=labels_size, color='black', wrap=True)
+                                ha='center', va="center",
+                                fontsize=labels_size, color='black', wrap=True, )
 
             else:
                 if row['count'] > threshold:
                     ax.annotate(text=str(prefix) + _human_format(row['count']) + str(suffix), xy=(row['center_x'], row['center_y']),
-                                horizontalalignment='center', color='black', wrap=True, fontsize=labels_size)
+                                ha='center', va="center",
+                                color='black', wrap=True, fontsize=labels_size)
     else:
         for idx, row in df.iterrows():
             ax.annotate(text=row['count'],
                         xy=(row['center_x'], row['center_y']),
-                        horizontalalignment='center', color='black', wrap=True, fontsize=labels_size)
+                        ha='center', va="center",
+                        color='black', wrap=True, fontsize=labels_size)
 
 
 def _get_shape_from_level(level):
@@ -158,7 +161,9 @@ def _create_choropleth_map(df0,
                            print_perc,
                            filter_list=None,
                            level2=None,
-                           labels_size=None):
+                           labels_size=None,
+                           save_path=None,
+                           dpi=100):
     # Todo add unità di misura labels / clorobar
     # Todo Cambio nome legenda
     # Todo Set title
@@ -256,7 +261,10 @@ def _create_choropleth_map(df0,
         _add_labels_on_plot(shape, ax, print_perc, numeric_values, prefix, suffix, labels_size=labels_size)
 
     if fig is not None:
-        plt.show()
+        if save_path is not None:
+            fig.savefig(save_path, bbox_inches='tight', dpi=dpi)
+        else:
+            plt.show()
 
     return fig
 
@@ -274,8 +282,10 @@ def plot_choropleth_map_regionale(df,
                                   prefix="",
                                   suffix="",
                                   filter_regioni=None,
-                                  print_perc=True,
-                                  labels_size=None):
+                                  print_perc=False,
+                                  labels_size=None,
+                                  save_path=None,
+                                  dpi=100):
     _create_choropleth_map(df,
                            region_tag,
                            value_tag,
@@ -292,7 +302,9 @@ def plot_choropleth_map_regionale(df,
                            print_perc,
                            filter_list=filter_regioni,
                            level2=cfg.LEVEL_REGIONE,
-                           labels_size=labels_size)
+                           labels_size=labels_size,
+                           save_path=save_path,
+                           dpi=dpi)
 
 
 def plot_choropleth_map_provinciale(df,
@@ -309,8 +321,10 @@ def plot_choropleth_map_provinciale(df,
                                     suffix="",
                                     filter_regioni=None,
                                     filter_province=None,
-                                    print_perc=True,
-                                    labels_size=None):
+                                    print_perc=False,
+                                    labels_size=None,
+                                    save_path=None,
+                                    dpi=100):
     if filter_regioni:
         level_filter = cfg.LEVEL_REGIONE
         filter_list = filter_regioni
@@ -336,7 +350,9 @@ def plot_choropleth_map_provinciale(df,
                            print_perc,
                            filter_list=filter_list,
                            level2=level_filter,
-                           labels_size=labels_size)
+                           labels_size=labels_size,
+                           save_path=save_path,
+                           dpi=dpi)
 
 
 def plot_choropleth_map_comunale(df,
@@ -354,8 +370,10 @@ def plot_choropleth_map_comunale(df,
                                  filter_regioni=None,
                                  filter_province=None,
                                  filter_comuni=None,
-                                 print_perc=True,
-                                 labels_size=None):
+                                 print_perc=False,
+                                 labels_size=None,
+                                 save_path=None,
+                                 dpi=100):
     if filter_regioni:
         level_filter = cfg.LEVEL_REGIONE
         filter_list = filter_regioni
@@ -384,7 +402,9 @@ def plot_choropleth_map_comunale(df,
                            print_perc,
                            filter_list=filter_list,
                            level2=level_filter,
-                           labels_size=labels_size)
+                           labels_size=labels_size,
+                           save_path=save_path,
+                           dpi=dpi)
 
 
 def _create_choropleth_map_interactive(df0,

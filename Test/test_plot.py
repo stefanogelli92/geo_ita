@@ -6,15 +6,17 @@ from pathlib import PureWindowsPath
 
 
 def test_plot_choropleth_map():
-    test_df = get_df_comuni()
-    # Aggiungo una finta categoria per i plot non quantitativi
-    test_df["prima_lettera"] = test_df[cfg.TAG_REGIONE].str[0]
+    test_df = get_df_regioni()
 
-    plot_choropleth_map_regionale(test_df[[cfg.TAG_REGIONE, "prima_lettera"]].drop_duplicates(), cfg.TAG_REGIONE,
-                                  "prima_lettera")
+    plot_choropleth_map_regionale(test_df, cfg.TAG_REGIONE,
+                                  "popolazione", save_path="usage_choropleth_regionale.png",
+                                  show_colorbar=False, dpi=50)
     print("ok1")
-    plot_choropleth_map_provinciale(test_df, cfg.TAG_PROVINCIA, "popolazione",
-                                    print_labels=True, print_perc=False, labels_size=5)
+    test_df = get_df_province()
+    plot_choropleth_map_provinciale_interactive(test_df, cfg.TAG_PROVINCIA, {"popolazione": "Popolazione",
+                                                                             "superficie_km2": "Superficie"},
+                                                filter_regioni=["Toscana"],
+                                                title="Toscana")
     print("ok2")
     plot_choropleth_map_comunale(test_df, cfg.TAG_COMUNE, "popolazione", filter_regioni=["lazio ", "campania"])
     print("ok3")
