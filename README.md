@@ -44,7 +44,7 @@ denominazione_comune  codice_comune denominazione_provincia  codice_provincia de
 ```
 You can also get the list of *Comuni*, *Province* and *Regioni* with *get_list_comuni*, *get_list_province* and *get_list_regioni*.
 ***
-### [Enrich Dataframe](#enrich_dataframe)
+### enrich_dataframe
 ***
 Here you can find some methods that add some geografical information to your dataset.
 - **[Geocoding](https://en.wikipedia.org/wiki/Address_geocoding)**: 
