@@ -15,7 +15,7 @@ pip install geo_ita-0.0.38-py3-none-any.whl
 
 ## Documentation
 1. [Data](#data)
-2. [Enrich Dataframe](#enrich_dataframe)
+2. [Enrich Dataframe](#enrich-dataframe)
 3. [Plot](#plot)
 
 ### Data
@@ -44,7 +44,7 @@ denominazione_comune  codice_comune denominazione_provincia  codice_provincia de
 ```
 You can also get the list of *Comuni*, *Province* and *Regioni* with *get_list_comuni*, *get_list_province* and *get_list_regioni*.
 ***
-### enrich_dataframe
+### Enrich Dataframe
 ***
 Here you can find some methods that add some geografical information to your dataset.
 - **[Geocoding](https://en.wikipedia.org/wiki/Address_geocoding)**: 
