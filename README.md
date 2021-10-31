@@ -15,7 +15,7 @@ pip install geo_ita-0.0.38-py3-none-any.whl
 
 ## Documentation
 1. [Data](#data)
-2. [Enrich Dataframe](#Enrich Dataframe)
+2. [Enrich Dataframe](#enrich_dataframe)
 3. [Plot](#plot)
 
 ### Data
@@ -44,7 +44,7 @@ denominazione_comune  codice_comune denominazione_provincia  codice_provincia de
 ```
 You can also get the list of *Comuni*, *Province* and *Regioni* with *get_list_comuni*, *get_list_province* and *get_list_regioni*.
 ***
-### Enrich Dataframe
+### [Enrich Dataframe](#enrich_dataframe)
 ***
 Here you can find some methods that add some geografical information to your dataset.
 - **[Geocoding](https://en.wikipedia.org/wiki/Address_geocoding)**: 
@@ -153,6 +153,8 @@ df = get_df_regioni()
 plot_choropleth_map_regionale(df, region_tag='denominazione_regione', value_tag='popolazione')
 ```
 ![plot](./Test/usage_choropleth_regionale.png?raw=true)
+
+![plot](https://github.com/enelx-customer-business-analytics/geo_ita/tree/master/Test/usage_choropleth_regionale.jpg?raw=true)
 ```python
 # Get the dataframe you want to use
 df = get_df_province()
@@ -163,9 +165,9 @@ plot_choropleth_map_provinciale_interactive(df, 'denominazione_regione', {"popol
                                                 filter_regioni=["Toscana"],
                                                 title="Toscana")
 ```
-![plot](./Test/usage_choropleth_provinciale_interactive.png?raw=true)
+#![plot](./Test/usage_choropleth_provinciale_interactive.png?raw=true)
 
 
-
+***
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)
