@@ -310,24 +310,25 @@ class AddGeographicalInfo:
             p = geocode(el + ", italia")
             if p is not None:
                 address = p.address
-                extract = re.search(
-                    '(?P<comune2>[^,]+, )?(?P<comune1>[^,]+), (?P<provincia>[^,]+), (?P<regione>[^,0-9]+)(?P<cap>, [0-9]{5})?, Italia',
-                    address)
-                if extract and not any(word.lower() in address.lower() for word in ["via", "viale", "piazza"]):
-                    regione = _clean_denom_text_value(extract.group("regione"))
-                    provincia = extract.group("provincia")
-                    provincia = _clean_denom_text_value(provincia.replace("Roma Capitale", "Roma"))
-                    comune = _clean_denom_text_value(extract.group("comune1"))
-                    comune2 = extract.group("comune2")
-                    if comune2:
-                        comune2 = _clean_denom_text_value(comune2[:-2])
-                    if (regione in regioni) & (provincia in province):
-                        if comune in comuni:
-                            match_dict[el] = comune
-                        elif (comune2 is not None) and (comune2 in comuni):
-                            match_dict[el] = comune2
-                        elif provincia in comuni:
-                            match_dict[el] = provincia
+                if el in address.lower():
+                    extract = re.search(
+                        '(?P<comune2>[^,]+, )?(?P<comune1>[^,]+), (?P<provincia>[^,]+), (?P<regione>[^,0-9]+)(?P<cap>, [0-9]{5})?, Italia',
+                        address)
+                    if extract and not any(word.lower() in address.lower() for word in ["via", "viale", "piazza"]):
+                        regione = _clean_denom_text_value(extract.group("regione"))
+                        provincia = extract.group("provincia")
+                        provincia = _clean_denom_text_value(provincia.replace("Roma Capitale", "Roma"))
+                        comune = _clean_denom_text_value(extract.group("comune1"))
+                        comune2 = extract.group("comune2")
+                        if comune2:
+                            comune2 = _clean_denom_text_value(comune2[:-2])
+                        if (regione in regioni) & (provincia in province):
+                            if comune in comuni:
+                                match_dict[el] = comune
+                            elif (comune2 is not None) and (comune2 in comuni):
+                                match_dict[el] = comune2
+                            elif provincia in comuni:
+                                match_dict[el] = provincia
         if len(match_dict) > 0:
             log.info("Match {} name that corrisponds to a possible frazione of a comune:\n{}".format(len(match_dict), match_dict))
             self.not_match = [x for x in self.not_match if x not in match_dict.keys()]
@@ -341,6 +342,8 @@ class AddGeographicalInfo:
         return self.frazioni_dict
 
     def get_result(self, add_missing=False, drop_not_match=False):
+        if self.not_match is None:
+            raise Exception("Run simple match before get the result.")
         if len(self.not_match) > 0:
             log.warning("Unable to find {} {}: {}".format(len(self.not_match), self.geo_tag_anag, self.not_match))
         else:
@@ -513,9 +516,12 @@ def __find_coord_columns(df):
     return flag_coord_found, lat_tag, long_tag
 
 
-def __create_geo_dataframe(df0):
+def __create_geo_dataframe(df0, lat_tag=None, long_tag=None):
     if isinstance(df0, pd.DataFrame):
-        flag_coord_found, lat_tag, long_tag = __find_coord_columns(df0)
+        if lat_tag is None:
+            flag_coord_found, lat_tag, long_tag = __find_coord_columns(df0)
+        else:
+            flag_coord_found = True
         if flag_coord_found:
             df = gpd.GeoDataFrame(
                 df0, geometry=gpd.points_from_xy(df0[long_tag].astype('float32'), df0[lat_tag].astype('float32')))
@@ -634,7 +640,7 @@ def get_geo_info_from_provincia(provincia, regione=None):
     return result_dict
 
 
-def get_city_from_coordinates(df0, rename_col_comune=None, rename_col_provincia=None, rename_col_regione=None):
+def get_city_from_coordinates(df0, latitude_columns=None, longitude_columns=None):
     df0 = df0.rename_axis('key_mapping').reset_index()
     df = df0.copy()
     df_comuni = get_df_comuni()
@@ -642,7 +648,7 @@ def get_city_from_coordinates(df0, rename_col_comune=None, rename_col_provincia=
     df_comuni.crs = {'init': 'epsg:32632'}
     df_comuni = df_comuni.to_crs({'init': 'epsg:4326'})
 
-    df = __create_geo_dataframe(df)
+    df = __create_geo_dataframe(df, lat_tag=latitude_columns, long_tag=longitude_columns)
     df = df[df["geometry"].notnull()]
     df = df[["key_mapping", "geometry"]].drop_duplicates()
     df = df.to_crs({'init': 'epsg:4326'})
@@ -656,14 +662,6 @@ def get_city_from_coordinates(df0, rename_col_comune=None, rename_col_provincia=
     else:
         log.warning("Unable to find the city for {} points: {}".format(len(missing), missing))
     map_city = map_city[["key_mapping", cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_SIGLA, cfg.TAG_REGIONE]]
-    rename_col = {}
-    if rename_col_comune is not None:
-        rename_col[cfg.TAG_COMUNE] = rename_col_comune
-    if rename_col_provincia is not None:
-        rename_col[cfg.TAG_PROVINCIA] = rename_col_provincia
-    if rename_col_regione is not None:
-        rename_col[cfg.TAG_REGIONE] = rename_col_regione
-    map_city.rename(columns=rename_col, inplace=True)
     return df0.merge(map_city, on=["key_mapping"], how="left").drop(["key_mapping"], axis=1)
 
 

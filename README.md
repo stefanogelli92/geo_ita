@@ -15,7 +15,7 @@ pip install geo_ita-0.0.38-py3-none-any.whl
 
 ## Documentation
 1. [Data](#data)
-2. [Enrich Dataframe](#enrich_dataframe)
+2. [Enrich Dataframe](#enrich-dataframe)
 3. [Plot](#plot)
 
 ### Data
@@ -44,12 +44,13 @@ denominazione_comune  codice_comune denominazione_provincia  codice_provincia de
 ```
 You can also get the list of *Comuni*, *Province* and *Regioni* with *get_list_comuni*, *get_list_province* and *get_list_regioni*.
 ***
-### [Enrich Dataframe](#enrich_dataframe)
+### Enrich Dataframe
 ***
 Here you can find some methods that add some geografical information to your dataset.
 - **[Geocoding](https://en.wikipedia.org/wiki/Address_geocoding)**: 
         <br>This method will return the coordinates of a place from the address. It will also add informations about *Comune*, *Provincia* or *Regione* in order to help the search and test the result.
         <br>Warning: This process cannot always determinate the coordinates. This is mostly due to an address with some errors or abbreviation, or some address that are not in the OpenStreetMaps project (we use it because it is open and free).
+        <br>Warning: This process takes avout 1 second per element.
 ```python
 # Usage
 from geo_ita.enrich_dataframe import get_coordinates_from_address
@@ -68,10 +69,12 @@ df = get_coordinates_from_address(df, "address")
    Via NUova Marina, Napoli  40.846269  14.267525 
 ```
 - **[Reverse Geocoding](https://en.wikipedia.org/wiki/Reverse_geocoding)**: 
-        <br>This method will return the address of a place from the coordinates.
+        <br>There are two version of reverse geocoding:
+        <br> 1. **get_address_from_coordinates**: This method will return the address of a place from the coordinates. Warning: This process takes avout 1 second per element.
+        <br> 2. **get_city_from_coordinates**: This method will return the comune, provincia ane regione from the coordinates.
 ```python
 # Usage
-from geo_ita.enrich_dataframe import get_address_from_coordinates
+from geo_ita.enrich_dataframe import get_address_from_coordinates, get_city_from_coordinates
 
 df = pd.DataFrame(data=[[41.939965,  12.470965],
                         [45.460908,   9.191498],
@@ -85,6 +88,15 @@ df = get_address_from_coordinates(df, latitude_columns="latitide", longitude_col
   41.939965  12.470965    'corso di francia, roma'    'Roma'
   45.460908   9.191498         'via larga, Milano'  'Milano'
   40.846269  14.267525  'via nuova marina, Napoli'  'Napoli'
+
+df = get_city_from_coordinates(df, latitude_columns="latitide", longitude_columns="longitude")
+
+# Output
+
+   latitude  longitude    denominazione_comune    denominazione_provincia    sigla   denominazione_regione
+  41.939965  12.470965                   'Roma'                     'Roma'     'RM'                 'Lazio'
+  45.460908   9.191498                 'Milano'                   'Milano'     'MI'             'Lombardia'
+  40.846269  14.267525                 'Napoli'                   'Napoli'     'NA'              'Campania'
 ```
 - **AddGeographicalInfo**:
         <br>From a given columns with the information of *Comune*, *Provincia* or *Regione* (works both with Codice ISTAT, denominazione or sigla), add the hierarchical structure of *Province* and *Regioni* and the value of population and area.
@@ -153,21 +165,84 @@ df = get_df_regioni()
 plot_choropleth_map_regionale(df, region_tag='denominazione_regione', value_tag='popolazione')
 ```
 ![plot](./Test/usage_choropleth_regionale.png?raw=true)
-
-![plot](https://github.com/enelx-customer-business-analytics/geo_ita/tree/master/Test/usage_choropleth_regionale.jpg?raw=true)
 ```python
-# Get the dataframe you want to use
+# Interactive plot of a single Regione
 df = get_df_province()
 
-# Simple use plot
-plot_choropleth_map_provinciale_interactive(df, 'denominazione_regione', {"popolazione": "Popolazione",
-                                                                          "superficie_km2": "Superficie"},
-                                                filter_regioni=["Toscana"],
-                                                title="Toscana")
+plot_choropleth_map_provinciale_interactive(df, 
+                                            'denominazione_regione', 
+                                            {"popolazione": "Popolazione",
+                                             "superficie_km2": "Superficie"},
+                                            filter_regioni=["Toscana"],
+                                            title="Toscana")
 ```
-#![plot](./Test/usage_choropleth_provinciale_interactive.png?raw=true)
+![plot](./Test/usage_choropleth_provinciale_interactive.png?raw=true)
+- **Point Map**:
+        <br>This method will plot a list of point in a map. The are also the interactive version were you can also read different information in each point.
 
+```python
+# Usage
+from geo_ita.data import get_df_comuni
+from geo_ita.plot import plot_point_map, plot_point_map_interactive
 
+# Get the dataframe you want to use
+df = get_df_province()[["denominazione_comune", "center_x", "center_y", "popolazione"]]
+
+    denominazione_comune       center_x      center_y  popolazione
+                   Agliè  404137.448470  5.024327e+06         2621
+                 Airasca  380324.100684  4.975382e+06         3598
+            Ala di Stura  365344.513419  5.018472e+06          441
+
+# Simple use plot
+plot_point_map(df, latitude_columns='center_y', longitude_columns='center_x', title="Province")
+```
+![plot](./Test/usage_point_map_comuni.png?raw=true)
+
+- **[Density Estimation](https://en.wikipedia.org/wiki/Multivariate_kernel_density_estimation)**:
+        <br>This method will plot a density on map.
+        <br>There are two type of density estimation:
+        <br> 1. Simple point density: This will show where point are more or less concentrated. In this case you need to pass only the coordinates of points.
+        
+        <br> 2. Density of a variable in each point: This will show the density of the variable. In this case you need to pass the coordinates and the value of the variable of each point.
+
+```python
+# Usage
+from geo_ita.plot import plot_kernel_density_estimation
+
+# Get the dataframe you want to use 
+df = get_df_comuni()
+
+# Simple point density
+plot_kernel_density_estimation(df, latitude_columns='center_y', longitude_columns='center_x',
+                               n_grid_x=500, n_grid_y=500)
+```
+![plot](./Test/usage_kernel_density_simple.png?raw=true)
+```python
+# Density of variable Popolazione
+plot_kernel_density_estimation_interactive(df, value_tag="popolazione",
+                               latitude_columns='center_y', longitude_columns='center_x',
+                               n_grid_x=500, n_grid_y=500)
+```
+![plot](./Test/usage_kernel_density_variable.png?raw=true)
 ***
+## TODO
+1. Condividere libreria senza whl
+2. Completare test Units
+3. Aggiornamento dati ISTAT
+4. Aggioranmento dati automatico
+5. Valutare utilizzo dei dati storici ISTAT e non solo ultimi
+6. Trovare nome più parlante per Enrich Dataset
+7. Utilizzo possibile delle api di Google con codice in input
+8. Semplificare utilizzo AddGeoInfo (forse non classe)
+9. Consigliare step successivo (AddGeoInfo)
+10. Point Map inserire possibilità di plottare più dataset di punti (e forse anche non sol punti)
+11. Kernel Estimation Migliorare guida
+12. Kernel estimation semplificare utilizzo
+13. Possiblità di aggiungere densità demografica da dataset Facebook in un modulo (o forse da guida ma troppo complesso)
+14. Creare calcolo puntuale Kernel estimation per informazioni puntuali e non plot
+15. valutare calcolo distanza da costa
+16. Valutare distanza in linea d'aria da uscite autostrada + plot autostrade + uscite
+17. Da valutare calcolo distanza tra punti su strada (è corretto averlo in questa libreria?)
+
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)

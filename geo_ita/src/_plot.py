@@ -773,6 +773,8 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape_
 
 
 def plot_point_map(df0,
+                   latitude_columns=None,
+                   longitude_columns=None,
                    comune=None,
                    provincia=None,
                    regione=None,
@@ -781,13 +783,16 @@ def plot_point_map(df0,
                    title=None,
                    legend_font=None,
                    size=None,
-                   save_in_path=None):
+                   save_in_path=None,
+                   dpi=100):
 
     df = df0.copy()
-    flag_coord_found, lat_tag, long_tag = __find_coord_columns(df)
-    df[lat_tag] = df[lat_tag].astype(float)
-    df[long_tag] = df[long_tag].astype(float)
-    coord_system_input = __find_coordinates_system(df, lat_tag, long_tag)
+    if (latitude_columns is None) or (longitude_columns is None):
+        flag_coord_found, latitude_columns, longitude_columns = __find_coord_columns(df)
+
+    df[latitude_columns] = df[latitude_columns].astype(float)
+    df[longitude_columns] = df[longitude_columns].astype(float)
+    coord_system_input = __find_coordinates_system(df, latitude_columns, longitude_columns)
 
     shape_list = []
     if regione:
@@ -797,7 +802,7 @@ def plot_point_map(df0,
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': coord_system_input})
         df = gpd.GeoDataFrame(
-            df, geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
+            df, geometry=gpd.points_from_xy(df[longitude_columns], df[latitude_columns]))
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
         shape = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
@@ -813,7 +818,7 @@ def plot_point_map(df0,
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': coord_system_input})
         df = gpd.GeoDataFrame(
-            df, geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
+            df, geometry=gpd.points_from_xy(df[longitude_columns], df[latitude_columns]))
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
         shape = _get_shape_from_level(cfg.LEVEL_COMUNE)
@@ -829,7 +834,7 @@ def plot_point_map(df0,
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': coord_system_input})
         df = gpd.GeoDataFrame(
-            df, geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
+            df, geometry=gpd.points_from_xy(df[longitude_columns], df[latitude_columns]))
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
     else:
@@ -853,7 +858,7 @@ def plot_point_map(df0,
 
     if color_tag:
         if is_numeric_dtype(df[color_tag]):
-            ax.scatter(df[long_tag], df[lat_tag], c=df[color_tag], cmap=get_cmap("Reds"), alpha=0.5, linewidth=0.5, s=size)
+            ax.scatter(df[longitude_columns], df[latitude_columns], c=df[color_tag], cmap=get_cmap("Reds"), alpha=0.5, linewidth=0.5, s=size)
         elif is_string_dtype(df[color_tag]):
             color_labels = list(df[color_tag].unique())
             n_color = len(list(color_labels))
@@ -867,7 +872,7 @@ def plot_point_map(df0,
             color_map = dict(zip(color_labels, rgb_values))
             for c in color_labels:
                 df_plot = df[df[color_tag]==c]
-                ax.scatter(df_plot[long_tag], df_plot[lat_tag], color=color_map[c], label=c, alpha=0.5, linewidth=0.5,
+                ax.scatter(df_plot[longitude_columns], df_plot[latitude_columns], color=color_map[c], label=c, alpha=0.5, linewidth=0.5,
                        s=size)
             if legend_font:
                 ax.legend(loc="lower left", title=color_tag, prop={'size': legend_font}, title_fontsize=legend_font*1.1)
@@ -875,19 +880,22 @@ def plot_point_map(df0,
                 ax.legend(loc="lower left", title=color_tag)
 
     else:
-        ax.scatter(df[long_tag], df[lat_tag], c='red', alpha=0.5, s=size)
+        ax.scatter(df[longitude_columns], df[latitude_columns], c='red', alpha=0.5, s=size)
 
     for shape, lw, ec in shape_list:
         shape.plot(facecolor="none", linewidth=lw, edgecolor=ec, ax=ax)
     ax.axis('off')
     if save_in_path:
-        plt.savefig(save_in_path)
-    if fig is not None:
-        plt.show()
+        plt.savefig(save_in_path, bbox_inches='tight', dpi=dpi)
+    else:
+        if fig is not None:
+            plt.show()
     return ax
 
 
 def plot_point_map_interactive(df0,
+                               latitude_columns=None,
+                               longitude_columns=None,
                                comune=None,
                                provincia=None,
                                regione=None,
@@ -915,7 +923,10 @@ def plot_point_map_interactive(df0,
         plot.title.align = 'center'
 
     column_list = list(df0.columns)
-    flag_coord_found, lat_tag, long_tag = __find_coord_columns(df0)
+
+    if (latitude_columns is None) or (longitude_columns is None):
+        flag_coord_found, latitude_columns, longitude_columns = __find_coord_columns(df0)
+
     df = __create_geo_dataframe(df0)
     df = df.to_crs({'init': 'epsg:3857'})
     df = _filter_margins(df, margins)
@@ -926,10 +937,10 @@ def plot_point_map_interactive(df0,
         table_columns = column_list
         if "geometry" in table_columns:
             table_columns.remove("geometry")
-    if lat_tag not in table_columns:
-        table_columns.append(lat_tag)
-    if long_tag not in table_columns:
-        table_columns.append(long_tag)
+    if latitude_columns not in table_columns:
+        table_columns.append(latitude_columns)
+    if longitude_columns not in table_columns:
+        table_columns.append(longitude_columns)
 
     df['x'] = df.geometry.x
     df['y'] = df.geometry.y
@@ -939,7 +950,7 @@ def plot_point_map_interactive(df0,
     if info_dict is not None:
         columns = [TableColumn(field=a, title=b) for a, b in info_dict.items()]
     else:
-        columns = [TableColumn(field=a, title=a) for a in table_columns if a not in [long_tag, lat_tag]]
+        columns = [TableColumn(field=a, title=a) for a in table_columns if a not in [longitude_columns, latitude_columns]]
 
     legend = False
     if color_tag is not None:
@@ -987,12 +998,12 @@ def plot_point_map_interactive(df0,
                 tooltips1.append((values, '@' + key))
     else:
         for values in table_columns:
-            if values not in [long_tag, lat_tag]:
+            if values not in [longitude_columns, latitude_columns]:
                 if is_numeric_dtype(df[values]):
                     tooltips1.append((values, '@' + values + '{0.[0] a}'))
                 else:
                     tooltips1.append((values, '@' + values))
-    tooltips1.append(("Coords", "(@" + lat_tag + "{0,0.0000000},@" + long_tag + "{0,0.0000000})"))
+    tooltips1.append(("Coords", "(@" + latitude_columns + "{0,0.0000000},@" + longitude_columns + "{0,0.0000000})"))
 
     plot.add_tools(HoverTool(renderers=[plot1], tooltips=tooltips1))
 
@@ -1076,6 +1087,8 @@ def _filter_margins(df, margins, long_tag=None, lat_tag=None):
 
 
 def plot_kernel_density_estimation(df0,
+                                   latitude_columns=None,
+                                   longitude_columns=None,
                                    value_tag=None,
                                    comune=None,
                                    provincia=None,
@@ -1083,12 +1096,15 @@ def plot_kernel_density_estimation(df0,
                                    n_grid_x=1000,
                                    n_grid_y=1000,
                                    ax=None,
-                                   title=None):
+                                   title=None,
+                                   save_in_path=None,
+                                   dpi=100):
     df = df0.copy()
-    flag_coord_found, lat_tag, long_tag = __find_coord_columns(df)
-    df[lat_tag] = df[lat_tag].astype(float)
-    df[long_tag] = df[long_tag].astype(float)
-    coord_system_input = __find_coordinates_system(df, lat_tag, long_tag)
+    if (latitude_columns is None) or (longitude_columns is None):
+        flag_coord_found, latitude_columns, longitude_columns = __find_coord_columns(df)
+    df[latitude_columns] = df[latitude_columns].astype(float)
+    df[longitude_columns] = df[longitude_columns].astype(float)
+    coord_system_input = __find_coordinates_system(df, latitude_columns, longitude_columns)
 
     shape_list = []
 
@@ -1099,7 +1115,7 @@ def plot_kernel_density_estimation(df0,
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': coord_system_input})
         df = gpd.GeoDataFrame(
-            df, geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
+            df, geometry=gpd.points_from_xy(df[longitude_columns], df[latitude_columns]))
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
         shape = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
@@ -1115,7 +1131,7 @@ def plot_kernel_density_estimation(df0,
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': coord_system_input})
         df = gpd.GeoDataFrame(
-            df, geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
+            df, geometry=gpd.points_from_xy(df[longitude_columns], df[latitude_columns]))
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
         shape = _get_shape_from_level(cfg.LEVEL_COMUNE)
@@ -1131,7 +1147,7 @@ def plot_kernel_density_estimation(df0,
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': coord_system_input})
         df = gpd.GeoDataFrame(
-            df, geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
+            df, geometry=gpd.points_from_xy(df[longitude_columns], df[latitude_columns]))
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
     else:
@@ -1146,14 +1162,16 @@ def plot_kernel_density_estimation(df0,
         shape = shape.to_crs({'init': coord_system_input})
         shape_list.append((shape, 0.4, "0.6"))
 
-    x, y = df[long_tag].values, df[lat_tag].values
-    x0, y0 = df[long_tag].min(), df[lat_tag].min()
-    x1, y1 = df[long_tag].max(), df[lat_tag].max()
+    x, y = df[longitude_columns].values, df[latitude_columns].values
+    x0, y0 = df[longitude_columns].min(), df[latitude_columns].min()
+    x1, y1 = df[longitude_columns].max(), df[latitude_columns].max()
 
     if value_tag:
         weights = df[value_tag].clip(0.00001, None).values
     else:
         weights = np.ones(df.shape[0])
+
+    weights = weights / weights.sum() * 10000
 
     h, _, _ = np.histogram2d(x, y, bins=(np.linspace(x0, x1, n_grid_x), np.linspace(y0, y1, n_grid_y)), weights=weights)
     h[h == 0] = 1
@@ -1166,17 +1184,23 @@ def plot_kernel_density_estimation(df0,
     if ax is None:
         fig, ax = plt.subplots()
     ax.imshow(z, origin='lower', extent=[x0, x1, y0, y1], cmap=get_cmap('Reds'))
+    ax.axis('off')
     if title:
         ax.set_title(title)
 
     for shape, lw, ec in shape_list:
         shape.plot(facecolor="none", linewidth=lw, edgecolor=ec, ax=ax)
-    if fig is not None:
-        plt.show()
+    if save_in_path:
+        plt.savefig(save_in_path, bbox_inches='tight', dpi=dpi)
+    else:
+        if fig is not None:
+            plt.show()
     return ax
 
 
 def plot_kernel_density_estimation_interactive(df0,
+                                               latitude_columns=None,
+                                               longitude_columns=None,
                                                value_tag=None,
                                                comune=None,
                                                provincia=None,
@@ -1189,29 +1213,31 @@ def plot_kernel_density_estimation_interactive(df0,
                                                save_in_path=None,
                                                show_flag=True):
     df = df0.copy()
-    flag_coord_found, lat_tag, long_tag = __find_coord_columns(df)
-    log.info("Found columns about coordinates: ({}, {})".format(lat_tag, long_tag))
-    df[lat_tag] = df[lat_tag].astype(float)
-    df[long_tag] = df[long_tag].astype(float)
-    coord_system_input = __find_coordinates_system(df, lat_tag, long_tag)
+    if (latitude_columns is None) or (longitude_columns is None):
+        flag_coord_found, latitude_columns, longitude_columns = __find_coord_columns(df)
+    df[latitude_columns] = df[latitude_columns].astype(float)
+    df[longitude_columns] = df[longitude_columns].astype(float)
+    coord_system_input = __find_coordinates_system(df, latitude_columns, longitude_columns)
     margins = _get_margins(comune=comune,
                            provincia=provincia,
                            regione=regione)
     inProj, outProj = Proj(init=coord_system_input), Proj(init='epsg:3857')
-    df[long_tag], df[lat_tag] = transform(inProj, outProj, df[long_tag].values, df[lat_tag].values)
+    df[longitude_columns], df[latitude_columns] = transform(inProj, outProj, df[longitude_columns].values, df[latitude_columns].values)
     if (regione is not None) | (provincia is not None) | (comune is not None):
-        df = _filter_margins(df, margins, long_tag=long_tag, lat_tag=lat_tag)
+        df = _filter_margins(df, margins, long_tag=longitude_columns, lat_tag=latitude_columns)
 
 
-    x0, y0 = df[long_tag].min(), df[lat_tag].min()
-    x1, y1 = df[long_tag].max(), df[lat_tag].max()
+    x0, y0 = df[longitude_columns].min(), df[latitude_columns].min()
+    x1, y1 = df[longitude_columns].max(), df[latitude_columns].max()
 
     if value_tag:
         weights = df[value_tag].clip(0.00001, None).values
     else:
         weights = np.ones(df.shape[0])
 
-    h, _, _ = np.histogram2d(df[long_tag], df[lat_tag], bins=(np.linspace(x0, x1, n_grid_x), np.linspace(y0, y1, n_grid_y)), weights=weights)
+    weights = weights / weights.sum() * 10000
+
+    h, _, _ = np.histogram2d(df[longitude_columns], df[latitude_columns], bins=(np.linspace(x0, x1, n_grid_x), np.linspace(y0, y1, n_grid_y)), weights=weights)
     h[h == 0] = 1
 
     z = scipy.ndimage.filters.gaussian_filter(np.log(h.T), 1)

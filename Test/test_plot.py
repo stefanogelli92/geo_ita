@@ -63,10 +63,8 @@ def test_point_map():
     # margins3 = _get_margins(provincia="Firenze")
     # margins4 = _get_margins(regione="Toscana")
     # margins5 = _get_margins(regione="Tascana")
-    test_df = get_df_comuni()
-    test_df.rename(columns={"center_x": "lon",
-                            "center_y": "lat"}, inplace=True)
-    plot_point_map(test_df, size=1)
+    test_df = get_df_province()
+    plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x', size=5, title="Province", save_in_path="usage_point_map_comuni.png")
     plot_point_map(test_df, color_tag="popolazione", provincia="Prato")
     plot_point_map(test_df, color_tag="denominazione_regione", legend_font=5)
     plot_point_map_interactive(test_df, color_tag="denominazione_regione")
@@ -75,6 +73,25 @@ def test_point_map():
 
 
 def test_4():
+    n = 1000
+    df = pd.DataFrame(index=range(n))
+
+    df["lat"] = np.random.normal((42 + 41.8)/2, (42 - 41.8)/10,  size=(n, 1))
+    df["lon"] = np.random.normal((12.6 + 12.37)/2, (12.6 - 12.37)/10, size=(n, 1))
+    df["popolazione"] = np.random.uniform(0, 100, size=(n, 1))
+    test_df = get_df_comuni()
+    plot_kernel_density_estimation(test_df, latitude_columns='center_y', longitude_columns='center_x',
+                                   n_grid_x=500, n_grid_y=500,
+                                   save_in_path="usage_kernel_density_simple.png")
+    plot_kernel_density_estimation(test_df, value_tag="popolazione", latitude_columns='center_y', longitude_columns='center_x',
+                                   n_grid_x=500, n_grid_y=500,
+                                   save_in_path="usage_kernel_density_variable.png")
+    plot_kernel_density_estimation_interactive(test_df, value_tag="popolazione", latitude_columns='center_y',
+                                   longitude_columns='center_x',
+                                   n_grid_x=500, n_grid_y=500,
+                                   regione="Lazio")
+
+
 
     # path = root_path / PureWindowsPath(r"data_sources/Test/farmacie_italiane.csv")
     # test_df = pd.read_csv(path, sep=";", engine='python')
@@ -97,7 +114,7 @@ def test_4():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    test_plot_choropleth_map()
+    #test_plot_choropleth_map()
     #test_2()
     #test_point_map()
-    #test_4()
+    test_4()
