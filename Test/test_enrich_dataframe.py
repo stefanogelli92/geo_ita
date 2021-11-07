@@ -157,7 +157,6 @@ class TestEnrichDataframe(unittest.TestCase):
 
 
 
-
 def test_add_geographic_info():
 
     prova = get_geo_info_from_comune("Prato")

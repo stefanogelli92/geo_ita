@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.cm import get_cmap
 from matplotlib.patches import Patch
+from matplotlib.ticker import FuncFormatter
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -62,7 +63,7 @@ def _linear_colormap(color_name1="white", color_name2=None, minval=0, maxval=1):
     return cmap
 
 
-def _plot_choropleth_map(df, color, ax, title, show_colorbar, vmin, vmax, numeric_values, value_tag, line_width=0.8, shape_list=[]):
+def _plot_choropleth_map(df, color, ax, title, show_colorbar, vmin, vmax, numeric_values, value_tag, prefix, suffix, line_width=0.8, shape_list=[]):
     if numeric_values:
         if vmin is None:
             vmin = df["count"].min()
@@ -88,12 +89,14 @@ def _plot_choropleth_map(df, color, ax, title, show_colorbar, vmin, vmax, numeri
         fig, ax = plt.subplots(1, figsize=(20, 10))
         if title:
             ax.set_title(title)
-        if show_colorbar & numeric_values:
-            cbar = fig.colorbar(sm)
-            cbar.ax.tick_params(labelsize=10)
+
     ax.axis('off')
     if numeric_values:
         df.plot('count', cmap=cmap, vmin=vmin, vmax=vmax, linewidth=line_width, edgecolor='0.8', ax=ax)
+        if show_colorbar & numeric_values:
+            fmt = lambda x, pos: str(prefix) + _human_format(x) + str(suffix)
+            cbar = fig.colorbar(sm, format=FuncFormatter(fmt))
+            cbar.ax.tick_params(labelsize=10)
     else:
         df.plot('count', linewidth=line_width, edgecolor='0.8', ax=ax, color=df["color"].values)
         ax.legend(title=value_tag, handles=legend_elements, bbox_to_anchor=(1.02, 1), loc='upper left')
@@ -111,6 +114,9 @@ def _add_labels_on_plot(df, ax, print_perc, numeric_values, prefix, suffix, labe
         labels_size = 'large'
     if numeric_values:
         total = df["count"].sum()
+        max_value = df["count"].max()
+        min_value = df["count"].min()
+        df["tx_color"] = np.where(df["count"]>((max_value+min_value)/2), "white", "black")
         for idx, row in df.iterrows():
             threshold = 0
             if print_perc:
@@ -118,13 +124,13 @@ def _add_labels_on_plot(df, ax, print_perc, numeric_values, prefix, suffix, labe
                     ax.annotate(text=round(row['count'] / total * 100, 1).astype(str) + "%",
                                 xy=(row['center_x'], row['center_y']),
                                 ha='center', va="center",
-                                fontsize=labels_size, color='black', wrap=True, )
+                                fontsize=labels_size, color=row["tx_color"], wrap=True)
 
             else:
                 if row['count'] > threshold:
                     ax.annotate(text=str(prefix) + _human_format(row['count']) + str(suffix), xy=(row['center_x'], row['center_y']),
                                 ha='center', va="center",
-                                color='black', wrap=True, fontsize=labels_size)
+                                color=row["tx_color"], wrap=True, fontsize=labels_size)
     else:
         for idx, row in df.iterrows():
             ax.annotate(text=row['count'],
@@ -143,6 +149,18 @@ def _get_shape_from_level(level):
     else:
         raise Exception("Level UNKNOWN")
     return shape
+
+
+def _check_filter(filter_list):
+    if filter_list is None:
+        result = None
+    elif isinstance(filter_list, str):
+        result = [filter_list]
+    elif isinstance(filter_list, list):
+        result = filter_list
+    else:
+        raise Exception("Filter not recognized. You can use a string or a list of string as filter.")
+    return result
 
 
 def _create_choropleth_map(df0,
@@ -164,6 +182,7 @@ def _create_choropleth_map(df0,
                            labels_size=None,
                            save_path=None,
                            dpi=100):
+    filter_list = _check_filter(filter_list)
     # Todo add unità di misura labels / clorobar
     # Todo Cambio nome legenda
     # Todo Set title
@@ -254,6 +273,8 @@ def _create_choropleth_map(df0,
                                    vmax,
                                    numeric_values,
                                    value_tag,
+                                   prefix,
+                                   suffix,
                                    line_width=line_width,
                                    shape_list=shape_list)
 
@@ -281,7 +302,7 @@ def plot_choropleth_map_regionale(df,
                                   print_labels=True,
                                   prefix="",
                                   suffix="",
-                                  filter_regioni=None,
+                                  filter_regione=None,
                                   print_perc=False,
                                   labels_size=None,
                                   save_path=None,
@@ -300,7 +321,7 @@ def plot_choropleth_map_regionale(df,
                            prefix,
                            suffix,
                            print_perc,
-                           filter_list=filter_regioni,
+                           filter_list=filter_regione,
                            level2=cfg.LEVEL_REGIONE,
                            labels_size=labels_size,
                            save_path=save_path,
@@ -319,18 +340,18 @@ def plot_choropleth_map_provinciale(df,
                                     print_labels=False,
                                     prefix="",
                                     suffix="",
-                                    filter_regioni=None,
-                                    filter_province=None,
+                                    filter_regione=None,
+                                    filter_provincia=None,
                                     print_perc=False,
                                     labels_size=None,
                                     save_path=None,
                                     dpi=100):
-    if filter_regioni:
+    if filter_regione:
         level_filter = cfg.LEVEL_REGIONE
-        filter_list = filter_regioni
-    elif filter_province:
+        filter_list = filter_regione
+    elif filter_provincia:
         level_filter = cfg.LEVEL_PROVINCIA
-        filter_list = filter_province
+        filter_list = filter_provincia
     else:
         level_filter = None
         filter_list = None
@@ -367,22 +388,22 @@ def plot_choropleth_map_comunale(df,
                                  print_labels=False,
                                  prefix="",
                                  suffix="",
-                                 filter_regioni=None,
-                                 filter_province=None,
-                                 filter_comuni=None,
+                                 filter_regione=None,
+                                 filter_provincia=None,
+                                 filter_comune=None,
                                  print_perc=False,
                                  labels_size=None,
                                  save_path=None,
                                  dpi=100):
-    if filter_regioni:
+    if filter_regione:
         level_filter = cfg.LEVEL_REGIONE
-        filter_list = filter_regioni
-    elif filter_province:
+        filter_list = filter_regione
+    elif filter_provincia:
         level_filter = cfg.LEVEL_PROVINCIA
-        filter_list = filter_province
-    elif filter_comuni:
+        filter_list = filter_provincia
+    elif filter_comune:
         level_filter = cfg.LEVEL_COMUNE
-        filter_list = filter_comuni
+        filter_list = filter_comune
     else:
         level_filter = None
         filter_list = None
@@ -414,6 +435,7 @@ def _create_choropleth_map_interactive(df0,
                                        title,
                                        filter_list=None,
                                        level2=None):
+    filter_list = _check_filter(filter_list)
     df = df0.copy()
     df = df[df[geo_tag_input].notnull()]
 
@@ -434,8 +456,6 @@ def _create_choropleth_map_interactive(df0,
     geoInf.run_simple_match()
     if level == cfg.LEVEL_COMUNE:
         geoInf.run_find_frazioni()
-        geoInf.run_similarity_match(unique_flag=False)
-        geoInf.accept_similarity_result()
     df = geoInf.get_result()
     del geoInf
 
@@ -485,19 +505,19 @@ def plot_choropleth_map_comunale_interactive(df_comunale,
                                              comuni_tag,
                                              dict_values,
                                              title="",
-                                             filter_regioni=None,
-                                             filter_province=None,
-                                             filter_comuni=None,
+                                             filter_regione=None,
+                                             filter_provincia=None,
+                                             filter_comune=None,
                                              save_path=None):
-    if filter_regioni:
+    if filter_regione:
         level_filter = cfg.LEVEL_REGIONE
-        filter_list = filter_regioni
-    elif filter_province:
+        filter_list = filter_regione
+    elif filter_provincia:
         level_filter = cfg.LEVEL_PROVINCIA
-        filter_list = filter_province
-    elif filter_comuni:
+        filter_list = filter_provincia
+    elif filter_comune:
         level_filter = cfg.LEVEL_COMUNE
-        filter_list = filter_comuni
+        filter_list = filter_comune
     else:
         level_filter = None
         filter_list = None
@@ -520,15 +540,15 @@ def plot_choropleth_map_provinciale_interactive(df_provinciale,
                                                 province_tag,
                                                 dict_values,
                                                 title="",
-                                                filter_regioni=None,
-                                                filter_province=None,
+                                                filter_regione=None,
+                                                filter_provincia=None,
                                                 save_path=None):
-    if filter_regioni:
+    if filter_regione:
         level_filter = cfg.LEVEL_REGIONE
-        filter_list = filter_regioni
-    elif filter_province:
+        filter_list = filter_regione
+    elif filter_provincia:
         level_filter = cfg.LEVEL_PROVINCIA
-        filter_list = filter_province
+        filter_list = filter_provincia
     else:
         level_filter = None
         filter_list = None
@@ -551,11 +571,11 @@ def plot_choropleth_map_regionale_interactive(df_regionale,
                                               regioni_tag,
                                               dict_values,
                                               title="",
-                                              filter_regioni=None,
+                                              filter_regione=None,
                                               save_path=None):
-    if filter_regioni:
+    if filter_regione:
         level_filter = cfg.LEVEL_REGIONE
-        filter_list = filter_regioni
+        filter_list = filter_regione
     else:
         level_filter = None
         filter_list = None
@@ -775,16 +795,20 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape_
 def plot_point_map(df0,
                    latitude_columns=None,
                    longitude_columns=None,
-                   comune=None,
-                   provincia=None,
-                   regione=None,
+                   filter_comune=None,
+                   filter_provincia=None,
+                   filter_regione=None,
                    color_tag=None,
                    ax=None,
                    title=None,
                    legend_font=None,
-                   size=None,
+                   show_colorbar=True,
+                   size=6,
                    save_in_path=None,
                    dpi=100):
+    filter_comune = _check_filter(filter_comune)
+    filter_provincia = _check_filter(filter_provincia)
+    filter_regione = _check_filter(filter_regione)
 
     df = df0.copy()
     if (latitude_columns is None) or (longitude_columns is None):
@@ -792,12 +816,12 @@ def plot_point_map(df0,
 
     df[latitude_columns] = df[latitude_columns].astype(float)
     df[longitude_columns] = df[longitude_columns].astype(float)
-    coord_system_input = __find_coordinates_system(df, latitude_columns, longitude_columns)
+    coord_system_input = __find_coordinates_system(df, lat=latitude_columns, lon=longitude_columns)
 
     shape_list = []
-    if regione:
+    if filter_regione:
         polygon_df = get_df_regioni()
-        polygon_df = polygon_df[polygon_df[cfg.TAG_REGIONE] == regione][["geometry"]]
+        polygon_df = polygon_df[polygon_df[cfg.TAG_REGIONE].isin(filter_regione)][["geometry"]]
         polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': coord_system_input})
@@ -806,14 +830,14 @@ def plot_point_map(df0,
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
         shape = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
-        shape = shape[shape[cfg.TAG_REGIONE] == regione]
+        shape = shape[shape[cfg.TAG_REGIONE].isin(filter_regione)]
         shape = gpd.GeoDataFrame(shape, geometry="geometry")
         shape.crs = {'init': "epsg:32632"}
         shape = shape.to_crs({'init': coord_system_input})
         shape_list.append((shape, 0.2, "0.8"))
-    elif provincia:
+    elif filter_provincia:
         polygon_df = get_df_province()
-        polygon_df = polygon_df[polygon_df[cfg.TAG_PROVINCIA] == provincia][["geometry"]]
+        polygon_df = polygon_df[polygon_df[cfg.TAG_PROVINCIA].isin(filter_provincia)][["geometry"]]
         polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': coord_system_input})
@@ -822,14 +846,14 @@ def plot_point_map(df0,
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
         shape = _get_shape_from_level(cfg.LEVEL_COMUNE)
-        shape = shape[shape[cfg.TAG_PROVINCIA] == provincia]
+        shape = shape[shape[cfg.TAG_PROVINCIA].isin(filter_provincia)]
         shape = gpd.GeoDataFrame(shape, geometry="geometry")
         shape.crs = {'init': "epsg:32632"}
         shape = shape.to_crs({'init': coord_system_input})
         shape_list.append((shape, 0.2, "0.8"))
-    elif comune:
+    elif filter_comune:
         polygon_df = get_df_comuni()
-        polygon_df = polygon_df[polygon_df[cfg.TAG_COMUNE] == comune][["geometry"]]
+        polygon_df = polygon_df[polygon_df[cfg.TAG_COMUNE].isin(filter_comune)][["geometry"]]
         polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': coord_system_input})
@@ -858,7 +882,20 @@ def plot_point_map(df0,
 
     if color_tag:
         if is_numeric_dtype(df[color_tag]):
-            ax.scatter(df[longitude_columns], df[latitude_columns], c=df[color_tag], cmap=get_cmap("Reds"), alpha=0.5, linewidth=0.5, s=size)
+            vmin = df[color_tag].min()
+            vmax = df[color_tag].max()
+            vmin -= (vmax - vmin)/5
+            cmap = get_cmap("Blues")
+            ax.scatter(df[longitude_columns], df[latitude_columns], c=df[color_tag], cmap=cmap,
+                       vmin=vmin, vmax=vmax,
+                       alpha=0.5, linewidths=0.1, s=size, edgecolors="blue")
+            if show_colorbar:
+                sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+                sm._A = []
+                cbar = fig.colorbar(sm)
+                if legend_font is None:
+                    legend_font = 12
+                cbar.ax.tick_params(labelsize=legend_font)
         elif is_string_dtype(df[color_tag]):
             color_labels = list(df[color_tag].unique())
             n_color = len(list(color_labels))
@@ -872,15 +909,16 @@ def plot_point_map(df0,
             color_map = dict(zip(color_labels, rgb_values))
             for c in color_labels:
                 df_plot = df[df[color_tag]==c]
-                ax.scatter(df_plot[longitude_columns], df_plot[latitude_columns], color=color_map[c], label=c, alpha=0.5, linewidth=0.5,
+                ax.scatter(df_plot[longitude_columns], df_plot[latitude_columns], color=color_map[c], label=c, alpha=0.5, linewidths=0.5,
                        s=size)
             if legend_font:
-                ax.legend(loc="lower left", title=color_tag, prop={'size': legend_font}, title_fontsize=legend_font*1.1)
+                ax.legend(loc="center left", title=color_tag, prop={'size': legend_font}, title_fontsize=legend_font*1.1,
+                          bbox_to_anchor=(1, 0.5))
             else:
-                ax.legend(loc="lower left", title=color_tag)
+                ax.legend(loc="center left", title=color_tag, bbox_to_anchor=(1, 0.5))
 
     else:
-        ax.scatter(df[longitude_columns], df[latitude_columns], c='red', alpha=0.5, s=size)
+        ax.scatter(df[longitude_columns], df[latitude_columns], c='blue', alpha=0.5, s=size)
 
     for shape, lw, ec in shape_list:
         shape.plot(facecolor="none", linewidth=lw, edgecolor=ec, ax=ax)
@@ -896,9 +934,9 @@ def plot_point_map(df0,
 def plot_point_map_interactive(df0,
                                latitude_columns=None,
                                longitude_columns=None,
-                               comune=None,
-                               provincia=None,
-                               regione=None,
+                               filter_comune=None,
+                               filter_provincia=None,
+                               filter_regione=None,
                                color_tag=None,
                                info_dict=None,
                                title=None,
@@ -907,9 +945,12 @@ def plot_point_map_interactive(df0,
                                plot_height=800,
                                save_in_path=None,
                                show_flag=True):
-    margins = _get_margins(comune=comune,
-                           provincia=provincia,
-                           regione=regione)
+    filter_comune = _check_filter(filter_comune)
+    filter_provincia = _check_filter(filter_provincia)
+    filter_regione = _check_filter(filter_regione)
+    margins, shape = _get_margins(filter_comune=filter_comune,
+                                  filter_provincia=filter_provincia,
+                                  filter_regione=filter_regione)
 
     tile_provider = get_provider(CARTODBPOSITRON)
 
@@ -927,9 +968,15 @@ def plot_point_map_interactive(df0,
     if (latitude_columns is None) or (longitude_columns is None):
         flag_coord_found, latitude_columns, longitude_columns = __find_coord_columns(df0)
 
-    df = __create_geo_dataframe(df0)
+    df = __create_geo_dataframe(df0, lat_tag=latitude_columns, long_tag=longitude_columns)
+    if latitude_columns is None:
+        latitude_columns = "geo_ita_lat"
+        longitude_columns = "geo_ita_lon"
+        df[latitude_columns] = df.geometry.y
+        df[longitude_columns] = df.geometry.x
     df = df.to_crs({'init': 'epsg:3857'})
-    df = _filter_margins(df, margins)
+    if filter_regione or filter_comune or filter_provincia:
+        df = gpd.tools.sjoin(df, shape, op='within')
 
     if info_dict != None:
         table_columns = list(info_dict.keys())
@@ -1003,7 +1050,7 @@ def plot_point_map_interactive(df0,
                     tooltips1.append((values, '@' + values + '{0.[0] a}'))
                 else:
                     tooltips1.append((values, '@' + values))
-    tooltips1.append(("Coords", "(@" + latitude_columns + "{0,0.0000000},@" + longitude_columns + "{0,0.0000000})"))
+    tooltips1.append(("Coords", "(@" + latitude_columns + "{0,0.0000000}-@" + longitude_columns + "{0,0.0000000})"))
 
     plot.add_tools(HoverTool(renderers=[plot1], tooltips=tooltips1))
 
@@ -1024,50 +1071,59 @@ def plot_point_map_interactive(df0,
     return p
 
 
-def _get_margins(comune=None,
-                 provincia=None,
-                 regione=None):
-    if comune is not None:
-        comune = _clean_denom_text_value(comune)
-        code = _code_or_desc([comune])
+def _get_margins(filter_comune=None,
+                 filter_provincia=None,
+                 filter_regione=None):
+    filter_comune = _check_filter(filter_comune)
+    filter_provincia = _check_filter(filter_provincia)
+    filter_regione = _check_filter(filter_regione)
+    if filter_comune is not None:
+        filter_comune = [_clean_denom_text_value(a) for a in filter_comune]
+        code = _code_or_desc(filter_comune)
         shape = _get_shape_from_level(cfg.LEVEL_COMUNE)
         tag_shape = _get_tag_anag(code, cfg.LEVEL_COMUNE)
         shape[tag_shape] = _clean_denom_text(shape[tag_shape])
-        margins = shape.loc[shape[tag_shape] == comune, "geometry"].values
-        if len(margins) > 0:
-            margins = margins[0].bounds
-    elif provincia is not None:
-        provincia = _clean_denom_text_value(provincia)
-        code = _code_or_desc([provincia])
+        margins = shape[shape[tag_shape].isin(filter_comune)]
+        margins = gpd.GeoDataFrame(margins, geometry="geometry")
+    elif filter_provincia is not None:
+        filter_provincia = [_clean_denom_text_value(a) for a in filter_provincia]
+        code = _code_or_desc(filter_provincia)
         shape = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
         tag_shape = _get_tag_anag(code, cfg.LEVEL_PROVINCIA)
         shape[tag_shape] = _clean_denom_text(shape[tag_shape])
-        margins = shape.loc[shape[tag_shape] == provincia, "geometry"].values
-        if len(margins) > 0:
-            margins = margins[0].bounds
-    elif regione is not None:
-        regione = _clean_denom_text_value(regione)
-        code = _code_or_desc([regione])
+        margins = shape[shape[tag_shape].isin(filter_provincia)]
+        margins = gpd.GeoDataFrame(margins, geometry="geometry")
+    elif filter_regione is not None:
+        filter_regione = [_clean_denom_text_value(a) for a in filter_regione]
+        code = _code_or_desc(filter_regione)
         shape = _get_shape_from_level(cfg.LEVEL_REGIONE)
         tag_shape = _get_tag_anag(code, cfg.LEVEL_REGIONE)
         shape[tag_shape] = _clean_denom_text(shape[tag_shape])
-        margins = shape.loc[shape[tag_shape] == regione, "geometry"].values
-        if len(margins) > 0:
-            margins = margins[0].bounds
+        margins = shape[shape[tag_shape].isin(filter_regione)]
+        margins = gpd.GeoDataFrame(margins, geometry="geometry")
     else:
-        df = _get_shape_from_level(cfg.LEVEL_REGIONE)
-        df["key"] = "Italia"
-        df = gpd.GeoDataFrame(df, geometry="geometry")
-        df = df.dissolve(by='key')
-        margins = df["geometry"].values[0].bounds
+        margins = _get_shape_from_level(cfg.LEVEL_REGIONE)
+        margins["key"] = "Italia"
+        margins = gpd.GeoDataFrame(margins, geometry="geometry")
+        margins = margins.dissolve(by='key')
+    if len(margins) == 0:
+        raise Exception("Unable to find the filter.")
+    else:
+        margins = margins[["geometry"]]
+        margins.crs = {'init': "epsg:32632"}
+        margins = margins.to_crs({'init': 'epsg:3857'})
+        margins_coord = margins["geometry"].values
+        margins_coord = (min([margins_coord[i].bounds[0] for i in range(len(margins_coord))]),
+                       min([margins_coord[i].bounds[1] for i in range(len(margins_coord))]),
+                       max([margins_coord[i].bounds[2] for i in range(len(margins_coord))]),
+                       max([margins_coord[i].bounds[3] for i in range(len(margins_coord))]))
+        margins_coord = [[margins_coord[0], margins_coord[2]], [margins_coord[1], margins_coord[3]]]
 
-    margins = [[margins[0], margins[2]], [margins[1], margins[3]]]
+    #inProj, outProj = Proj(init='epsg:32632'), Proj(init='epsg:3857')
+    #margins_coord2 = [[], []]
+    #margins_coord2[0], margins_coord2[1] = transform(inProj, outProj, margins_coord[0], margins_coord[1])
 
-    inProj, outProj = Proj(init='epsg:32632'), Proj(init='epsg:3857')
-    margins_coord = [[], []]
-    margins_coord[0], margins_coord[1] = transform(inProj, outProj, margins[0], margins[1])
-
-    return margins_coord
+    return margins_coord, margins
 
 
 def _filter_margins(df, margins, long_tag=None, lat_tag=None):
@@ -1104,7 +1160,7 @@ def plot_kernel_density_estimation(df0,
         flag_coord_found, latitude_columns, longitude_columns = __find_coord_columns(df)
     df[latitude_columns] = df[latitude_columns].astype(float)
     df[longitude_columns] = df[longitude_columns].astype(float)
-    coord_system_input = __find_coordinates_system(df, latitude_columns, longitude_columns)
+    coord_system_input = __find_coordinates_system(df, lat=latitude_columns, lon=longitude_columns)
 
     shape_list = []
 
@@ -1202,9 +1258,9 @@ def plot_kernel_density_estimation_interactive(df0,
                                                latitude_columns=None,
                                                longitude_columns=None,
                                                value_tag=None,
-                                               comune=None,
-                                               provincia=None,
-                                               regione=None,
+                                               filter_comune=None,
+                                               filter_provincia=None,
+                                               filter_regione=None,
                                                n_grid_x=1000,
                                                n_grid_y=1000,
                                                title=None,
@@ -1217,15 +1273,21 @@ def plot_kernel_density_estimation_interactive(df0,
         flag_coord_found, latitude_columns, longitude_columns = __find_coord_columns(df)
     df[latitude_columns] = df[latitude_columns].astype(float)
     df[longitude_columns] = df[longitude_columns].astype(float)
-    coord_system_input = __find_coordinates_system(df, latitude_columns, longitude_columns)
-    margins = _get_margins(comune=comune,
-                           provincia=provincia,
-                           regione=regione)
-    inProj, outProj = Proj(init=coord_system_input), Proj(init='epsg:3857')
-    df[longitude_columns], df[latitude_columns] = transform(inProj, outProj, df[longitude_columns].values, df[latitude_columns].values)
-    if (regione is not None) | (provincia is not None) | (comune is not None):
-        df = _filter_margins(df, margins, long_tag=longitude_columns, lat_tag=latitude_columns)
-
+    filter_comune = _check_filter(filter_comune)
+    filter_provincia = _check_filter(filter_provincia)
+    filter_regione = _check_filter(filter_regione)
+    margins, shape = _get_margins(filter_comune=filter_comune,
+                                  filter_provincia=filter_provincia,
+                                  filter_regione=filter_regione)
+    df = __create_geo_dataframe(df0, lat_tag=latitude_columns, long_tag=longitude_columns)
+    df = df.to_crs({'init': 'epsg:3857'})
+    if filter_regione or filter_comune or filter_provincia:
+        df = gpd.tools.sjoin(df, shape, op='within')
+    if latitude_columns is None:
+        latitude_columns = "geo_ita_lat"
+        longitude_columns = "geo_ita_lon"
+        df[latitude_columns] = df.geometry.y
+        df[longitude_columns] = df.geometry.x
 
     x0, y0 = df[longitude_columns].min(), df[latitude_columns].min()
     x1, y1 = df[longitude_columns].max(), df[latitude_columns].max()
@@ -1235,7 +1297,7 @@ def plot_kernel_density_estimation_interactive(df0,
     else:
         weights = np.ones(df.shape[0])
 
-    weights = weights / weights.sum() * 10000
+    weights = weights / weights.max() * 10000
 
     h, _, _ = np.histogram2d(df[longitude_columns], df[latitude_columns], bins=(np.linspace(x0, x1, n_grid_x), np.linspace(y0, y1, n_grid_y)), weights=weights)
     h[h == 0] = 1

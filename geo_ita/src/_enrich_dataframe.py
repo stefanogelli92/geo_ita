@@ -35,8 +35,6 @@ class AddGeographicalInfo:
         self.df = None
         self.comuni, self.province, self.sigle, self.regioni = _get_list()
         self._find_info()
-        self.cap_tag = None
-        self.cap_code = None
         self.comuni_tag = None
         self.comuni_code = None
         self.province_tag = None
@@ -73,19 +71,6 @@ class AddGeographicalInfo:
         self.geo_tag_input = col_name
         self.code = self.comuni_code
 
-    # def set_cap_tag(self, col_name):
-    #     list_values = [x for x in list(self.original_df[col_name].unique()) if (str(x) != 'nan') and (x is not None)]
-    #     wrong_format = [x for x in list_values if (not isinstance(x, int)) & (not x.isdigit())]
-    #     if len(wrong_format) == 0:
-    #         self.cap_tag = col_name
-    #         self.comuni_code = cfg.CODE_CAP
-    #         if self.level != cfg.LEVEL_COMUNE:
-    #             self.level = cfg.LEVEL_CAP
-    #             self.geo_tag_input = col_name
-    #             self.code = self.comuni_code
-    #     else:
-    #         raise Exception("{} values with a wrong format: {}".format(len(wrong_format), wrong_format))
-
     def set_province_tag(self, col_name):
         self._test_column_in_dataframe(col_name)
         self.province_tag = col_name
@@ -117,15 +102,12 @@ class AddGeographicalInfo:
 
     def run_simple_match(self):
 
-        self.keys = [x for x in [self.cap_tag, self.comuni_tag, self.province_tag, self.regioni_tag] if x is not None]
+        self.keys = [x for x in [self.comuni_tag, self.province_tag, self.regioni_tag] if x is not None]
         if len(self.keys) == 0:
             raise Exception("You need to set al least one betweeen cap_tag, comuni_tag, province_tag or regioni_tag.")
         self.df = self.original_df[self.keys].copy().drop_duplicates()
 
         self.df = self.df[self.df[self.geo_tag_input].notnull()]
-
-        if self.level == cfg.LEVEL_CAP:
-            self._map_cap_to_comune()
 
         self.df[cfg.KEY_UNIQUE] = self.df[self.geo_tag_input]
 
@@ -142,15 +124,6 @@ class AddGeographicalInfo:
             self._run_codice()
         else:
             self._run_denominazione()
-
-    def _map_cap_to_comune(self):
-        self.df = self.df[self.df[self.geo_tag_input].astype(int) != 0]
-        self.df[cfg.KEY_UNIQUE2] = self.df[self.geo_tag_input].apply(lambda x: x.zfill(5))
-        #self.df[cfg.KEY_UNIQUE2] = self.df[cfg.KEY_UNIQUE2].map(xxx)
-        self.level = cfg.LEVEL_COMUNE
-        self.geo_tag_input = cfg.KEY_UNIQUE2
-        self.code = cfg.CODE_DENOMINAZIONE
-        self.df = self.df[self.df[self.geo_tag_input].notnull()]
 
     def _run_sigla(self):
         self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].str.lower()
@@ -306,6 +279,8 @@ class AddGeographicalInfo:
         province = [_clean_denom_text_value(a) for a in self.province]
         comuni = [_clean_denom_text_value(a) for a in self.comuni]
         match_dict = {}
+        n = len(self.not_match)
+        log.info("Needed at least {} seconds".format(n))
         for el in self.not_match:
             p = geocode(el + ", italia")
             if p is not None:
@@ -459,7 +434,7 @@ def _code_or_desc(list_values):
     n_tot = len(list_values)
     if n_tot == 0:
         result = cfg.CODE_DENOMINAZIONE
-    elif (sum([isinstance(item, np.integer) or item.isdigit() for item in list_values]) / n_tot) > 0.8:
+    elif (sum([isinstance(item, np.integer) or isinstance(item, np.float) or item.isdigit() for item in list_values]) / n_tot) > 0.8:
         result = cfg.CODE_CODICE_ISTAT
     elif (sum([isinstance(item, str) and item.isalpha() and len(item) == 2 for item in list_values]) / n_tot) > 0.8:
         result = cfg.CODE_SIGLA
@@ -513,6 +488,7 @@ def __find_coord_columns(df):
         else:
             lat_tag = None
             long_tag = None
+    log.info("Found columns about coordinates: ({}, {})".format(lat_tag, long_tag))
     return flag_coord_found, lat_tag, long_tag
 
 
@@ -528,9 +504,10 @@ def __create_geo_dataframe(df0, lat_tag=None, long_tag=None):
             df.loc[(df[long_tag].isna()) | (df[lat_tag].isna()), "geometry"] = None
             coord_system = __find_coordinates_system(df0, lat_tag, long_tag)
             df.crs = {'init': coord_system}
-            log.info("Found columns about coordinates: ({}, {})".format(lat_tag, long_tag))
         elif "geometry" in df0.columns:
             df = gpd.GeoDataFrame(df0)
+            coord_system = __find_coordinates_system(df0, geometry="geometry")
+            df.crs = {'init': coord_system}
             log.info("Found geometry columns")
         else:
             raise Exception("The DataFrame must have a geometry attribute or lat-long.")
@@ -541,11 +518,16 @@ def __create_geo_dataframe(df0, lat_tag=None, long_tag=None):
     return df
 
 
-def __find_coordinates_system(df, lat, lon):
+def __find_coordinates_system(df, lat=None, lon=None, geometry=None):
     n_test = min(100, df.shape[0])
     test = df.sample(n=n_test)
-    test = gpd.GeoDataFrame(
-        test, geometry=gpd.points_from_xy(test[lon], test[lat]))
+    if geometry is not None:
+        test = gpd.GeoDataFrame(test, geometry=geometry)
+    elif lat is not None and lon is not None:
+        test = gpd.GeoDataFrame(
+            test, geometry=gpd.points_from_xy(test[lon], test[lat]))
+    else:
+        raise Exception("To find the coordinate System usa lat-lon or geometry")
 
     italy = _get_shape_italia()
     italy.crs = {'init': "epsg:32632"}
@@ -654,13 +636,13 @@ def get_city_from_coordinates(df0, latitude_columns=None, longitude_columns=None
     df = df.to_crs({'init': 'epsg:4326'})
 
     n_tot = df.shape[0]
-    map_city = gpd.sjoin(df, df_comuni, op='within')
+    map_city = gpd.sjoin(df, df_comuni, op='within', how="left")
 
     missing = list(map_city[map_city[cfg.TAG_COMUNE].isna()]["geometry"].unique())
     if len(missing) == 0:
         log.info("Found the correct city for each point")
     else:
-        log.warning("Unable to find the city for {} points: {}".format(len(missing), missing))
+        log.warning("Unable to find the city for {} points: {}".format(len(missing), [(x.x, x.y) for x in missing]))
     map_city = map_city[["key_mapping", cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_SIGLA, cfg.TAG_REGIONE]]
     return df0.merge(map_city, on=["key_mapping"], how="left").drop(["key_mapping"], axis=1)
 
@@ -762,6 +744,23 @@ def get_address_from_coordinates(df0, latitude_columns=None, longitude_columns=N
     ## Join df0
     df = df0.merge(df, how="left", on=[latitude_columns, longitude_columns])
     return df
+
+
+def _process_high_density_population_df(file_path):
+    df = pd.read_csv(file_path)
+    log.info("Start getting city from coordinates")
+    df = get_city_from_coordinates(df)
+    log.info("End getting city from coordinates")
+    df.drop(["geometry"], axis=1, inplace=True)
+    df.to_pickle(file_path.replace(".csv", ".pkl"))
+
+    # perc_split = 0.05
+    # n_split = math.ceil(1 / perc_split)
+    # df_list = np.split(df, np.arange(1, n_split) * int(perc_split * len(df)))
+    # i = 0
+    # for df_i in df_list:
+    #     df_i.to_pickle(path + str(i) + ".pkl")
+    #     i += 1
 
 # class KDEDensity:
 #

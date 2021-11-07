@@ -1,13 +1,20 @@
+import math
 import os
 from datetime import datetime
 from pathlib import PureWindowsPath
+import logging
 
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+import urllib
+import zipfile
 
 from geo_ita.src.definition import *
 import geo_ita.src.config as cfg
+
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
 
 
 def _get_list():
@@ -300,6 +307,23 @@ def _get_shape_italia():
     df = gpd.GeoDataFrame(df, geometry="geometry")
     df = df.dissolve(by='key')
     return df
+
+
+def _download_high_density_population_df(folder_path):
+    link = r"https://data.humdata.org/dataset/0eb77b21-06be-42c8-9245-2edaff79952f/resource/1e96f272-7d86-4108-b4ca-5a951a8b11a0/download/population_ita_2019-07-01.csv.zip"
+    file_name = link.split("/")[-1]
+    file_path = PureWindowsPath(folder_path) / PureWindowsPath(file_name)
+    log.info("Start downloading the high resolution population of Italy (239.0M)")
+    urllib.request.urlretrieve(link, file_path)
+    log.info("High resolution population of Italy ended")
+    new_file_path = PureWindowsPath(folder_path) / PureWindowsPath(file_name.replace(".zip", ""))
+    with zipfile.ZipFile(file_path, 'r') as zip_ref:
+        zip_ref.extractall(folder_path)
+    os.remove(file_path)
+    return new_file_path
+
+
+
 
 
 def create_df():

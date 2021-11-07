@@ -1,21 +1,47 @@
 from geo_ita.src._plot import *
+from geo_ita.src._plot import _get_margins
 from geo_ita.src._data import get_df_comuni, _get_shape_italia
 import geo_ita.src.config as cfg
 from geo_ita.src.definition import *
 from pathlib import PureWindowsPath
+
+import unittest
+
+
+class TestPlot(unittest.TestCase):
+
+    # plot_choropleth_map
+
+    def test_get_marging(self):
+        with self.assertRaises(Exception):
+            _get_margins(1)
+        result, _ = _get_margins()
+        self.assertTrue(isinstance(result, list))
+        self.assertTrue(len(result), 4)
+        result1, _ = _get_margins(filter_comune="PRato")
+        result2, _ = _get_margins(filter_comune=["PrAto"])
+        self.assertListEqual(result1, result2)
+        result3, _ = _get_margins(filter_comune=["Prato", "firenze"])
+        self.assertTrue(isinstance(result, list))
+        self.assertTrue(len(result), 4)
+        self.assertTrue(result2 != result3)
+
+    def test_plot_choropleth_map_input(self):
+        pass
 
 
 def test_plot_choropleth_map():
     test_df = get_df_regioni()
 
     plot_choropleth_map_regionale(test_df, cfg.TAG_REGIONE,
-                                  "popolazione", save_path="usage_choropleth_regionale.png",
-                                  show_colorbar=False, dpi=50)
+                                  "popolazione",
+                                  title="Popolazione Regionale", save_path="usage_choropleth_regionale.png",
+                                  dpi=50)
     print("ok1")
     test_df = get_df_province()
     plot_choropleth_map_provinciale_interactive(test_df, cfg.TAG_PROVINCIA, {"popolazione": "Popolazione",
                                                                              "superficie_km2": "Superficie"},
-                                                filter_regioni=["Toscana"],
+                                                filter_regione="Toscana",
                                                 title="Toscana")
     print("ok2")
     plot_choropleth_map_comunale(test_df, cfg.TAG_COMUNE, "popolazione", filter_regioni=["lazio ", "campania"])
@@ -64,15 +90,23 @@ def test_point_map():
     # margins4 = _get_margins(regione="Toscana")
     # margins5 = _get_margins(regione="Tascana")
     test_df = get_df_province()
-    plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x', size=5, title="Province", save_in_path="usage_point_map_comuni.png")
+    plot_point_map_interactive(test_df,
+                               longitude_columns="center_x",
+                               latitude_columns="center_y",
+                               filter_regione="Toscana")
+    plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x',
+                   size=12, title="Province", save_in_path="usage_point_map_comuni.png",
+                   color_tag="popolazione")
+    test_df = get_df_comuni()
+    plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x',
+                   regione="Toscana", color_tag="denominazione_provincia",
+                   size=8, title="Comuni", save_in_path="usage_point_map_comuni2.png")
     plot_point_map(test_df, color_tag="popolazione", provincia="Prato")
     plot_point_map(test_df, color_tag="denominazione_regione", legend_font=5)
     plot_point_map_interactive(test_df, color_tag="denominazione_regione")
-    plot_point_map_interactive(test_df, provincia="Prato")
 
 
-
-def test_4():
+def test_density():
     n = 1000
     df = pd.DataFrame(index=range(n))
 
@@ -89,7 +123,7 @@ def test_4():
     plot_kernel_density_estimation_interactive(test_df, value_tag="popolazione", latitude_columns='center_y',
                                    longitude_columns='center_x',
                                    n_grid_x=500, n_grid_y=500,
-                                   regione="Lazio")
+                                   filter_regione="Lazio")
 
 
 
@@ -115,6 +149,9 @@ def test_4():
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     #test_plot_choropleth_map()
-    #test_2()
     #test_point_map()
-    test_4()
+    test_density()
+    unittest.main()
+    #test_2()
+
+

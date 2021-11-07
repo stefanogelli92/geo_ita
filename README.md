@@ -50,7 +50,7 @@ Here you can find some methods that add some geografical information to your dat
 - **[Geocoding](https://en.wikipedia.org/wiki/Address_geocoding)**: 
         <br>This method will return the coordinates of a place from the address. It will also add informations about *Comune*, *Provincia* or *Regione* in order to help the search and test the result.
         <br>Warning: This process cannot always determinate the coordinates. This is mostly due to an address with some errors or abbreviation, or some address that are not in the OpenStreetMaps project (we use it because it is open and free).
-        <br>Warning: This process takes avout 1 second per element.
+        <br>Warning: This process takes about 1 second per element.
 ```python
 # Usage
 from geo_ita.enrich_dataframe import get_coordinates_from_address
@@ -70,7 +70,7 @@ df = get_coordinates_from_address(df, "address")
 ```
 - **[Reverse Geocoding](https://en.wikipedia.org/wiki/Reverse_geocoding)**: 
         <br>There are two version of reverse geocoding:
-        <br> 1. **get_address_from_coordinates**: This method will return the address of a place from the coordinates. Warning: This process takes avout 1 second per element.
+        <br> 1. **get_address_from_coordinates**: This method will return the address of a place from the coordinates. Warning: This process takes about 1 second per element.
         <br> 2. **get_city_from_coordinates**: This method will return the comune, provincia ane regione from the coordinates.
 ```python
 # Usage
@@ -173,7 +173,7 @@ plot_choropleth_map_provinciale_interactive(df,
                                             'denominazione_regione', 
                                             {"popolazione": "Popolazione",
                                              "superficie_km2": "Superficie"},
-                                            filter_regioni=["Toscana"],
+                                            filter_regione="Toscana",
                                             title="Toscana")
 ```
 ![plot](./Test/usage_choropleth_provinciale_interactive.png?raw=true)
@@ -202,7 +202,6 @@ plot_point_map(df, latitude_columns='center_y', longitude_columns='center_x', ti
         <br>This method will plot a density on map.
         <br>There are two type of density estimation:
         <br> 1. Simple point density: This will show where point are more or less concentrated. In this case you need to pass only the coordinates of points.
-        
         <br> 2. Density of a variable in each point: This will show the density of the variable. In this case you need to pass the coordinates and the value of the variable of each point.
 
 ```python
@@ -235,7 +234,7 @@ plot_kernel_density_estimation_interactive(df, value_tag="popolazione",
 7. Utilizzo possibile delle api di Google con codice in input
 8. Semplificare utilizzo AddGeoInfo (forse non classe)
 9. Consigliare step successivo (AddGeoInfo)
-10. Point Map inserire possibilità di plottare più dataset di punti (e forse anche non sol punti)
+10. Point Map inserire possibilità di plottare più dataset di punti (e forse anche non solo punti)
 11. Kernel Estimation Migliorare guida
 12. Kernel estimation semplificare utilizzo
 13. Possiblità di aggiungere densità demografica da dataset Facebook in un modulo (o forse da guida ma troppo complesso)
