@@ -12,3 +12,7 @@ xlrd==1.2.0
 bokeh
 unidecode
 pyproj
+scipy
+requests
+beautifulsoup4
+google

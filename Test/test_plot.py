@@ -1,6 +1,6 @@
 from geo_ita.src._plot import *
 from geo_ita.src._plot import _get_margins
-from geo_ita.src._data import get_df_comuni, _get_shape_italia
+from geo_ita.src._data import get_df_comuni, _get_shape_italia, get_high_resolution_population_density_df
 import geo_ita.src.config as cfg
 from geo_ita.src.definition import *
 from pathlib import PureWindowsPath
@@ -107,40 +107,45 @@ def test_point_map():
 
 
 def test_density():
-    n = 1000
-    df = pd.DataFrame(index=range(n))
-
-    df["lat"] = np.random.normal((42 + 41.8)/2, (42 - 41.8)/10,  size=(n, 1))
-    df["lon"] = np.random.normal((12.6 + 12.37)/2, (12.6 - 12.37)/10, size=(n, 1))
-    df["popolazione"] = np.random.uniform(0, 100, size=(n, 1))
-    test_df = get_df_comuni()
-    plot_kernel_density_estimation(test_df, latitude_columns='center_y', longitude_columns='center_x',
-                                   n_grid_x=500, n_grid_y=500,
-                                   save_in_path="usage_kernel_density_simple.png")
-    plot_kernel_density_estimation(test_df, value_tag="popolazione", latitude_columns='center_y', longitude_columns='center_x',
-                                   n_grid_x=500, n_grid_y=500,
-                                   save_in_path="usage_kernel_density_variable.png")
-    plot_kernel_density_estimation_interactive(test_df, value_tag="popolazione", latitude_columns='center_y',
-                                   longitude_columns='center_x',
-                                   n_grid_x=500, n_grid_y=500,
-                                   filter_regione="Lazio")
+    df = get_high_resolution_population_density_df()
+    plot_kernel_density_estimation(df, n_grid_x=500, n_grid_y=500)
 
 
 
-    # path = root_path / PureWindowsPath(r"data_sources/Test/farmacie_italiane.csv")
-    # test_df = pd.read_csv(path, sep=";", engine='python')
-    # test_df = test_df[test_df["LATITUDINE"] != "-"]
-    # test_df["LATITUDINE"] = test_df["LATITUDINE"].str.replace(",", ".")
-    # test_df["LONGITUDINE"] = test_df["LONGITUDINE"].str.replace(",", ".")
-    # plot_kernel_density_estimation_interactive(test_df, n_grid_x=50, n_grid_y=50, comune="Prato")
-
-    test_df = pd.read_pickle(r"C:\Users\A470222\Documents\Python Scripts\ex_mobility\data\Geo/Densita\population_ita_2019-07-01.pkl")
-    #plot_kernel_density_estimation_interactive(test_df)
-    test_df = test_df[test_df["denominazione_comune"] == "Prato"]
-    pop_total = test_df["Population"].sum()
-    #plot_point_map_interactive(test_df, comune="Prato", info_dict={"Population": "Popolazione"})
-    plot_kernel_density_estimation_interactive(test_df, value_tag="Population", provincia="Roma")
-    #plot_kernel_density_estimation(test_df)
+    # n = 1000
+    # df = pd.DataFrame(index=range(n))
+    #
+    # df["lat"] = np.random.normal((42 + 41.8)/2, (42 - 41.8)/10,  size=(n, 1))
+    # df["lon"] = np.random.normal((12.6 + 12.37)/2, (12.6 - 12.37)/10, size=(n, 1))
+    # df["popolazione"] = np.random.uniform(0, 100, size=(n, 1))
+    # test_df = get_df_comuni()
+    # plot_kernel_density_estimation(test_df, latitude_columns='center_y', longitude_columns='center_x',
+    #                                n_grid_x=500, n_grid_y=500,
+    #                                save_in_path="usage_kernel_density_simple.png")
+    # plot_kernel_density_estimation(test_df, value_tag="popolazione", latitude_columns='center_y', longitude_columns='center_x',
+    #                                n_grid_x=500, n_grid_y=500,
+    #                                save_in_path="usage_kernel_density_variable.png")
+    # plot_kernel_density_estimation_interactive(test_df, value_tag="popolazione", latitude_columns='center_y',
+    #                                longitude_columns='center_x',
+    #                                n_grid_x=500, n_grid_y=500,
+    #                                filter_regione="Lazio")
+    #
+    #
+    #
+    # # path = root_path / PureWindowsPath(r"data_sources/Test/farmacie_italiane.csv")
+    # # test_df = pd.read_csv(path, sep=";", engine='python')
+    # # test_df = test_df[test_df["LATITUDINE"] != "-"]
+    # # test_df["LATITUDINE"] = test_df["LATITUDINE"].str.replace(",", ".")
+    # # test_df["LONGITUDINE"] = test_df["LONGITUDINE"].str.replace(",", ".")
+    # # plot_kernel_density_estimation_interactive(test_df, n_grid_x=50, n_grid_y=50, comune="Prato")
+    #
+    # test_df = pd.read_pickle(r"C:\Users\A470222\Documents\Python Scripts\ex_mobility\data\Geo/Densita\population_ita_2019-07-01.pkl")
+    # #plot_kernel_density_estimation_interactive(test_df)
+    # test_df = test_df[test_df["denominazione_comune"] == "Prato"]
+    # pop_total = test_df["Population"].sum()
+    # #plot_point_map_interactive(test_df, comune="Prato", info_dict={"Population": "Popolazione"})
+    # plot_kernel_density_estimation_interactive(test_df, value_tag="Population", provincia="Roma")
+    # #plot_kernel_density_estimation(test_df)
 
 
     #plot_kernel_density_estimation_interactive(test_df, value_tag="Population", regione="Toscana")

@@ -16,7 +16,7 @@ class TestEnrichDataframe(unittest.TestCase):
 
     # get_coordinates_from_address
 
-    def xtest_get_coordinates_from_address_input(self):
+    def test_get_coordinates_from_address_input(self):
         df, address = ["via corso di Francia"], "address"
         with self.assertRaises(Exception):
             get_coordinates_from_address(df, address)
@@ -33,7 +33,7 @@ class TestEnrichDataframe(unittest.TestCase):
         self.assertEqual(0, result.shape[0])
         self.assertListEqual(["address", "latitude", "longitude"], list(result.columns))
 
-    def xtest_get_coordinates_from_address_match(self):
+    def test_get_coordinates_from_address_match(self):
         df, address = pd.DataFrame(data=[["Corso di Francia Roma"]], columns=["address"]), "address"
         result = get_coordinates_from_address(df, address)
         result = get_city_from_coordinates(result)
@@ -44,6 +44,8 @@ class TestEnrichDataframe(unittest.TestCase):
         self.assertEqual(None, result["latitude"].values[0])
         df, address = pd.DataFrame(data=[["Corso di Francia Roma", "Firenze"],
                                          ["Corso di Francia Roma", "Roma"],
+                                         ["Viale G. P. da Palestrina", "Latina"],
+                                         ["Via S. Barbara", "Paola"],
                                          ["xxxx", None]], columns=["address", "city"]), "address"
         city = "city"
         result = get_coordinates_from_address(df, address, city)
@@ -90,7 +92,7 @@ class TestEnrichDataframe(unittest.TestCase):
 
     # AddGeographicalInfo
 
-    def test_add_geographical_info_input(self):
+    def xtest_add_geographical_info_input(self):
         df = ["via corso di Francia"]
         with self.assertRaises(Exception):
             AddGeographicalInfo(df)
@@ -126,6 +128,7 @@ class TestEnrichDataframe(unittest.TestCase):
         addinfo.set_comuni_tag(comune_column)
         addinfo.run_simple_match()
         addinfo.run_find_frazioni()
+        addinfo.run_find_frazioni_from_google()
         addinfo.run_similarity_match()
         addinfo.use_manual_match({"rome": "roma"})
         result = addinfo.get_result()
@@ -137,10 +140,13 @@ class TestEnrichDataframe(unittest.TestCase):
                                        cfg.TAG_AREA_GEOGRAFICA,
                                        cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE], list(result.columns))
 
-    def test_add_geographical_info_match(self):
+    def xtest_add_geographical_info_match(self):
         df = pd.DataFrame(data=[["Milano", "Milano", "Milano", "MI", "Lombardia"],
                                 ["florence", "Firenze", "Firenze", "FI", "Toscana"],
                                 ["porretta terme", "Alto Reno Terme", "Bologna", "BO", "Emilia-Romagna"],
+                                ["marina di ardea", "Ardea", "Roma", "RM", "Lazio"],
+                                ["Baranzate", "Baranzate", "Milano", "MI", "Lombardia"],
+                                ["milano marittima", "Cervia", "Ravenna", "RA", "Emilia-Romagna"],
                                 ["xxxx", None, None, None, None],
                                 [None, None, None, None, None]],
                           columns=["Citta", "comune", "provincia", "sl", "regione"])
@@ -149,12 +155,20 @@ class TestEnrichDataframe(unittest.TestCase):
         addinfo.set_comuni_tag("Citta")
         addinfo.run_simple_match()
         addinfo.run_find_frazioni()
+        addinfo.run_find_frazioni_from_google()
         result = addinfo.get_result()
         result = result.where(pd.notnull(result), None)
         self.assertTrue(result["denominazione_comune"].equals(result["comune"]))
         self.assertTrue(result["sigla"].equals(result["sl"]))
         self.assertTrue(result["denominazione_regione"].equals(result["regione"]))
 
+    def xtest_get_population_nearby_input(self):
+        pass
+
+    def xtest_get_population_nearby_usage(self):
+        test_df = get_df_comuni()
+        test_df = get_population_nearby(test_df, 100, latitude_columns="center_y", longitude_columns="center_x")
+        prova = ""
 
 
 def test_add_geographic_info():

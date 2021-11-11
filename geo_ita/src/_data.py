@@ -309,21 +309,64 @@ def _get_shape_italia():
     return df
 
 
-def _download_high_density_population_df(folder_path):
-    link = r"https://data.humdata.org/dataset/0eb77b21-06be-42c8-9245-2edaff79952f/resource/1e96f272-7d86-4108-b4ca-5a951a8b11a0/download/population_ita_2019-07-01.csv.zip"
+def _download_high_resolution_population_density_df():
+    link = cfg.high_resolution_population_density["link"]
     file_name = link.split("/")[-1]
+    folder_path = root_path / PureWindowsPath(cfg.high_resolution_population_density["folder_path"])
     file_path = PureWindowsPath(folder_path) / PureWindowsPath(file_name)
     log.info("Start downloading the high resolution population of Italy (239.0M)")
+    start = datetime.now()
     urllib.request.urlretrieve(link, file_path)
-    log.info("High resolution population of Italy ended")
+    end = datetime.now()
+    log.info("Dowload High resolution population of Italy ended in {}".format(end-start))
     new_file_path = PureWindowsPath(folder_path) / PureWindowsPath(file_name.replace(".zip", ""))
+    log.info("Start unzipping the file")
+    start = datetime.now()
     with zipfile.ZipFile(file_path, 'r') as zip_ref:
         zip_ref.extractall(folder_path)
     os.remove(file_path)
-    return new_file_path
+    end = datetime.now()
+    log.info("Unzipping ended in {}".format(end-start))
+    df = pd.read_csv(new_file_path)
+
+    # Reduce memory usage
+    # Remember to divide Population per 1000
+    df["Lat"] = df["Lat"].astype('float32')
+    df["Lon"] = df["Lon"].astype('float32')
+    df["Population"] = (df["Population"]*10).round(0).astype('int32')
+    df = df[df["Population"] > 0]
+    df.to_pickle(root_path / PureWindowsPath(cfg.high_resolution_population_density["file_path"]))
+    os.remove(new_file_path)
+    # log.info("Start creating the geopandas dataframe")
+    # start = datetime.now()
+    # long_tag = "Lon"
+    # lat_tag = "Lat"
+    # df = gpd.GeoDataFrame(
+    #     df.drop([long_tag, lat_tag], axis=1),
+    #     crs={'init': 'epsg:4326'},
+    #     geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
+    # end = datetime.now()
+    # log.info("Created the geopandas dataframe in {}".format(end - start))
+    # start = datetime.now()
+    # log.info("Start saving the file")
+    # df.to_file(root_path / PureWindowsPath("data_sources/HighResolutionPopulationDensity/high_resolution_population_density.geojson"), driver='GeoJSON')
+    # #df.to_pickle(root_path / PureWindowsPath("data_sources/HighResolutionPopulationDensity/high_resolution_population_density.pkl"))
+    # end = datetime.now()
+    # log.info("File saved in {}".format(end - start))
+    return df
 
 
-
+def get_high_resolution_population_density_df():
+    file_path = root_path / PureWindowsPath(cfg.high_resolution_population_density["file_path"])
+    if os.path.exists(file_path):
+        log.info("Start loading the file")
+        start = datetime.now()
+        df = pd.read_pickle(file_path)
+        end = datetime.now()
+        log.info("File loaded in {}".format(end - start))
+    else:
+        df = _download_high_resolution_population_density_df()
+    return df
 
 
 def create_df():

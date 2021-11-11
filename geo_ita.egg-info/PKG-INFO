@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: geo-ita
-Version: 0.1.19
+Version: 0.1.26
 Summary: A package for geo analysis for Italy
 Home-page: https://github.com/enelx-customer-business-analytics/geo_ita.git
 Author: Stefano Gelli
@@ -181,7 +181,7 @@ Description: # Geo Ita
                                                     'denominazione_regione', 
                                                     {"popolazione": "Popolazione",
                                                      "superficie_km2": "Superficie"},
-                                                    filter_regioni=["Toscana"],
+                                                    filter_regione="Toscana",
                                                     title="Toscana")
         ```
         ![plot](./Test/usage_choropleth_provinciale_interactive.png?raw=true)

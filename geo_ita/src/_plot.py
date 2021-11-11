@@ -1141,6 +1141,14 @@ def _filter_margins(df, margins, long_tag=None, lat_tag=None):
                 ]
     return result
 
+import sys
+def sizeof_fmt(num, suffix='B'):
+    ''' by Fred Cirera,  https://stackoverflow.com/a/1094933/1870254, modified'''
+    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+        if abs(num) < 1024.0:
+            return "%3.1f %s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.1f %s%s" % (num, 'Yi', suffix)
 
 def plot_kernel_density_estimation(df0,
                                    latitude_columns=None,
@@ -1155,12 +1163,9 @@ def plot_kernel_density_estimation(df0,
                                    title=None,
                                    save_in_path=None,
                                    dpi=100):
-    df = df0.copy()
-    if (latitude_columns is None) or (longitude_columns is None):
-        flag_coord_found, latitude_columns, longitude_columns = __find_coord_columns(df)
-    df[latitude_columns] = df[latitude_columns].astype(float)
-    df[longitude_columns] = df[longitude_columns].astype(float)
-    coord_system_input = __find_coordinates_system(df, lat=latitude_columns, lon=longitude_columns)
+
+    df = __create_geo_dataframe(df0, lat_tag=latitude_columns, long_tag=longitude_columns)
+    coord_system_input = df.crs['init']
 
     shape_list = []
 
@@ -1170,8 +1175,6 @@ def plot_kernel_density_estimation(df0,
         polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': coord_system_input})
-        df = gpd.GeoDataFrame(
-            df, geometry=gpd.points_from_xy(df[longitude_columns], df[latitude_columns]))
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
         shape = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
@@ -1186,8 +1189,6 @@ def plot_kernel_density_estimation(df0,
         polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': coord_system_input})
-        df = gpd.GeoDataFrame(
-            df, geometry=gpd.points_from_xy(df[longitude_columns], df[latitude_columns]))
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
         shape = _get_shape_from_level(cfg.LEVEL_COMUNE)
@@ -1202,8 +1203,6 @@ def plot_kernel_density_estimation(df0,
         polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': coord_system_input})
-        df = gpd.GeoDataFrame(
-            df, geometry=gpd.points_from_xy(df[longitude_columns], df[latitude_columns]))
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
     else:
@@ -1218,9 +1217,9 @@ def plot_kernel_density_estimation(df0,
         shape = shape.to_crs({'init': coord_system_input})
         shape_list.append((shape, 0.4, "0.6"))
 
-    x, y = df[longitude_columns].values, df[latitude_columns].values
-    x0, y0 = df[longitude_columns].min(), df[latitude_columns].min()
-    x1, y1 = df[longitude_columns].max(), df[latitude_columns].max()
+    x, y = df["geometry"].x.values, df["geometry"].y.values
+    x0, y0 = df["geometry"].x.min(), df["geometry"].y.min()
+    x1, y1 = df["geometry"].x.max(), df["geometry"].y.max()
 
     if value_tag:
         weights = df[value_tag].clip(0.00001, None).values
@@ -1289,8 +1288,8 @@ def plot_kernel_density_estimation_interactive(df0,
         df[latitude_columns] = df.geometry.y
         df[longitude_columns] = df.geometry.x
 
-    x0, y0 = df[longitude_columns].min(), df[latitude_columns].min()
-    x1, y1 = df[longitude_columns].max(), df[latitude_columns].max()
+    x0, y0 = df.geometry.x.min(), df.geometry.y.min()
+    x1, y1 = df.geometry.x.max(), df.geometry.y.max()
 
     if value_tag:
         weights = df[value_tag].clip(0.00001, None).values
@@ -1299,7 +1298,7 @@ def plot_kernel_density_estimation_interactive(df0,
 
     weights = weights / weights.max() * 10000
 
-    h, _, _ = np.histogram2d(df[longitude_columns], df[latitude_columns], bins=(np.linspace(x0, x1, n_grid_x), np.linspace(y0, y1, n_grid_y)), weights=weights)
+    h, _, _ = np.histogram2d(df.geometry.x, df.geometry.y, bins=(np.linspace(x0, x1, n_grid_x), np.linspace(y0, y1, n_grid_y)), weights=weights)
     h[h == 0] = 1
 
     z = scipy.ndimage.filters.gaussian_filter(np.log(h.T), 1)

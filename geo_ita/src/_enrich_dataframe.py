@@ -1,20 +1,32 @@
 import difflib
+import math
+import os
 import re
 import time
 import logging
 import ssl
+from pathlib import PureWindowsPath
+from datetime import datetime
+
 import unidecode
+from geo_ita.src.definition import *
 
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+from geopy.distance import distance
 import geopy.geocoders
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 # from sklearn.neighbors import KernelDensity
 
+from googlesearch import search
+import requests
+from bs4 import BeautifulSoup
+import re
+
 from geo_ita.src._data import (get_df, get_df_comuni, get_variazioni_amministrative_df, _get_list,
-    get_double_languages_mapping, _get_shape_italia)
+    get_double_languages_mapping, _get_shape_italia, get_high_resolution_population_density_df)
 import geo_ita.src.config as cfg
 
 log = logging.getLogger(__name__)
@@ -24,6 +36,31 @@ ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 geopy.geocoders.options.default_ssl_context = ctx
+
+
+from googleapiclient.discovery import build
+api_key = "AIzaSyDQTlp0F0tExsXg1PZn1FF_ugK_bwBhlqA"
+cse_id = "8558e6507a2bf9d77"
+
+
+def google_query(query, api_key, cse_id, **kwargs):
+    query_service = build("customsearch",
+                          "v1",
+                          developerKey=api_key
+                          )
+    query_results = query_service.cse().list(q=query,    # Query
+                                             cx=cse_id,  # CSE ID
+                                             **kwargs
+                                             ).execute()
+    return query_results['items']
+
+
+def _clean_htmltext(text):
+    text = text.lower()
+    text = re.sub('\s+', ' ', text)
+    text = re.sub('[^A-Za-z0-9.]+', ' ', text)
+    text = re.sub(' +', ' ', text)
+    return text
 
 
 class AddGeographicalInfo:
@@ -248,7 +285,9 @@ class AddGeographicalInfo:
         df_variazioni["data_decorrenza"] = pd.to_datetime(df_variazioni["data_decorrenza"])
         df_variazioni.sort_values([cfg.TAG_COMUNE, "data_decorrenza"], ascending=False, inplace=True)
         df_variazioni = df_variazioni.groupby(cfg.TAG_COMUNE)["new_denominazione_comune"].last().to_dict()
-        s = self.df[cfg.KEY_UNIQUE].replace(df_variazioni)
+        s = np.where(self.df[cfg.KEY_UNIQUE].isin(list(self.info_df[cfg.KEY_UNIQUE].unique())),
+            self.df[cfg.KEY_UNIQUE],
+            self.df[cfg.KEY_UNIQUE].replace(df_variazioni))
         if (s != self.df[cfg.KEY_UNIQUE]).any():
             replaces = self.df[(s != self.df[cfg.KEY_UNIQUE])][cfg.KEY_UNIQUE].unique()
             log.info("Match {} name that are no longer comuni:\n{}".format(len(replaces), replaces))
@@ -289,7 +328,7 @@ class AddGeographicalInfo:
                     extract = re.search(
                         '(?P<comune2>[^,]+, )?(?P<comune1>[^,]+), (?P<provincia>[^,]+), (?P<regione>[^,0-9]+)(?P<cap>, [0-9]{5})?, Italia',
                         address)
-                    if extract and not any(word.lower() in address.lower() for word in ["via", "viale", "piazza"]):
+                    if extract:  # and not any(word.lower() in address.lower() for word in ["via", "viale", "piazza"]):
                         regione = _clean_denom_text_value(extract.group("regione"))
                         provincia = extract.group("provincia")
                         provincia = _clean_denom_text_value(provincia.replace("Roma Capitale", "Roma"))
@@ -306,6 +345,70 @@ class AddGeographicalInfo:
                                 match_dict[el] = provincia
         if len(match_dict) > 0:
             log.info("Match {} name that corrisponds to a possible frazione of a comune:\n{}".format(len(match_dict), match_dict))
+            self.not_match = [x for x in self.not_match if x not in match_dict.keys()]
+            self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].replace(match_dict)
+        if self.frazioni_dict is not None:
+            self.frazioni_dict.update(match_dict)
+        else:
+            self.frazioni_dict = match_dict
+
+
+    def run_find_frazioni_from_google(self, n_url_read=1):
+        comuni = [_clean_denom_text_value(a) for a in self.comuni]
+        match_dict = {}
+        for el in self.not_match:
+            query = """ "{}" è una frazione del comune di""".format(el)
+            match_comuni = []
+            urls = []
+            try:
+                urls = list(search(query, tld='com', num=n_url_read, lang="it", country="Italy", stop=n_url_read, pause=2.5, verify_ssl=False))
+            except Exception as e:
+                log.error('Failed to search on google tentative 1: ' + str(e))
+                try:
+                    my_results = google_query(query,
+                                              api_key,
+                                              cse_id,
+                                              num=n_url_read
+                                              )
+                    for result in my_results:
+                        urls.append(result['link'])
+                except Exception as e:
+                    log.error('Failed to search on google tentative 2: ' + str(e))
+            if len(urls) > 0:
+                 for url in urls:
+                    res = requests.get(url, verify=False)
+                    html_page = res.content
+                    soup = BeautifulSoup(html_page, 'html.parser')
+                    text = soup.find_all(text=True)
+                    output = ''
+                    blacklist = [
+                        '[document]',
+                        'noscript',
+                        'header',
+                        'html',
+                        'meta',
+                        'head',
+                        'input',
+                        'script',
+                        # there may be more elements you don't want, such as "style", etc.
+                    ]
+
+                    for t in text:
+                        if t.parent.name not in blacklist:
+                            output += '{} '.format(t)
+                    output = _clean_htmltext(output)
+                    r1 = re.findall(cfg.regex_find_frazioni.format(el), output)
+                    for r in r1:
+                        find_comuni = r[8].split(" ")
+                        test_name = [" ".join(find_comuni[:i + 1]) for i in range(len(find_comuni))]
+                        test_list = [a in comuni for a in test_name]
+                        if any(test_list):
+                             match_comuni.extend([test_name[i] for i in range(len(find_comuni)) if test_list[i]])
+            match_comuni = list(set(match_comuni))
+            if len(match_comuni) == 1:
+                match_dict[el] = match_comuni[0]
+        if len(match_dict) > 0:
+            log.info("Match {} name that corrisponds to a possible frazione of a comune from google:\n{}".format(len(match_dict), match_dict))
             self.not_match = [x for x in self.not_match if x not in match_dict.keys()]
             self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].replace(match_dict)
         if self.frazioni_dict is not None:
@@ -493,16 +596,22 @@ def __find_coord_columns(df):
 
 
 def __create_geo_dataframe(df0, lat_tag=None, long_tag=None):
-    if isinstance(df0, pd.DataFrame):
+    if isinstance(df0, gpd.GeoDataFrame):
+        df = df0.copy()
+        if df.crs['init'] is None:
+            coord_system = __find_coordinates_system(df, geometry="geometry")
+            df.crs = {'init': coord_system}
+    elif isinstance(df0, pd.DataFrame):
         if lat_tag is None:
             flag_coord_found, lat_tag, long_tag = __find_coord_columns(df0)
         else:
             flag_coord_found = True
         if flag_coord_found:
+            df = df0[df0[long_tag].notnull()]
             df = gpd.GeoDataFrame(
-                df0, geometry=gpd.points_from_xy(df0[long_tag].astype('float32'), df0[lat_tag].astype('float32')))
-            df.loc[(df[long_tag].isna()) | (df[lat_tag].isna()), "geometry"] = None
-            coord_system = __find_coordinates_system(df0, lat_tag, long_tag)
+                df.drop([long_tag, lat_tag], axis=1), geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
+            #df.loc[(df[long_tag].isna()) | (df[lat_tag].isna()), "geometry"] = None
+            coord_system = __find_coordinates_system(df, lat_tag, long_tag)
             df.crs = {'init': coord_system}
         elif "geometry" in df0.columns:
             df = gpd.GeoDataFrame(df0)
@@ -511,8 +620,7 @@ def __create_geo_dataframe(df0, lat_tag=None, long_tag=None):
             log.info("Found geometry columns")
         else:
             raise Exception("The DataFrame must have a geometry attribute or lat-long.")
-    elif isinstance(df0, gpd.GeoDataFrame):
-        df = df0.copy()
+
     else:
         raise Exception("You need to pass a Pandas DataFrame of GeoDataFrame.")
     return df
@@ -521,7 +629,9 @@ def __create_geo_dataframe(df0, lat_tag=None, long_tag=None):
 def __find_coordinates_system(df, lat=None, lon=None, geometry=None):
     n_test = min(100, df.shape[0])
     test = df.sample(n=n_test)
-    if geometry is not None:
+    if isinstance(df, gpd.GeoDataFrame):
+        pass
+    elif geometry is not None:
         test = gpd.GeoDataFrame(test, geometry=geometry)
     elif lat is not None and lon is not None:
         test = gpd.GeoDataFrame(
@@ -651,7 +761,7 @@ def __test_city_in_address(df, city_tag, address_tag):
     return df.apply(lambda x: x[city_tag].lower() in x[address_tag] if (x[address_tag] and x[city_tag]) else False, axis=1)
 
 
-def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=None, regione_tag=None):
+def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=None, regione_tag=None, n_url_read=1):
     # TODO add successive tentative (maps api)
     if not isinstance(df0, pd.DataFrame) or not isinstance(address_tag, str) or address_tag not in df0.columns:
         raise Exception("Insert a Pandas DataFrame as first parameter and the name of the column with the info of the address.")
@@ -665,7 +775,7 @@ def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=N
         t = t | df[city_tag].isna()
         df["address_search"] = np.where(t, df["address_search"], df["address_search"] + ", " + df[city_tag].str.lower())
 
-    log.info("Needed at least {} seconds".format(n))
+    log.info("Run search on OpenStreetMap. Needed at least {} seconds".format(n))
     geolocator = Nominatim(timeout=10, user_agent=cfg.USER_AGENT)
     geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
     start = time.time()
@@ -678,6 +788,65 @@ def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=N
     n_tot = df.shape[0]
     n_found = df["location"].notnull().sum()
     n_not_found = n_tot - n_found
+
+    if n_not_found > 0:
+        log.info("Try to find abbreviated name")
+        not_found = list(df.loc[df["location"].isna(), "address_search"].unique())
+        for address in not_found:
+            address_without_city = address.split(",")[0]
+            m = re.search(r"^([^.]+) (([a-z]+\. ?)+) ?([^.]+)$", address_without_city)
+            if m:
+                prefix = m.group(1)
+                if prefix in cfg.list_road_prefix:
+                    prefix = "(" + "|".join(cfg.list_road_prefix) + ")"
+                suffix = m.group(4)
+                abbreviations = m.group(2)
+                abbreviations = "[a-z]+ ?".join(abbreviations.replace(" ", "").split("."))
+                match = []
+                urls = []
+                try:
+                    urls = list(
+                        search(address, tld='com', num=n_url_read, lang="it", country="Italy", stop=n_url_read, pause=2.5,
+                               verify_ssl=False))
+                except Exception as e:
+                    log.error('Failed to search on google tentative 1: ' + str(e))
+                    try:
+                        my_results = google_query(address,
+                                                  api_key,
+                                                  cse_id,
+                                                  num=n_url_read
+                                                  )
+                        for result in my_results:
+                            urls.append(result['link'])
+                    except Exception as e:
+                        log.error('Failed to search on google tentative 2: ' + str(e))
+                if len(urls) > 0:
+                    for url in urls:
+                        res = requests.get(url, verify=False)
+                        html_page = res.content
+                        soup = BeautifulSoup(html_page, 'html.parser')
+                        text = soup.find_all(text=True)
+                        output = ' '.join(text)
+                        output = _clean_htmltext(output)
+                        pattern = "{prefix} ?{abbreviations} ?{suffix}".format(prefix=prefix,
+                                                                      abbreviations=abbreviations,
+                                                                      suffix=suffix)
+                        r1 = re.search(pattern, output)
+                        match.append(r1.group())
+                match = list(set(match))
+                if len(match) == 1:
+                    pos_match = df["address_search"] == address
+                    df.loc[pos_match, "address_search"] = match[0]
+                    if "," in address:
+                        s = match[0] + "," + ", ".join(address.split(",")[1:])
+                    else:
+                        s = match[0]
+                    location = geocode(s)
+                    if location is not None:
+                        df.loc[pos_match, "latitude"] = location.latitude
+                        df.loc[pos_match, "longitude"] = location.longitude
+                        df.loc[pos_match, "address_test"] = location.address.lower()
+
     if city_tag:
         df["test"] = __test_city_in_address(df, city_tag, "address_test")
         df.loc[~df["test"], "latitude"] = None
@@ -697,6 +866,8 @@ def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=N
             n_found, n_tot, (~df["test"]).sum() - n_not_found))
     else:
         log.info("Found {} location over {} address.".format(n_found, n_tot))
+
+
 
 
     # drop columns
@@ -746,21 +917,161 @@ def get_address_from_coordinates(df0, latitude_columns=None, longitude_columns=N
     return df
 
 
-def _process_high_density_population_df(file_path):
-    df = pd.read_csv(file_path)
-    log.info("Start getting city from coordinates")
-    df = get_city_from_coordinates(df)
-    log.info("End getting city from coordinates")
-    df.drop(["geometry"], axis=1, inplace=True)
-    df.to_pickle(file_path.replace(".csv", ".pkl"))
+def _distance_to_range_ccord(d):
+    a = (14, 6)
+    max_value = 1
+    min_value = 0
+    x_dist = 1
+    while True:
+        b = (a[0] + x_dist, a[1])
+        dist = distance(a,b).m
+        if dist == d:
+            break
+        elif dist > d:
+            d1 = round((x_dist + min_value) / 2, 7)
+            max_value = x_dist
+            if d1 == x_dist:
+                break
+            else:
+                x_dist = d1
+        else:
+            d1 = round((x_dist + max_value) / 2, 7)
+            min_value = x_dist
+            if d1 == x_dist:
+                break
+            else:
+                x_dist = d1
 
-    # perc_split = 0.05
-    # n_split = math.ceil(1 / perc_split)
-    # df_list = np.split(df, np.arange(1, n_split) * int(perc_split * len(df)))
-    # i = 0
-    # for df_i in df_list:
-    #     df_i.to_pickle(path + str(i) + ".pkl")
-    #     i += 1
+    max_value = 1
+    min_value = 0
+    y_dist = 1
+    while True:
+        b = (a[0], a[1] + y_dist)
+        dist = distance(a, b).m
+        if dist == d:
+            break
+        elif dist > d:
+            d1 = round((y_dist + min_value) / 2, 7)
+            max_value = y_dist
+            if d1 == y_dist:
+                break
+            else:
+                y_dist = d1
+        else:
+            d1 = round((y_dist + max_value) / 2, 7)
+            min_value = y_dist
+            if d1 == y_dist:
+                break
+            else:
+                y_dist = d1
+    return x_dist, y_dist
+
+
+def get_population_nearby2(df, radius, latitude_columns=None, longitude_columns=None):
+    population_df = get_high_resolution_population_density_df()
+    #population_df = __create_geo_dataframe(population_df)
+    long_tag = "Lon"
+    lat_tag = "Lat"
+    df = df.rename_axis('key_mapping').reset_index()
+    radius_df = __create_geo_dataframe(df, lat_tag=latitude_columns, long_tag=longitude_columns)[["key_mapping", "geometry"]]
+    radius_df = radius_df.to_crs({'init': 'epsg:4326'})
+    x_dist2, y_dist2 = _distance_to_range_ccord(radius*1.1)
+    x_dist, y_dist = _distance_to_range_ccord(radius)
+    dist = (x_dist + y_dist) / 2
+    radius_df["geometry2"] = radius_df["geometry"]
+    more_precision = False
+    if more_precision:
+        radius_df["geometry"] = radius_df.apply(lambda x: x['geometry2'].buffer(dist, cap_style=1), axis=1)
+    radius_df["population0"] = None
+    radius_df["population1"] = None
+    start = time.time()
+    print("Start")
+    for index, row in radius_df.iterrows():
+        signle_population_df = population_df[(population_df[lat_tag].between(row["geometry2"].y-y_dist2, row["geometry2"].y+y_dist2) &
+                                              population_df[long_tag].between(row["geometry2"].x-x_dist2, row["geometry2"].x+x_dist2))]
+        population = signle_population_df["Population"].sum()
+        radius_df.loc[index, 'population0'] = population
+        if more_precision & (population > 0):
+            signle_population_df = gpd.GeoDataFrame(signle_population_df.drop([long_tag, lat_tag], axis=1),
+                                            crs={'init': 'epsg:4326'},
+                                            geometry=gpd.points_from_xy(signle_population_df[long_tag], signle_population_df[lat_tag]))
+            circle = radius_df.loc[radius_df.index == index, ["geometry"]]
+            signle_population_df = gpd.sjoin(signle_population_df, circle, op='within')
+            radius_df.loc[index, 'population1'] = signle_population_df["Population"].sum()
+
+    end = time.time()
+    print('Change coord System', end - start)
+    start = time.time()
+    df["n_residents0"] = df["key_mapping"].map(radius_df.set_index("key_mapping")["population0"])
+    if more_precision:
+        df["n_residents1"] = df["key_mapping"].map(radius_df.set_index("key_mapping")["population1"])
+    end = time.time()
+    print('Mapping', end - start)
+    return df
+
+
+def get_population_nearby(df, radius, latitude_columns=None, longitude_columns=None):
+    population_df = get_high_resolution_population_density_df()
+    radius_df = df.rename_axis('key_mapping').reset_index()
+    radius_df = __create_geo_dataframe(radius_df, lat_tag=latitude_columns, long_tag=longitude_columns)[["key_mapping", "geometry"]]
+    radius_df = radius_df.to_crs({'init': 'epsg:4326'})
+    if radius_df.shape[0] > 1000:
+        log.info("Start creating the geopandas dataframe")
+        start = datetime.now()
+        long_tag = "Lon"
+        lat_tag = "Lat"
+        population_df = gpd.GeoDataFrame(
+            population_df.drop([long_tag, lat_tag], axis=1),
+            crs={'init': 'epsg:4326'},
+            geometry=gpd.points_from_xy(population_df[long_tag], population_df[lat_tag]))
+        end = datetime.now()
+        log.info("Created the geopandas dataframe in {}".format(end - start))
+        x_dist, y_dist = _distance_to_range_ccord(radius)
+        dist = (x_dist + y_dist) / 2
+        radius_df["geometry"] = radius_df.apply(lambda x: x['geometry'].buffer(dist, cap_style=1), axis=1)
+        start = time.time()
+        population_df = gpd.sjoin(population_df, radius_df, op='within')
+        end = time.time()
+        print('Join', end - start)
+        start = time.time()
+        mapping = population_df.groupby("key_mapping")["Population"].sum()
+    else:
+        pass
+    df["n_residents"] = df["key_mapping"].map(mapping) / 10
+    end = time.time()
+    print('Mapping', end - start)
+    return df
+
+
+def _process_high_density_population_df(file_path, split_perc=0.05):
+    file_path = str(file_path)
+    df = pd.read_csv(file_path)
+
+    #df = get_city_from_coordinates(df)
+    #df.drop(["geometry"], axis=1, inplace=True)
+    #df.to_pickle(file_path.replace(".csv", ".pkl"))
+
+    # Split
+    log.info("Start getting city from coordinates")
+    split_path = PureWindowsPath(file_path.rsplit('\\', 1)[0]) / "split"
+    os.mkdir(split_path)
+    n_split = math.ceil(1 / split_perc)
+    df_list = np.split(df, np.arange(1, n_split) * int(split_perc * len(df)))
+    i = 0
+    for df_i in df_list:
+        df_i.to_pickle(split_path / PureWindowsPath(str(i) + ".pkl"))
+        i += 1
+    del df
+    for filename in os.listdir(split_path):
+        df = pd.read_pickle(split_path / filename)
+        df = get_city_from_coordinates(df)
+        df.to_pickle(split_path / filename)
+    df = pd.DataFrame()
+    for filename in os.listdir(split_path):
+        df = pd.concat([pd.read_pickle(split_path / filename), df], ignore_index=True)
+    df.drop(["geometry"], axis=1, inplace=True)
+    log.info("End getting city from coordinates")
+    df.to_pickle(str(file_path).replace(".csv", ".pkl"))
 
 # class KDEDensity:
 #

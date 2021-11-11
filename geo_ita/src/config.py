@@ -152,3 +152,11 @@ comuni_omonimi = {
                  "San Teodoro messina", "San Teodoro"]
 }
 
+high_resolution_population_density = {
+    "folder_path": "data_sources/HighResolutionPopulationDensity",
+    "file_path": "data_sources/HighResolutionPopulationDensity/high_resolution_population_density.pkl",
+    "link": r"https://data.humdata.org/dataset/0eb77b21-06be-42c8-9245-2edaff79952f/resource/1e96f272-7d86-4108-b4ca-5a951a8b11a0/download/population_ita_2019-07-01.csv.zip"
+}
+
+regex_find_frazioni = r"({}) ?(\[[^\[.]+\])? ?(\([^\(.]+\))? ?([^.]{{0,40}}) (si trova nel comune|fa parte del comune|frazione ?(\([^.]+\))? ?[^.]{{0,20}} ?(\([^.]+\))? comune|borgo del comune|località del comune) (di ?)([^.]+)"
+list_road_prefix = ["via", "viale", "strada", "st", "largo", "corso", "contrada"]
