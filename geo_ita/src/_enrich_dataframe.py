@@ -94,7 +94,7 @@ class AddGeographicalInfo:
 
     def _test_column_in_dataframe(self, col):
         if col not in self.original_df.columns:
-            raise Exception("Column not found in dataframe.")
+            raise Exception("Column {} not found in dataframe.".format(col))
 
     def _find_info(self):
         pass
@@ -761,6 +761,85 @@ def __test_city_in_address(df, city_tag, address_tag):
     return df.apply(lambda x: x[city_tag].lower() in x[address_tag] if (x[address_tag] and x[city_tag]) else False, axis=1)
 
 
+def _try_replace_abbreviation_on_google(df, n_url_read, geocode):
+    log.info("Try to find abbreviated name")
+    not_found = list(df.loc[df["location"].isna(), "address_search"].unique())
+    for address in not_found:
+        address_without_city = address.split(",")[0]
+        m = re.search(r"^([^.]+) (([a-z]+\. ?)+) ?([^.]+)$", address_without_city)
+        if m:
+            prefix = m.group(1)
+            if prefix in cfg.list_road_prefix:
+                prefix = "(" + "|".join(cfg.list_road_prefix) + ")"
+            suffix = m.group(4)
+            abbreviations = m.group(2)
+            abbreviations = "[a-z]+ ?".join(abbreviations.replace(" ", "").split("."))
+            match = []
+            urls = []
+            try:
+                urls = list(
+                    search(address, tld='com', num=n_url_read, lang="it", country="Italy", stop=n_url_read, pause=2.5,
+                           verify_ssl=False))
+            except Exception as e:
+                log.error('Failed to search on google tentative 1: ' + str(e))
+                try:
+                    my_results = google_query(address,
+                                              api_key,
+                                              cse_id,
+                                              num=n_url_read
+                                              )
+                    for result in my_results:
+                        urls.append(result['link'])
+                except Exception as e:
+                    log.error('Failed to search on google tentative 2: ' + str(e))
+            if len(urls) > 0:
+                for url in urls:
+                    res = requests.get(url, verify=False)
+                    html_page = res.content
+                    soup = BeautifulSoup(html_page, 'html.parser')
+                    text = soup.find_all(text=True)
+                    output = ' '.join(text)
+                    output = _clean_htmltext(output)
+                    pattern = "{prefix} ?{abbreviations} ?{suffix}".format(prefix=prefix,
+                                                                           abbreviations=abbreviations,
+                                                                           suffix=suffix)
+                    r1 = re.search(pattern, output)
+                    match.append(r1.group())
+            match = list(set(match))
+            if len(match) == 1:
+                pos_match = df["address_search"] == address
+                df.loc[pos_match, "address_search"] = match[0]
+                if "," in address:
+                    s = match[0] + "," + ", ".join(address.split(",")[1:])
+                else:
+                    s = match[0]
+                location = geocode(s)
+                if location is not None:
+                    df.loc[pos_match, "latitude"] = location.latitude
+                    df.loc[pos_match, "longitude"] = location.longitude
+                    df.loc[pos_match, "address_test"] = location.address.lower()
+    return df
+
+
+def _try_wrong_replace_of_accents(df, address_tag, geocode):
+    log.info("Try to find _wrong_replace_of_accents")
+    regex =r"\b(del|dell|d|nell|sull|sant|Sant)([A-Z][^\s]+)"
+    pos_replace = (df["location"].isna() &
+                   df[address_tag].str.contains(regex))
+    not_found = list(df.loc[pos_replace, address_tag].unique())
+    for address in not_found:
+        new_name = re.sub(regex, r"\1'\2", address)
+        pos_match = df[address_tag] == address
+        df.loc[pos_match, "address_search"] = new_name
+        location = geocode(new_name)
+        if location is not None:
+            df.loc[pos_match, "location"] = location
+            df.loc[pos_match, "latitude"] = location.latitude
+            df.loc[pos_match, "longitude"] = location.longitude
+            df.loc[pos_match, "address_test"] = location.address.lower()
+    return df
+
+
 def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=None, regione_tag=None, n_url_read=1):
     # TODO add successive tentative (maps api)
     if not isinstance(df0, pd.DataFrame) or not isinstance(address_tag, str) or address_tag not in df0.columns:
@@ -790,63 +869,11 @@ def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=N
     n_not_found = n_tot - n_found
 
     if n_not_found > 0:
-        log.info("Try to find abbreviated name")
-        not_found = list(df.loc[df["location"].isna(), "address_search"].unique())
-        for address in not_found:
-            address_without_city = address.split(",")[0]
-            m = re.search(r"^([^.]+) (([a-z]+\. ?)+) ?([^.]+)$", address_without_city)
-            if m:
-                prefix = m.group(1)
-                if prefix in cfg.list_road_prefix:
-                    prefix = "(" + "|".join(cfg.list_road_prefix) + ")"
-                suffix = m.group(4)
-                abbreviations = m.group(2)
-                abbreviations = "[a-z]+ ?".join(abbreviations.replace(" ", "").split("."))
-                match = []
-                urls = []
-                try:
-                    urls = list(
-                        search(address, tld='com', num=n_url_read, lang="it", country="Italy", stop=n_url_read, pause=2.5,
-                               verify_ssl=False))
-                except Exception as e:
-                    log.error('Failed to search on google tentative 1: ' + str(e))
-                    try:
-                        my_results = google_query(address,
-                                                  api_key,
-                                                  cse_id,
-                                                  num=n_url_read
-                                                  )
-                        for result in my_results:
-                            urls.append(result['link'])
-                    except Exception as e:
-                        log.error('Failed to search on google tentative 2: ' + str(e))
-                if len(urls) > 0:
-                    for url in urls:
-                        res = requests.get(url, verify=False)
-                        html_page = res.content
-                        soup = BeautifulSoup(html_page, 'html.parser')
-                        text = soup.find_all(text=True)
-                        output = ' '.join(text)
-                        output = _clean_htmltext(output)
-                        pattern = "{prefix} ?{abbreviations} ?{suffix}".format(prefix=prefix,
-                                                                      abbreviations=abbreviations,
-                                                                      suffix=suffix)
-                        r1 = re.search(pattern, output)
-                        match.append(r1.group())
-                match = list(set(match))
-                if len(match) == 1:
-                    pos_match = df["address_search"] == address
-                    df.loc[pos_match, "address_search"] = match[0]
-                    if "," in address:
-                        s = match[0] + "," + ", ".join(address.split(",")[1:])
-                    else:
-                        s = match[0]
-                    location = geocode(s)
-                    if location is not None:
-                        df.loc[pos_match, "latitude"] = location.latitude
-                        df.loc[pos_match, "longitude"] = location.longitude
-                        df.loc[pos_match, "address_test"] = location.address.lower()
+        df = _try_replace_abbreviation_on_google(df, n_url_read, geocode)
+        df = _try_wrong_replace_of_accents(df, address_tag, geocode)
 
+    n_found = df["location"].notnull().sum()
+    n_not_found = n_tot - n_found
     if city_tag:
         df["test"] = __test_city_in_address(df, city_tag, "address_test")
         df.loc[~df["test"], "latitude"] = None

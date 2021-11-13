@@ -43,16 +43,18 @@ class TestEnrichDataframe(unittest.TestCase):
         result = get_coordinates_from_address(df, address, city)
         self.assertEqual(None, result["latitude"].values[0])
         df, address = pd.DataFrame(data=[["Corso di Francia Roma", "Firenze"],
-                                         ["Corso di Francia Roma", "Roma"],
+                                         ["Corso di Francia", "Roma"],
                                          ["Viale G. P. da Palestrina", "Latina"],
                                          ["Via S. Barbara", "Paola"],
+                                         ["Via dellAquila Reale", "Roma"],
                                          ["xxxx", None]], columns=["address", "city"]), "address"
         city = "city"
         result = get_coordinates_from_address(df, address, city)
         result = get_city_from_coordinates(result)
         self.assertTrue(pd.isnull(result["latitude"].values[0]))
-        self.assertTrue(pd.isnull(result["latitude"].values[2]))
+        self.assertTrue(pd.isnull(result["latitude"].values[-1]))
         self.assertEqual("Roma", result["denominazione_comune"].values[1])
+        self.assertEqual("Roma", result["denominazione_comune"].values[4])
 
     # get_address_from_coordinates
 
