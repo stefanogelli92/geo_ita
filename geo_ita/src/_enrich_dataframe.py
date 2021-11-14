@@ -13,6 +13,7 @@ from geo_ita.src.definition import *
 import numpy as np
 import pandas as pd
 from scipy.sparse.csgraph import connected_components
+from scipy.sparse import csr_matrix
 import geopandas as gpd
 from geopy.distance import distance
 import geopy.geocoders
@@ -1127,9 +1128,22 @@ def aggregate_point_by_distance(df0, distance_in_meters, latitude_columns=None, 
     radius_df["geometry"] = radius_df.apply(lambda x: x['geometry'].buffer(dist, cap_style=1), axis=1)
     radius_df = gpd.sjoin(df, radius_df, op='within', how="left")
     radius_df = radius_df[["key_mapping_left", "key_mapping_right"]]
-    radius_df.set_index(["key_mapping_left", "key_mapping_right"], inplace=True)
-    radius_df["value"] = 1
-    n_cc, df[agg_column_name] = connected_components(radius_df["value"].unstack().values)
+    #start = datetime.now()
+    #radius_df["value"] = 1
+    #radius_df.set_index(["key_mapping_left", "key_mapping_right"], inplace=True)
+    #n_cc, df[agg_column_name] = connected_components(radius_df["value"].unstack().values, directed=False)
+    #end = datetime.now()
+    #print(end-start)
+    n_points = df.shape[0]
+    start = datetime.now()
+    n_cc, df[agg_column_name] = connected_components(
+        csr_matrix((np.ones(radius_df.shape[0]),
+                    (radius_df["key_mapping_left"].values, radius_df["key_mapping_right"].values)),
+                   shape=(n_points, n_points)),
+        directed=False)
+    end = datetime.now()
+    print(end - start)
+
     df = df.set_index("key_mapping")[agg_column_name]
     df0[agg_column_name] = df0["key_mapping"].map(df)
     df0.drop(["key_mapping"], axis=1, inplace=True)

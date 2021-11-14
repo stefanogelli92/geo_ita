@@ -11,7 +11,7 @@ requirements = ["pandas", "twine", "geopandas", "geopy",
 
 setup(
     name="geo_ita",
-    version="0.1.27",
+    version="0.1.28",
     author="Stefano Gelli",
     author_email="stefano.mat92@gmail.com",
     description="A package for geo analysis for Italy",
