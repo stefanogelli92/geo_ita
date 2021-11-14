@@ -839,7 +839,6 @@ def _try_wrong_replace_of_accents(df, address_tag, geocode):
         df.loc[pos_match, "address_search"] = new_name
         location = geocode(new_name)
         if location is not None:
-            df.loc[pos_match, "location"] = location
             df.loc[pos_match, "latitude"] = location.latitude
             df.loc[pos_match, "longitude"] = location.longitude
             df.loc[pos_match, "address_test"] = location.address.lower()
@@ -885,7 +884,7 @@ def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=N
         df = _try_replace_abbreviation_on_google(df, n_url_read, geocode)
         df = _try_wrong_replace_of_accents(df, address_tag, geocode)
 
-    n_found = df["location"].notnull().sum()
+    n_found = df["latitude"].notnull().sum()
     n_not_found = n_tot - n_found
     if city_tag:
         df["test"] = __test_city_in_address(df, city_tag, "address_test")
