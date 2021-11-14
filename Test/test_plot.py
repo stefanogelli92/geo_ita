@@ -154,8 +154,8 @@ def test_density():
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     #test_plot_choropleth_map()
-    #test_point_map()
-    test_density()
+    test_point_map()
+    #test_density()
     unittest.main()
     #test_2()
 

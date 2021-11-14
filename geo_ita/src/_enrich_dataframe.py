@@ -1135,14 +1135,11 @@ def aggregate_point_by_distance(df0, distance_in_meters, latitude_columns=None, 
     #end = datetime.now()
     #print(end-start)
     n_points = df.shape[0]
-    start = datetime.now()
     n_cc, df[agg_column_name] = connected_components(
         csr_matrix((np.ones(radius_df.shape[0]),
                     (radius_df["key_mapping_left"].values, radius_df["key_mapping_right"].values)),
                    shape=(n_points, n_points)),
         directed=False)
-    end = datetime.now()
-    print(end - start)
 
     df = df.set_index("key_mapping")[agg_column_name]
     df0[agg_column_name] = df0["key_mapping"].map(df)

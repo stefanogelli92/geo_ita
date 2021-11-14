@@ -972,8 +972,9 @@ def plot_point_map_interactive(df0,
     if latitude_columns is None:
         latitude_columns = "geo_ita_lat"
         longitude_columns = "geo_ita_lon"
-        df[latitude_columns] = df.geometry.y
-        df[longitude_columns] = df.geometry.x
+    df = df.to_crs({'init': 'epsg:4326'})
+    df[latitude_columns] = df.geometry.y
+    df[longitude_columns] = df.geometry.x
     df = df.to_crs({'init': 'epsg:3857'})
     if filter_regione or filter_comune or filter_provincia:
         df = gpd.tools.sjoin(df, shape, op='within')
