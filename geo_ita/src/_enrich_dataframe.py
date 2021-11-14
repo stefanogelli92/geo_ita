@@ -1,7 +1,6 @@
 import difflib
 import math
 import os
-import re
 import time
 import logging
 import ssl
@@ -13,6 +12,7 @@ from geo_ita.src.definition import *
 
 import numpy as np
 import pandas as pd
+from scipy.sparse.csgraph import connected_components
 import geopandas as gpd
 from geopy.distance import distance
 import geopy.geocoders
@@ -63,11 +63,19 @@ def _clean_htmltext(text):
     return text
 
 
+def _test_dataframe(df):
+    if not isinstance(df, pd.DataFrame):
+        raise Exception("Pass a Pandas DataFrame as parameter.")
+
+def _test_column_in_dataframe(df, col):
+    if col not in df.columns:
+        raise Exception("Column {} not found in DataFrame.".format(col))
+
 class AddGeographicalInfo:
 
     def __init__(self, df):
         self.original_df = df
-        self._test_dataframe()
+        _test_dataframe(self.original_df)
         self.keys = None
         self.df = None
         self.comuni, self.province, self.sigle, self.regioni = _get_list()
@@ -88,20 +96,12 @@ class AddGeographicalInfo:
         self.frazioni_dict = None
         self.similarity_dict = None
 
-    def _test_dataframe(self):
-        if not isinstance(self.original_df, pd.DataFrame):
-            raise Exception("Call AddGeographicalInfo with a dataframe as parameter.")
-
-    def _test_column_in_dataframe(self, col):
-        if col not in self.original_df.columns:
-            raise Exception("Column {} not found in dataframe.".format(col))
-
     def _find_info(self):
         pass
         #for col in self.df.select_dtypes(include='object').columns:
 
     def set_comuni_tag(self, col_name):
-        self._test_column_in_dataframe(col_name)
+        _test_column_in_dataframe(self.original_df, col_name)
         self.comuni_tag = col_name
         self.comuni_code = _code_or_desc(list(self.original_df[col_name].unique()))
         self.level = cfg.LEVEL_COMUNE
@@ -109,7 +109,7 @@ class AddGeographicalInfo:
         self.code = self.comuni_code
 
     def set_province_tag(self, col_name):
-        self._test_column_in_dataframe(col_name)
+        _test_column_in_dataframe(self.original_df, col_name)
         self.province_tag = col_name
         self.province_code = _code_or_desc(list(self.original_df[col_name].unique()))
         if (self.level != cfg.LEVEL_COMUNE) & (self.level != cfg.LEVEL_CAP):
@@ -118,7 +118,7 @@ class AddGeographicalInfo:
             self.code = self.province_code
 
     def set_regioni_tag(self, col_name):
-        self._test_column_in_dataframe(col_name)
+        _test_column_in_dataframe(self.original_df, col_name)
         self.regioni_tag = col_name
         self.regioni_code = _code_or_desc(list(self.original_df[col_name].unique()))
         if self.level is None:
@@ -733,7 +733,12 @@ def get_geo_info_from_provincia(provincia, regione=None):
 
 
 def get_city_from_coordinates(df0, latitude_columns=None, longitude_columns=None):
-    df0 = df0.rename_axis('key_mapping').reset_index()
+    _test_dataframe(df0)
+    if latitude_columns is not None:
+        _test_column_in_dataframe(df0, latitude_columns)
+    if longitude_columns is not None:
+        _test_column_in_dataframe(df0, longitude_columns)
+    df0["key_mapping"] = range(df0.shape[0])
     df = df0.copy()
     df_comuni = get_df_comuni()
     df_comuni = gpd.GeoDataFrame(df_comuni)
@@ -842,8 +847,15 @@ def _try_wrong_replace_of_accents(df, address_tag, geocode):
 
 def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=None, regione_tag=None, n_url_read=1):
     # TODO add successive tentative (maps api)
-    if not isinstance(df0, pd.DataFrame) or not isinstance(address_tag, str) or address_tag not in df0.columns:
-        raise Exception("Insert a Pandas DataFrame as first parameter and the name of the column with the info of the address.")
+    _test_dataframe(df0)
+    _test_column_in_dataframe(df0, address_tag)
+    if city_tag is not None:
+        _test_column_in_dataframe(df0, city_tag)
+    if province_tag is not None:
+        _test_column_in_dataframe(df0, province_tag)
+    if regione_tag is not None:
+        _test_column_in_dataframe(df0, regione_tag)
+
     col_list = [address_tag, city_tag, province_tag, regione_tag]
     col_list = [x for x in col_list if x is not None]
     df = df0[col_list].drop_duplicates()
@@ -894,9 +906,6 @@ def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=N
     else:
         log.info("Found {} location over {} address.".format(n_found, n_tot))
 
-
-
-
     # drop columns
     df.drop(["address_search", "location", "address_test", "test"], axis=1, inplace=True)
     ## Join df0
@@ -905,8 +914,7 @@ def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=N
 
 
 def get_address_from_coordinates(df0, latitude_columns=None, longitude_columns=None):
-    if not isinstance(df0, pd.DataFrame):
-        raise Exception("Insert a Pandas DataFrame as first parameter.")
+    _test_dataframe(df0)
     if latitude_columns is None or longitude_columns is None:
         flag_coord_found, latitude_columns, longitude_columns = __find_coord_columns(df0)
         if not flag_coord_found:
@@ -999,7 +1007,7 @@ def get_population_nearby2(df, radius, latitude_columns=None, longitude_columns=
     #population_df = __create_geo_dataframe(population_df)
     long_tag = "Lon"
     lat_tag = "Lat"
-    df = df.rename_axis('key_mapping').reset_index()
+    df["key_mapping"] = range(df.shape[0])
     radius_df = __create_geo_dataframe(df, lat_tag=latitude_columns, long_tag=longitude_columns)[["key_mapping", "geometry"]]
     radius_df = radius_df.to_crs({'init': 'epsg:4326'})
     x_dist2, y_dist2 = _distance_to_range_ccord(radius*1.1)
@@ -1033,6 +1041,7 @@ def get_population_nearby2(df, radius, latitude_columns=None, longitude_columns=
     if more_precision:
         df["n_residents1"] = df["key_mapping"].map(radius_df.set_index("key_mapping")["population1"])
     end = time.time()
+    df.drop(["key_mapping"], axis=1, inplace=True)
     print('Mapping', end - start)
     return df
 
@@ -1099,6 +1108,34 @@ def _process_high_density_population_df(file_path, split_perc=0.05):
     df.drop(["geometry"], axis=1, inplace=True)
     log.info("End getting city from coordinates")
     df.to_pickle(str(file_path).replace(".csv", ".pkl"))
+
+
+def aggregate_point_by_distance(df0, distance_in_meters, latitude_columns=None, longitude_columns=None, agg_column_name="aggregation_code"):
+    _test_dataframe(df0)
+    if latitude_columns is not None:
+        _test_column_in_dataframe(df0, latitude_columns)
+    if longitude_columns is not None:
+        _test_column_in_dataframe(df0, longitude_columns)
+    df0["key_mapping"] = range(df0.shape[0])
+    df = __create_geo_dataframe(df0, latitude_columns, longitude_columns)
+    df = df.to_crs({'init': 'epsg:4326'})
+    df = df[["key_mapping", "geometry"]]
+    radius_df = df.copy()
+    #TODO Da rivedere
+    x_dist, y_dist = _distance_to_range_ccord(distance_in_meters)
+    dist = (x_dist + y_dist) / 2
+    radius_df["geometry"] = radius_df.apply(lambda x: x['geometry'].buffer(dist, cap_style=1), axis=1)
+    radius_df = gpd.sjoin(df, radius_df, op='within', how="left")
+    radius_df = radius_df[["key_mapping_left", "key_mapping_right"]]
+    radius_df.set_index(["key_mapping_left", "key_mapping_right"], inplace=True)
+    radius_df["value"] = 1
+    n_cc, df[agg_column_name] = connected_components(radius_df["value"].unstack().values)
+    df = df.set_index("key_mapping")[agg_column_name]
+    df0[agg_column_name] = df0["key_mapping"].map(df)
+    df0.drop(["key_mapping"], axis=1, inplace=True)
+    log.info("The {} points have been aggregated in {} group. The largest has {} points.".format(df0.shape[0], n_cc, df0[agg_column_name].value_counts().values[0]))
+    return df0
+
 
 # class KDEDensity:
 #
