@@ -138,7 +138,27 @@ result = addinfo.get_result()
         florence          Firenze   Firenze  FI         Toscana       366927            48017                48              Firenze        102.3187                  Firenze               9          Centro    FI                Toscana
   porretta terme  Alto Reno Terme   Bologna  BO  Emilia romagna         6953            37062                37      Alto Reno Terme             NaN                  Bologna               8        Nord-est    BO         Emilia-Romagna
 ```
+- **Aggregation points by distance**:
+        <br>From a given list of point we create groups based on distances.
+        <br>There are several approaches to the problem based on what we expect from the groups created. In this method the approach 
+```python
+# Usage
+from geo_ita.enrich_dataframe import aggregate_point_by_distance
 
+df = pd.DataFrame(data=[[42.000001, 12.000001],
+                        [42.000002, 12.000002],
+                        [42.001002, 12.001002],
+                        [42.001002, 12.001002]], columns=["latitude", "longitude"])
+# Create the class and pass the dataframe
+df = aggregate_point_by_distance(df, 1000)
+
+# Output
+    latitude       longitude     aggregation_code
+  42.0000001      12.0000001                    0
+  42.0000002      12.0000002                    0
+  42.0010002      12.0010002                    1
+  42.0010002      12.0010002                    1
+```
 ***
 ### Plot
 ***
