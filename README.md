@@ -10,7 +10,7 @@ WARNING: Da rivedere!
  - Open Terminal on folder where you put the whl file
 
 ```bash
-pip install geo_ita-0.0.38-py3-none-any.whl
+pip install geo_ita-0.1.35-py3-none-any.whl
 ```
 
 ## Documentation
@@ -249,21 +249,19 @@ plot_kernel_density_estimation_interactive(df, value_tag="popolazione",
 ## TODO
 1. Condividere libreria senza whl
 2. Completare test Units
-3. Aggiornamento dati ISTAT
-4. Aggioranmento dati automatico
-5. Valutare utilizzo dei dati storici ISTAT e non solo ultimi
-6. Trovare nome più parlante per Enrich Dataset
-7. Utilizzo possibile delle api di Google con codice in input
-8. Semplificare utilizzo AddGeoInfo (forse non classe)
-9. Consigliare step successivo (AddGeoInfo)
-10. Point Map inserire possibilità di plottare più dataset di punti (e forse anche non solo punti)
-11. Kernel Estimation Migliorare guida
-12. Kernel estimation semplificare utilizzo
-13. Possiblità di aggiungere densità demografica da dataset Facebook in un modulo (o forse da guida ma troppo complesso)
-14. Creare calcolo puntuale Kernel estimation per informazioni puntuali e non plot
-15. valutare calcolo distanza da costa
-16. Valutare distanza in linea d'aria da uscite autostrada + plot autostrade + uscite
-17. Da valutare calcolo distanza tra punti su strada (è corretto averlo in questa libreria?)
+3. Aggioranmento dati automatico
+4. Valutare utilizzo dei dati storici ISTAT e non solo ultimi
+5. Trovare nome più parlante per Enrich Dataset
+6. Utilizzo possibile delle api di Google con codice in input
+7. Semplificare utilizzo AddGeoInfo (forse non classe)
+8. Point Map inserire possibilità di plottare più dataset di punti (e forse anche non solo punti)
+9. Kernel Estimation Migliorare guida
+10. Kernel estimation semplificare utilizzo
+11. Possiblità di aggiungere densità demografica da dataset Facebook in un modulo (o forse da guida ma troppo complesso)
+12. Creare calcolo puntuale Kernel estimation per informazioni puntuali e non plot
+13. valutare calcolo distanza da costa
+14. Valutare distanza in linea d'aria da uscite autostrada + plot autostrade + uscite
+15. Da valutare calcolo distanza tra punti su strada (è corretto averlo in questa libreria?)
 
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)
