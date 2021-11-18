@@ -78,9 +78,9 @@ from geo_ita.enrich_dataframe import get_address_from_coordinates, get_city_from
 
 df = pd.DataFrame(data=[[41.939965,  12.470965],
                         [45.460908,   9.191498],
-                        [40.846269,  14.267525]], columns=["latitide", "longitude"])
+                        [40.846269,  14.267525]], columns=["latitude", "longitude"])
 
-df = get_address_from_coordinates(df, latitude_columns="latitide", longitude_columns="longitude")
+df = get_address_from_coordinates(df, latitude_columns="latitude", longitude_columns="longitude")
 
 # Output
 
@@ -117,6 +117,8 @@ addinfo.set_comuni_tag("Citta")
 addinfo.run_simple_match()
 # (Optional) The remaining values are searched on OpenStreetMap in order to find any frazione used instead of the name of comune (such as Ostia Lido is a Frazione of the municipality of Rome).
 addinfo.run_find_frazioni()
+# (Optional) The remaining values are searched on Google in order to find other frazioni used instead of the name of comune.
+addinfo.run_find_frazioni_from_google()
 # (Optional) The remaining values are searched for similarity with ISTAT's anagrafica. This can find some wrong match so you can look at the match and decide to accept or not this step.
 addinfo.run_similarity_match()
 # (Optional) You can show the similarity step result in order to accept or decline the step

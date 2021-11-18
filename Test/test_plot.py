@@ -38,11 +38,12 @@ def test_plot_choropleth_map():
                                   title="Popolazione Regionale", save_path="usage_choropleth_regionale.png",
                                   dpi=50)
     print("ok1")
-    test_df = get_df_province()
-    plot_choropleth_map_provinciale_interactive(test_df, cfg.TAG_PROVINCIA, {"popolazione": "Popolazione",
+
+    test_df = get_df_comuni()
+    plot_choropleth_map_comunale_interactive(test_df, cfg.TAG_COMUNE, {"popolazione": "Popolazione",
                                                                              "superficie_km2": "Superficie"},
-                                                filter_regione="Toscana",
-                                                title="Toscana")
+                                                title="Semplificato",
+                                                save_path="comunale_semplificato.html")
     print("ok2")
     plot_choropleth_map_comunale(test_df, cfg.TAG_COMUNE, "popolazione", filter_regioni=["lazio ", "campania"])
     print("ok3")
@@ -153,8 +154,8 @@ def test_density():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    #test_plot_choropleth_map()
-    test_point_map()
+    test_plot_choropleth_map()
+    #test_point_map()
     #test_density()
     unittest.main()
     #test_2()

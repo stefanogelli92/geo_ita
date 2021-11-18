@@ -12,3 +12,5 @@ bokeh
 requests
 beautifulsoup4
 google
+scipy
+google-api-python-client

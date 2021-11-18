@@ -160,3 +160,8 @@ high_resolution_population_density = {
 
 regex_find_frazioni = r"({}) ?(\[[^\[.]+\])? ?(\([^\(.]+\))? ?([^.]{{0,40}}) (si trova nel comune|fa parte del comune|frazione ?(\([^.]+\))? ?[^.]{{0,20}} ?(\([^.]+\))? comune|borgo del comune|località del comune) (di ?)([^.]+)"
 list_road_prefix = ["via", "viale", "strada", "st", "largo", "corso", "contrada"]
+
+simplify_values={LEVEL_REGIONE: 500,
+                 LEVEL_PROVINCIA: 500,
+                 LEVEL_COMUNE: 250}
+

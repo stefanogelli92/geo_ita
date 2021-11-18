@@ -16,3 +16,4 @@ scipy
 requests
 beautifulsoup4
 google
+google-api-python-client

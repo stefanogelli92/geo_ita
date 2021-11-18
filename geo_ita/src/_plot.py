@@ -485,16 +485,16 @@ def _create_choropleth_map_interactive(df0,
         shape_province = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
         shape_province = shape_province[shape_province[cfg.TAG_PROVINCIA].isin(shape[cfg.TAG_PROVINCIA].unique())]
         shape_province = gpd.GeoDataFrame(shape_province, geometry="geometry")
-        shape_list.append((shape_province, 0.25))
+        shape_list.append((shape_province, 0.25, cfg.LEVEL_PROVINCIA))
         shape_regioni = _get_shape_from_level(cfg.LEVEL_REGIONE)
         shape_regioni = shape_regioni[shape_regioni[cfg.TAG_REGIONE].isin(shape[cfg.TAG_REGIONE].unique())]
         shape_regioni = gpd.GeoDataFrame(shape_regioni, geometry="geometry")
-        shape_list.append((shape_regioni, 0.5))
+        shape_list.append((shape_regioni, 0.5, cfg.LEVEL_REGIONE))
     elif level == cfg.LEVEL_PROVINCIA:
         shape_regioni = _get_shape_from_level(cfg.LEVEL_REGIONE)
         shape_regioni = shape_regioni[shape_regioni[cfg.TAG_REGIONE].isin(shape[cfg.TAG_REGIONE].unique())]
         shape_regioni = gpd.GeoDataFrame(shape_regioni, geometry="geometry")
-        shape_list.append((shape_regioni, 0.5))
+        shape_list.append((shape_regioni, 0.5, cfg.LEVEL_REGIONE))
 
     plot = plot_bokeh_choropleth_map(df, geo_tag_anag, level, dict_values, title=title, shape_list=shape_list)
 
@@ -604,9 +604,9 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape_
     palette_list_numerical = [Blues9,
                               Greens9,
                               Reds9,
-                              Greys9,
                               Purples9,
-                              Oranges9]
+                              Oranges9,
+                              Greys9]
     palette_list = {}
     legend_list = {}
     is_numeric = {}
@@ -629,8 +629,9 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape_
             legend_list[key] = 1
     geodf["values_plot"] = geodf[field_list[0]]
     geodf["line_color"] = "gray"
+    simplify_values = cfg.simplify_values[level]
+    geodf["geometry"] = geodf["geometry"].simplify(simplify_values)
     geosource = GeoJSONDataSource(geojson=geodf.to_json())
-
     mapper = palette_list[field_list[0]]
     p = figure(title=title,
                plot_height=900,
@@ -670,7 +671,8 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape_
                       line_color='line_color',
                       line_width=line_width)
     line_color = "darkgray"
-    for shape, lw in shape_list:
+    for shape, lw, sf in shape_list:
+        shape["geometry"] = shape["geometry"].simplify(cfg.simplify_values[sf])
         shape = GeoJSONDataSource(geojson=shape.to_json())
         p.patches('xs', 'ys', source=shape,
                   fill_alpha=0,

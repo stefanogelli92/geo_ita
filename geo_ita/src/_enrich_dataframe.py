@@ -113,7 +113,7 @@ class AddGeographicalInfo:
         _test_column_in_dataframe(self.original_df, col_name)
         self.province_tag = col_name
         self.province_code = _code_or_desc(list(self.original_df[col_name].unique()))
-        if (self.level != cfg.LEVEL_COMUNE) & (self.level != cfg.LEVEL_CAP):
+        if self.level != cfg.LEVEL_COMUNE:
             self.level = cfg.LEVEL_PROVINCIA
             self.geo_tag_input = col_name
             self.code = self.province_code
