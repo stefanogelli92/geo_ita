@@ -140,7 +140,7 @@ result = addinfo.get_result()
 ```
 - **Aggregation points by distance**:
         <br>From a given list of point we create groups based on distances.
-        <br>There are several approaches to the problem based on what we expect from the groups created. In this method the approach 
+        <br>There are several approaches to the problem based on what we expect from the groups created. In this method point can be in the same group when their distance is bigger than the entered value, but they have a point in common that has a smaller distance to both of them.
 ```python
 # Usage
 from geo_ita.enrich_dataframe import aggregate_point_by_distance
