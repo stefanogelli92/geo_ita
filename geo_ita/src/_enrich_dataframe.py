@@ -68,9 +68,11 @@ def _test_dataframe(df):
     if not isinstance(df, pd.DataFrame):
         raise Exception("Pass a Pandas DataFrame as parameter.")
 
+
 def _test_column_in_dataframe(df, col):
     if col not in df.columns:
         raise Exception("Column {} not found in DataFrame.".format(col))
+
 
 class AddGeographicalInfo:
 

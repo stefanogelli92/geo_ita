@@ -71,7 +71,7 @@ shape_regioni = {
 }
 
 dimensioni_comuni = {
-    "path": r"data_sources/Comuni/Dimensioni",
+    "path": r"data_sources/Comuni/Dimensioni/dimensioni.pkl",
     "column_rename": {"Codice Comune": TAG_CODICE_COMUNE,
                       "Superficie totale (Km2)": TAG_SUPERFICIE}
 }

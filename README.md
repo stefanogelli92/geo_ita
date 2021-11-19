@@ -23,7 +23,7 @@ pip install geo_ita-0.1.35-py3-none-any.whl
 Here you can get all the data avaiable in this libraries.
 - **Anagrafica** (source [ISTAT](https://www.istat.it/it/archivio/6789) - updated to 31-12-2020): 
        <br>Contains the list of each *Comune* with the hierarchical structure of *Province* and *Regioni*.
-- **Superficie** (source [ISTAT](https://www.istat.it/it/files//2015/04/Superfici-delle-unit%C3%A0-amministrative-Dati-comunali-e-provinciali.zip) - updated to 09-10-2011):
+- **Superficie** (source API Istat - updated to 31-12-2020):
        <br>Contains the area of each *Comune* in Km2.
 - **Popolazione** (source [ISTAT](http://dati.istat.it/Index.aspx?DataSetCode=DCIS_POPRES1) - updated to 01-01-2020): 
        <br>Contains the population of each *Comune*.
@@ -249,7 +249,7 @@ plot_kernel_density_estimation_interactive(df, value_tag="popolazione",
 ## TODO
 1. Condividere libreria senza whl
 2. Completare test Units
-3. Aggioranmento dati automatico
+3. Aggiornamento dati automatico
 4. Valutare utilizzo dei dati storici ISTAT e non solo ultimi
 5. Trovare nome più parlante per Enrich Dataset
 6. Utilizzo possibile delle api di Google con codice in input

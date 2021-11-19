@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 from pathlib import PureWindowsPath
 import logging
+import requests
 
 import numpy as np
 import pandas as pd
@@ -201,9 +202,9 @@ def _get_dimensioni_df():
     appartenenza e delle regioni.
     """
     path = root_path / PureWindowsPath(cfg.dimensioni_comuni["path"])
-    last_files, _ = __get_last_file_from_folder(path)
+    #last_files, _ = __get_last_file_from_folder(path)
 
-    df = pd.read_excel(path / PureWindowsPath(last_files), sheet_name="Dati comunali")
+    df = pd.read_pickle(path / PureWindowsPath(path))
 
     __rename_col(df, cfg.dimensioni_comuni["column_rename"])
     df = df[df[cfg.TAG_CODICE_COMUNE].notnull()]
@@ -374,3 +375,22 @@ def create_df():
     create_df_province()
     create_df_regioni()
     create_variazioni_amministrative_df()
+
+
+def upload_data_istat_from_api():
+    year = 2020
+    path1 = root_path / PureWindowsPath(cfg.dimensioni_comuni["path"].replace("pkl", "csv"))
+    path2 = root_path / PureWindowsPath(cfg.dimensioni_comuni["path"])
+    base_url = "http://sdmx.istat.it/SDMXWS/rest/data/729_1050/A..TOTAREA2?startPeriod={year}".format(year=year)
+    response = requests.get(base_url, headers={'Accept': 'application/vnd.sdmx.data+csv;version=1.0.0'}, verify=False)
+    url_content = response.content
+    csv_file = open(path1, 'wb')
+    csv_file.write(url_content)
+    csv_file.close()
+    df = pd.read_csv(path1)
+    df = df[(df["TIME_PERIOD"] == year) &
+            (df["ITTER107"].astype(str).str.isnumeric())]
+    df = df[["ITTER107", "OBS_VALUE"]]
+    df.columns = ["Codice Comune", "Superficie totale (Km2)"]
+    df.to_pickle(path2)
+    os.remove(path1)
