@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: geo-ita
-Version: 0.1.35
+Version: 0.1.38
 Summary: A package for geo analysis for Italy
 Home-page: https://github.com/enelx-customer-business-analytics/geo_ita.git
 Author: Stefano Gelli
@@ -18,7 +18,7 @@ Description: # Geo Ita
          - Open Terminal on folder where you put the whl file
         
         ```bash
-        pip install geo_ita-0.0.38-py3-none-any.whl
+        pip install geo_ita-0.1.35-py3-none-any.whl
         ```
         
         ## Documentation
@@ -31,7 +31,7 @@ Description: # Geo Ita
         Here you can get all the data avaiable in this libraries.
         - **Anagrafica** (source [ISTAT](https://www.istat.it/it/archivio/6789) - updated to 31-12-2020): 
                <br>Contains the list of each *Comune* with the hierarchical structure of *Province* and *Regioni*.
-        - **Superficie** (source [ISTAT](https://www.istat.it/it/files//2015/04/Superfici-delle-unit%C3%A0-amministrative-Dati-comunali-e-provinciali.zip) - updated to 09-10-2011):
+        - **Superficie** (source API Istat - updated to 31-12-2020):
                <br>Contains the area of each *Comune* in Km2.
         - **Popolazione** (source [ISTAT](http://dati.istat.it/Index.aspx?DataSetCode=DCIS_POPRES1) - updated to 01-01-2020): 
                <br>Contains the population of each *Comune*.
@@ -146,7 +146,27 @@ Description: # Geo Ita
                 florence          Firenze   Firenze  FI         Toscana       366927            48017                48              Firenze        102.3187                  Firenze               9          Centro    FI                Toscana
           porretta terme  Alto Reno Terme   Bologna  BO  Emilia romagna         6953            37062                37      Alto Reno Terme             NaN                  Bologna               8        Nord-est    BO         Emilia-Romagna
         ```
+        - **Aggregation points by distance**:
+                <br>From a given list of point we create groups based on distances.
+                <br>There are several approaches to the problem based on what we expect from the groups created. In this method point can be in the same group when their distance is bigger than the entered value, but they have a point in common that has a smaller distance to both of them.
+        ```python
+        # Usage
+        from geo_ita.enrich_dataframe import aggregate_point_by_distance
         
+        df = pd.DataFrame(data=[[42.000001, 12.000001],
+                                [42.000002, 12.000002],
+                                [42.001002, 12.001002],
+                                [42.001002, 12.001002]], columns=["latitude", "longitude"])
+        # Create the class and pass the dataframe
+        df = aggregate_point_by_distance(df, 1000)
+        
+        # Output
+            latitude       longitude     aggregation_code
+          42.0000001      12.0000001                    0
+          42.0000002      12.0000002                    0
+          42.0010002      12.0010002                    1
+          42.0010002      12.0010002                    1
+        ```
         ***
         ### Plot
         ***
@@ -237,21 +257,19 @@ Description: # Geo Ita
         ## TODO
         1. Condividere libreria senza whl
         2. Completare test Units
-        3. Aggiornamento dati ISTAT
-        4. Aggioranmento dati automatico
-        5. Valutare utilizzo dei dati storici ISTAT e non solo ultimi
-        6. Trovare nome piÃ¹ parlante per Enrich Dataset
-        7. Utilizzo possibile delle api di Google con codice in input
-        8. Semplificare utilizzo AddGeoInfo (forse non classe)
-        9. Consigliare step successivo (AddGeoInfo)
-        10. Point Map inserire possibilitÃ  di plottare piÃ¹ dataset di punti (e forse anche non solo punti)
-        11. Kernel Estimation Migliorare guida
-        12. Kernel estimation semplificare utilizzo
-        13. PossiblitÃ  di aggiungere densitÃ  demografica da dataset Facebook in un modulo (o forse da guida ma troppo complesso)
-        14. Creare calcolo puntuale Kernel estimation per informazioni puntuali e non plot
-        15. valutare calcolo distanza da costa
-        16. Valutare distanza in linea d'aria da uscite autostrada + plot autostrade + uscite
-        17. Da valutare calcolo distanza tra punti su strada (Ã¨ corretto averlo in questa libreria?)
+        3. Aggiornamento dati automatico
+        4. Valutare utilizzo dei dati storici ISTAT e non solo ultimi
+        5. Trovare nome piÃ¹ parlante per Enrich Dataset
+        6. Utilizzo possibile delle api di Google con codice in input
+        7. Semplificare utilizzo AddGeoInfo (forse non classe)
+        8. Point Map inserire possibilitÃ  di plottare piÃ¹ dataset di punti (e forse anche non solo punti)
+        9. Kernel Estimation Migliorare guida
+        10. Kernel estimation semplificare utilizzo
+        11. PossiblitÃ  di aggiungere densitÃ  demografica da dataset Facebook in un modulo (o forse da guida ma troppo complesso)
+        12. Creare calcolo puntuale Kernel estimation per informazioni puntuali e non plot
+        13. valutare calcolo distanza da costa
+        14. Valutare distanza in linea d'aria da uscite autostrada + plot autostrade + uscite
+        15. Da valutare calcolo distanza tra punti su strada (Ã¨ corretto averlo in questa libreria?)
         
         ## License
         [MIT](https://choosealicense.com/licenses/mit/)

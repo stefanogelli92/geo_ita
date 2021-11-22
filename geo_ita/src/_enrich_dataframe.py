@@ -459,7 +459,10 @@ class AddGeographicalInfo:
                 how = "left"
             result = self.df.merge(self.info_df, on=cfg.KEY_UNIQUE, how=how)
             list_col = [col for col in list_col if col in result.columns]
-            result = self.original_df.merge(result[list_col], on=self.keys, how=how, suffixes=["", "_new"])
+            index_name = self.original_df.index.name
+            if index_name is None:
+                index_name = "index"
+            result = self.original_df.reset_index().merge(result[list_col], on=self.keys, how=how, suffixes=["", "_new"]).set_index(index_name)
 
         return result
 
@@ -1172,6 +1175,7 @@ class GeoDataQuality:
         self.check_tag = "_check"
         self.propose_tag = "_propose"
         self.flag_in_italy = "is_in_italy"
+        self.case_sensitive = None
 
     def set_keys(self, col_name):
         _test_column_in_dataframe(self.original_df, col_name)
@@ -1205,6 +1209,8 @@ class GeoDataQuality:
         self.longitude_tag = long_col
 
     def _check_nazione(self):
+        if not self.case_sensitive:
+            self.original_df[self.nazione_tag] = self.original_df[self.nazione_tag].str.lower()
         itali_string_names = ["it", "italy", "italia"]
         self._check_missing_values(self.nazione_tag)
         self.original_df[self.flag_in_italy] = self.original_df[self.nazione_tag].str.lower().isin(itali_string_names)
@@ -1213,15 +1219,20 @@ class GeoDataQuality:
             if values.shape[0] > 1:
                 self.italy_name = values.index[0]
                 wrong_positions = (self.original_df[self.nazione_tag] != self.italy_name) & self.original_df[self.flag_in_italy]
+
                 self.original_df[self.nazione_tag + self.check_tag] = self.original_df[self.nazione_tag + self.check_tag] | wrong_positions
                 self.original_df.loc[wrong_positions, self.nazione_tag + self.propose_tag] = self.italy_name
 
     def _check_regione(self):
+        if not self.case_sensitive:
+            self.original_df[self.regioni_tag] = self.original_df[self.regioni_tag].str.lower()
         self._check_missing_values(self.regioni_tag)
         addinfo = AddGeographicalInfo(self.original_df)
         addinfo.set_regioni_tag(self.regioni_tag)
         addinfo.run_simple_match()
         check_df = addinfo.get_result()
+        if not self.case_sensitive:
+            check_df[cfg.TAG_REGIONE] = check_df[cfg.TAG_REGIONE].str.lower()
         self.original_df[cfg.TAG_REGIONE + "_regione"] = check_df[cfg.TAG_REGIONE]
         not_found_position = check_df[cfg.TAG_REGIONE].isna() & self.original_df[self.flag_in_italy]
         self.original_df[self.regioni_tag + self.check_tag] = self.original_df[self.regioni_tag + self.check_tag] | not_found_position
@@ -1236,11 +1247,16 @@ class GeoDataQuality:
         self.original_df.loc[pos, self.flag_in_italy] = True
 
     def _check_provincia(self):
+        if not self.case_sensitive:
+            self.original_df[self.province_tag] = self.original_df[self.province_tag].str.lower()
         self._check_missing_values(self.province_tag)
         addinfo = AddGeographicalInfo(self.original_df)
         addinfo.set_province_tag(self.province_tag)
         addinfo.run_simple_match()
         check_df = addinfo.get_result()
+        if not self.case_sensitive:
+            check_df[cfg.TAG_REGIONE] = check_df[cfg.TAG_REGIONE].str.lower()
+            check_df[cfg.TAG_PROVINCIA] = check_df[cfg.TAG_PROVINCIA].str.lower()
         self.original_df[cfg.TAG_REGIONE + "_provincia"] = check_df[cfg.TAG_REGIONE]
         self.original_df[cfg.TAG_PROVINCIA + "_provincia"] = check_df[cfg.TAG_PROVINCIA]
         not_found_position = check_df[cfg.TAG_PROVINCIA].isna() & self.original_df[self.flag_in_italy]
@@ -1267,6 +1283,8 @@ class GeoDataQuality:
         self.original_df.loc[pos, self.regioni_tag + self.propose_tag] = None
 
     def _check_comune(self):
+        if not self.case_sensitive:
+            self.original_df[self.comuni_tag] = self.original_df[self.comuni_tag].str.lower()
         self._check_missing_values(self.comuni_tag)
         addinfo = AddGeographicalInfo(self.original_df)
         addinfo.set_comuni_tag(self.comuni_tag)
@@ -1277,6 +1295,10 @@ class GeoDataQuality:
         except:
             pass
         check_df = addinfo.get_result()
+        if not self.case_sensitive:
+            check_df[cfg.TAG_REGIONE] = check_df[cfg.TAG_REGIONE].str.lower()
+            check_df[cfg.TAG_PROVINCIA] = check_df[cfg.TAG_PROVINCIA].str.lower()
+            check_df[cfg.TAG_COMUNE] = check_df[cfg.TAG_COMUNE].str.lower()
         self.original_df[cfg.TAG_REGIONE + "_comune"] = check_df[cfg.TAG_REGIONE]
         self.original_df[cfg.TAG_PROVINCIA + "_comune"] = check_df[cfg.TAG_PROVINCIA]
         self.original_df[cfg.TAG_COMUNE + "_comune"] = check_df[cfg.TAG_COMUNE]
@@ -1320,6 +1342,10 @@ class GeoDataQuality:
         self.original_df[check_tag] = (self.original_df[self.latitude_tag].isna() |
                                                             self.original_df[self.longitude_tag].isna()) & self.original_df[self.flag_in_italy]
         check_df = get_city_from_coordinates(self.original_df, self.latitude_tag, self.longitude_tag)
+        if not self.case_sensitive:
+            check_df[cfg.TAG_REGIONE] = check_df[cfg.TAG_REGIONE].str.lower()
+            check_df[cfg.TAG_PROVINCIA] = check_df[cfg.TAG_PROVINCIA].str.lower()
+            check_df[cfg.TAG_COMUNE] = check_df[cfg.TAG_COMUNE].str.lower()
         not_found_position = check_df[cfg.TAG_COMUNE].isna() & self.original_df[self.flag_in_italy]
         self.original_df.loc[not_found_position, check_tag] = True
         self.original_df[cfg.TAG_REGIONE + "_coordinates"] = check_df[cfg.TAG_REGIONE]
@@ -1367,7 +1393,8 @@ class GeoDataQuality:
         self.original_df.loc[pos, self.comuni_tag + self.check_tag] = True
         self.original_df.loc[pos, self.comuni_tag + self.propose_tag] = None
 
-    def start_check(self, show_only_warning=True):
+    def start_check(self, show_only_warning=True, case_sensitive=False):
+        self.case_sensitive = case_sensitive
         col_list = [self.keys, self.nazione_tag, self.regioni_tag, self.province_tag, self.comuni_tag, self.latitude_tag, self.longitude_tag]
         col_list = [a for a in col_list if a is not None]
         self.original_df = self.original_df[col_list].drop_duplicates()
@@ -1408,7 +1435,9 @@ class GeoDataQuality:
             if self.comuni_tag is not None:
                 self._check_coordinates_comune()
 
-        check_list = [self.nazione_tag, self.regioni_tag, self.province_tag, self.comuni_tag, "coordinates"]
+        check_list = [self.nazione_tag, self.regioni_tag, self.province_tag, self.comuni_tag]
+        if self.latitude_tag is not None:
+            check_list.append("coordinates")
         check_list = [a + self.check_tag for a in check_list if a is not None]
 
         self.original_df["check"] = self.original_df[check_list].any(axis='columns')

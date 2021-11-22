@@ -188,7 +188,7 @@ class TestEnrichDataframe(unittest.TestCase):
         dq.set_province_tag("provincia")
         dq.set_comuni_tag("comune")
         dq.set_latitude_longitude_tag("latitudine", "longitudine")
-        result = dq.start_check(show_only_warning=False)
+        result = dq.start_check(show_only_warning=False, case_sensitive=True)
         dq.plot_result()
         col_test = ["nazione", "regione", "provincia", "comune",
                     "nazione_check", "nazione_propose", "regione_check", "regione_propose",
@@ -198,6 +198,7 @@ class TestEnrichDataframe(unittest.TestCase):
                            df[col_test],
                            check_names=False, check_dtype=False
                            )
+
         prova = ""
 
 
