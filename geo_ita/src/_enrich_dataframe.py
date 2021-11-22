@@ -21,6 +21,12 @@ from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 # from sklearn.neighbors import KernelDensity
 
+from bokeh.models import ColumnDataSource, DataTable, TableColumn, HTMLTemplateFormatter, CategoricalColorMapper, \
+    LabelSet
+from bokeh.plotting import save, figure
+from bokeh.io import output_file, show
+from bokeh.layouts import column, row
+
 from googlesearch import search
 import requests
 from bs4 import BeautifulSoup
@@ -1147,6 +1153,490 @@ def aggregate_point_by_distance(df0, distance_in_meters, latitude_columns=None, 
     df0.drop(["key_mapping"], axis=1, inplace=True)
     log.info("The {} points have been aggregated in {} group. The largest has {} points.".format(df0.shape[0], n_cc, df0[agg_column_name].value_counts().values[0]))
     return df0
+
+
+class GeoDataQuality:
+    def __init__(self, df):
+        self.original_df = df
+        _test_dataframe(self.original_df)
+        self.keys = None
+        self.comuni_tag = None
+        self.comuni_code = None
+        self.province_tag = None
+        self.province_code = None
+        self.regioni_tag = None
+        self.regioni_code = None
+        self.nazione_tag = None
+        self.latitude_tag = None
+        self.longitude_tag = None
+        self.check_tag = "_check"
+        self.propose_tag = "_propose"
+        self.flag_in_italy = "is_in_italy"
+
+    def set_keys(self, col_name):
+        _test_column_in_dataframe(self.original_df, col_name)
+        if not self.original_df[col_name].is_unique:
+            raise Exception(r"Insert a column with unique values.")
+        self.keys = col_name
+
+    def set_nazione_tag(self, col_name):
+        _test_column_in_dataframe(self.original_df, col_name)
+        self.nazione_tag = col_name
+
+    def set_regioni_tag(self, col_name):
+        _test_column_in_dataframe(self.original_df, col_name)
+        self.regioni_tag = col_name
+        self.regioni_code = _code_or_desc(list(self.original_df[col_name].unique()))
+
+    def set_comuni_tag(self, col_name):
+        _test_column_in_dataframe(self.original_df, col_name)
+        self.comuni_tag = col_name
+        self.comuni_code = _code_or_desc(list(self.original_df[col_name].unique()))
+
+    def set_province_tag(self, col_name):
+        _test_column_in_dataframe(self.original_df, col_name)
+        self.province_tag = col_name
+        self.province_code = _code_or_desc(list(self.original_df[col_name].unique()))
+
+    def set_latitude_longitude_tag(self, lat_col, long_col):
+        _test_column_in_dataframe(self.original_df, lat_col)
+        _test_column_in_dataframe(self.original_df, long_col)
+        self.latitude_tag = lat_col
+        self.longitude_tag = long_col
+
+    def _check_nazione(self):
+        itali_string_names = ["it", "italy", "italia"]
+        self._check_missing_values(self.nazione_tag)
+        self.original_df[self.flag_in_italy] = self.original_df[self.nazione_tag].str.lower().isin(itali_string_names)
+        if self.original_df[self.flag_in_italy].sum() > 0:
+            values = self.original_df.loc[self.original_df[self.flag_in_italy], self.nazione_tag].value_counts()
+            if values.shape[0] > 1:
+                self.italy_name = values.index[0]
+                wrong_positions = (self.original_df[self.nazione_tag] != self.italy_name) & self.original_df[self.flag_in_italy]
+                self.original_df[self.nazione_tag + self.check_tag] = self.original_df[self.nazione_tag + self.check_tag] | wrong_positions
+                self.original_df.loc[wrong_positions, self.nazione_tag + self.propose_tag] = self.italy_name
+
+    def _check_regione(self):
+        self._check_missing_values(self.regioni_tag)
+        addinfo = AddGeographicalInfo(self.original_df)
+        addinfo.set_regioni_tag(self.regioni_tag)
+        addinfo.run_simple_match()
+        check_df = addinfo.get_result()
+        self.original_df[cfg.TAG_REGIONE + "_regione"] = check_df[cfg.TAG_REGIONE]
+        not_found_position = check_df[cfg.TAG_REGIONE].isna() & self.original_df[self.flag_in_italy]
+        self.original_df[self.regioni_tag + self.check_tag] = self.original_df[self.regioni_tag + self.check_tag] | not_found_position
+        wrong_position = (check_df[cfg.TAG_REGIONE] != check_df[self.regioni_tag]) & check_df[cfg.TAG_REGIONE].notnull()
+        self.original_df.loc[wrong_position, self.regioni_tag + self.check_tag] = True
+        self.original_df.loc[wrong_position, self.regioni_tag + self.propose_tag] = check_df.loc[wrong_position, cfg.TAG_REGIONE]
+
+    def _check_regione_nazione(self):
+        pos = (self.original_df[self.nazione_tag].isna() | (self.original_df[self.nazione_tag] != self.italy_name)) & (self.original_df[cfg.TAG_REGIONE + "_regione"].notnull())
+        self.original_df.loc[pos, self.nazione_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.nazione_tag + self.propose_tag] = self.italy_name
+        self.original_df.loc[pos, self.flag_in_italy] = True
+
+    def _check_provincia(self):
+        self._check_missing_values(self.province_tag)
+        addinfo = AddGeographicalInfo(self.original_df)
+        addinfo.set_province_tag(self.province_tag)
+        addinfo.run_simple_match()
+        check_df = addinfo.get_result()
+        self.original_df[cfg.TAG_REGIONE + "_provincia"] = check_df[cfg.TAG_REGIONE]
+        self.original_df[cfg.TAG_PROVINCIA + "_provincia"] = check_df[cfg.TAG_PROVINCIA]
+        not_found_position = check_df[cfg.TAG_PROVINCIA].isna() & self.original_df[self.flag_in_italy]
+        self.original_df.loc[not_found_position, self.province_tag + self.check_tag] = True
+        wrong_position = (check_df[cfg.TAG_PROVINCIA] != check_df[self.province_tag]) & check_df[cfg.TAG_PROVINCIA].notnull()
+        self.original_df.loc[wrong_position, self.province_tag + self.check_tag] = True
+        self.original_df.loc[wrong_position, self.province_tag + self.propose_tag] = check_df.loc[
+            wrong_position, cfg.TAG_PROVINCIA]
+
+    def _check_provincia_nazione(self):
+        pos = (self.original_df[self.nazione_tag].isna() | (self.original_df[self.nazione_tag] != self.italy_name)) & (self.original_df[cfg.TAG_REGIONE + "_provincia"].notnull())
+        self.original_df.loc[pos, self.nazione_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.nazione_tag + self.propose_tag] = self.italy_name
+        self.original_df.loc[pos, self.flag_in_italy] = True
+
+    def _check_provincia_regione(self):
+        pos = self.original_df[cfg.TAG_REGIONE + "_provincia"].notnull() & self.original_df[cfg.TAG_REGIONE + "_regione"].isna()
+        self.original_df.loc[pos, self.regioni_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.regioni_tag + self.propose_tag] = self.original_df.loc[pos, cfg.TAG_REGIONE + "_provincia"]
+        pos = self.original_df[cfg.TAG_REGIONE + "_provincia"].notnull() & self.original_df[
+            cfg.TAG_REGIONE + "_regione"].notnull() & (self.original_df[cfg.TAG_REGIONE + "_provincia"] != self.original_df[
+            cfg.TAG_REGIONE + "_regione"])
+        self.original_df.loc[pos, self.regioni_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.regioni_tag + self.propose_tag] = None
+
+    def _check_comune(self):
+        self._check_missing_values(self.comuni_tag)
+        addinfo = AddGeographicalInfo(self.original_df)
+        addinfo.set_comuni_tag(self.comuni_tag)
+        addinfo.run_simple_match()
+        try:
+            addinfo.run_find_frazioni()
+            addinfo.run_find_frazioni_from_google()
+        except:
+            pass
+        check_df = addinfo.get_result()
+        self.original_df[cfg.TAG_REGIONE + "_comune"] = check_df[cfg.TAG_REGIONE]
+        self.original_df[cfg.TAG_PROVINCIA + "_comune"] = check_df[cfg.TAG_PROVINCIA]
+        self.original_df[cfg.TAG_COMUNE + "_comune"] = check_df[cfg.TAG_COMUNE]
+        not_found_position = check_df[cfg.TAG_COMUNE].isna() & self.original_df[self.flag_in_italy]
+        self.original_df.loc[not_found_position, self.comuni_tag + self.check_tag] = True
+        wrong_position = (check_df[cfg.TAG_COMUNE] != check_df[self.comuni_tag]) & check_df[cfg.TAG_COMUNE].notnull()
+        self.original_df.loc[wrong_position, self.comuni_tag + self.check_tag] = True
+        self.original_df.loc[wrong_position, self.comuni_tag + self.propose_tag] = check_df.loc[
+            wrong_position, cfg.TAG_COMUNE]
+
+    def _check_comune_nazione(self):
+        pos = (self.original_df[self.nazione_tag].isna() | (self.original_df[self.nazione_tag] != self.italy_name)) & (self.original_df[cfg.TAG_REGIONE + "_comune"].notnull())
+        self.original_df.loc[pos, self.nazione_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.nazione_tag + self.propose_tag] = self.italy_name
+        self.original_df.loc[pos, self.flag_in_italy] = True
+
+    def _check_comune_regione(self):
+        pos = self.original_df[cfg.TAG_REGIONE + "_comune"].notnull() & self.original_df[cfg.TAG_REGIONE + "_regione"].isna() & self.original_df[self.regioni_tag + self.propose_tag].isna()
+        self.original_df.loc[pos, self.regioni_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.regioni_tag + self.propose_tag] = self.original_df.loc[pos, cfg.TAG_REGIONE + "_comune"]
+        pos = self.original_df[cfg.TAG_REGIONE + "_comune"].notnull() & (
+                    (self.original_df[cfg.TAG_REGIONE + "_regione"].notnull() &
+                     (self.original_df[cfg.TAG_REGIONE + "_comune"] != self.original_df[cfg.TAG_REGIONE + "_regione"])) |
+                    (self.original_df[self.regioni_tag + self.propose_tag].notnull() &
+                     (self.original_df[cfg.TAG_REGIONE + "_comune"] != self.original_df[self.regioni_tag + self.propose_tag])))
+        self.original_df.loc[pos, self.regioni_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.regioni_tag + self.propose_tag] = None
+
+    def _check_comune_provincia(self):
+        pos = self.original_df[cfg.TAG_PROVINCIA + "_comune"].notnull() & self.original_df[cfg.TAG_PROVINCIA + "_provincia"].isna()
+        self.original_df.loc[pos, self.province_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.province_tag + self.propose_tag] = self.original_df.loc[pos, cfg.TAG_PROVINCIA + "_comune"]
+        pos = self.original_df[cfg.TAG_PROVINCIA + "_comune"].notnull() & self.original_df[
+            cfg.TAG_PROVINCIA + "_provincia"].notnull() & (self.original_df[cfg.TAG_PROVINCIA + "_comune"] != self.original_df[
+            cfg.TAG_PROVINCIA + "_provincia"])
+        self.original_df.loc[pos, self.province_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.province_tag + self.propose_tag] = None
+
+    def _check_coordinates(self):
+        check_tag = "coordinates" + self.check_tag
+        self.original_df[check_tag] = (self.original_df[self.latitude_tag].isna() |
+                                                            self.original_df[self.longitude_tag].isna()) & self.original_df[self.flag_in_italy]
+        check_df = get_city_from_coordinates(self.original_df, self.latitude_tag, self.longitude_tag)
+        not_found_position = check_df[cfg.TAG_COMUNE].isna() & self.original_df[self.flag_in_italy]
+        self.original_df.loc[not_found_position, check_tag] = True
+        self.original_df[cfg.TAG_REGIONE + "_coordinates"] = check_df[cfg.TAG_REGIONE]
+        self.original_df[cfg.TAG_PROVINCIA + "_coordinates"] = check_df[cfg.TAG_PROVINCIA]
+        self.original_df[cfg.TAG_COMUNE + "_coordinates"] = check_df[cfg.TAG_COMUNE]
+
+    def _check_coordinates_nazione(self):
+        pos = (self.original_df[self.nazione_tag].isna() | (self.original_df[self.nazione_tag] != self.italy_name)) & (
+            self.original_df[cfg.TAG_REGIONE + "_coordinates"].notnull())
+        self.original_df.loc[pos, self.nazione_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.nazione_tag + self.propose_tag] = self.italy_name
+        self.original_df.loc[pos, self.flag_in_italy] = True
+
+    def _check_coordinates_regione(self):
+        pos = self.original_df[cfg.TAG_REGIONE + "_coordinates"].notnull() & self.original_df[cfg.TAG_REGIONE + "_regione"].isna() & self.original_df[self.regioni_tag + self.propose_tag].isna()
+        self.original_df.loc[pos, self.regioni_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.regioni_tag + self.propose_tag] = self.original_df.loc[pos, cfg.TAG_REGIONE + "_coordinates"]
+        pos = self.original_df[cfg.TAG_REGIONE + "_coordinates"].notnull() & (
+                    (self.original_df[cfg.TAG_REGIONE + "_regione"].notnull() &
+                     (self.original_df[cfg.TAG_REGIONE + "_coordinates"] != self.original_df[cfg.TAG_REGIONE + "_regione"])) |
+                    (self.original_df[self.regioni_tag + self.propose_tag].notnull() &
+                     (self.original_df[cfg.TAG_REGIONE + "_coordinates"] != self.original_df[self.regioni_tag + self.propose_tag])))
+        self.original_df.loc[pos, self.regioni_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.regioni_tag + self.propose_tag] = None
+
+    def _check_coordinates_provincia(self):
+        pos = self.original_df[cfg.TAG_PROVINCIA + "_coordinates"].notnull() & self.original_df[cfg.TAG_PROVINCIA + "_provincia"].isna() & self.original_df[self.province_tag + self.propose_tag].isna()
+        self.original_df.loc[pos, self.province_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.province_tag + self.propose_tag] = self.original_df.loc[pos, cfg.TAG_PROVINCIA + "_coordinates"]
+        pos = self.original_df[cfg.TAG_PROVINCIA + "_coordinates"].notnull() & (
+                    (self.original_df[cfg.TAG_PROVINCIA + "_provincia"].notnull() &
+                     (self.original_df[cfg.TAG_PROVINCIA + "_coordinates"] != self.original_df[cfg.TAG_PROVINCIA + "_provincia"])) |
+                    (self.original_df[self.province_tag + self.propose_tag].notnull() &
+                     (self.original_df[cfg.TAG_PROVINCIA + "_coordinates"] != self.original_df[self.province_tag + self.propose_tag])))
+        self.original_df.loc[pos, self.province_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.province_tag + self.propose_tag] = None
+
+    def _check_coordinates_comune(self):
+        pos = self.original_df[cfg.TAG_COMUNE + "_coordinates"].notnull() & self.original_df[cfg.TAG_COMUNE + "_comune"].isna()
+        self.original_df.loc[pos, self.comuni_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.comuni_tag + self.propose_tag] = self.original_df.loc[pos, cfg.TAG_COMUNE + "_coordinates"]
+        pos = self.original_df[cfg.TAG_COMUNE + "_coordinates"].notnull() & self.original_df[
+            cfg.TAG_COMUNE + "_comune"].notnull() & (self.original_df[cfg.TAG_COMUNE + "_coordinates"] != self.original_df[
+            cfg.TAG_COMUNE + "_comune"])
+        self.original_df.loc[pos, self.comuni_tag + self.check_tag] = True
+        self.original_df.loc[pos, self.comuni_tag + self.propose_tag] = None
+
+    def start_check(self, show_only_warning=True):
+        col_list = [self.keys, self.nazione_tag, self.regioni_tag, self.province_tag, self.comuni_tag, self.latitude_tag, self.longitude_tag]
+        col_list = [a for a in col_list if a is not None]
+        self.original_df = self.original_df[col_list].drop_duplicates()
+
+        self.original_df[self.flag_in_italy] = True
+        if self.nazione_tag is not None:
+            self._check_nazione()
+
+        if self.regioni_tag is not None:
+            self._check_regione()
+            if self.nazione_tag is not None:
+                self._check_regione_nazione()
+
+        if self.province_tag is not None:
+            self._check_provincia()
+            if self.nazione_tag is not None:
+                self._check_provincia_nazione()
+            if self.regioni_tag is not None:
+                self._check_provincia_regione()
+
+        if self.comuni_tag is not None:
+            self._check_comune()
+            if self.nazione_tag is not None:
+                self._check_comune_nazione()
+            if self.regioni_tag is not None:
+                self._check_comune_regione()
+            if self.province_tag is not None:
+                self._check_comune_provincia()
+
+        if self.latitude_tag is not None:
+            self._check_coordinates()
+            if self.nazione_tag is not None:
+                self._check_coordinates_nazione()
+            if self.regioni_tag is not None:
+                self._check_coordinates_regione()
+            if self.province_tag is not None:
+                self._check_coordinates_provincia()
+            if self.comuni_tag is not None:
+                self._check_coordinates_comune()
+
+        check_list = [self.nazione_tag, self.regioni_tag, self.province_tag, self.comuni_tag, "coordinates"]
+        check_list = [a + self.check_tag for a in check_list if a is not None]
+
+        self.original_df["check"] = self.original_df[check_list].any(axis='columns')
+        self.original_df["solved"] = np.where(self.original_df["check"], True, None)
+        for c in check_list:
+            pos = self.original_df[c]
+            if c != ("coordinates" + self.check_tag):
+                not_solved = self.original_df[c.replace(self.check_tag, self.propose_tag)].isna()
+                self.original_df.loc[pos & not_solved, "solved"] = False
+            else:
+                self.original_df.loc[pos, "solved"] = False
+        n_tot = self.original_df.shape[0]
+
+        n_check = self.original_df["check"].sum()
+        n_solved = self.original_df["solved"].sum()
+        log.info("Found {} problems over {} ({}%), of which {} solved ({}%)".format(n_check, n_tot,
+                                                                                    round(n_check/n_tot*100, 1),
+                                                                                    n_solved,
+                                                                                    round(n_solved/n_check*100, 1)))
+        if self.nazione_tag:
+            log.info("Field {}: {} problem, {} solved".format(
+                self.nazione_tag, self.original_df[self.nazione_tag + self.check_tag].sum(),
+                self.original_df[self.nazione_tag + self.propose_tag].notnull().sum()
+            ))
+        if self.regioni_tag:
+            log.info("Field {}: {} problem, {} solved".format(
+                self.regioni_tag, self.original_df[self.regioni_tag + self.check_tag].sum(),
+                self.original_df[self.regioni_tag + self.propose_tag].notnull().sum()
+            ))
+        if self.province_tag:
+            log.info("Field {}: {} problem, {} solved".format(
+                self.province_tag, self.original_df[self.province_tag + self.check_tag].sum(),
+                self.original_df[self.province_tag + self.propose_tag].notnull().sum()
+            ))
+        if self.comuni_tag:
+            log.info("Field {}: {} problem, {} solved".format(
+                self.comuni_tag, self.original_df[self.comuni_tag + self.check_tag].sum(),
+                self.original_df[self.comuni_tag + self.propose_tag].notnull().sum()
+            ))
+        if self.latitude_tag:
+            log.info("Coordinates: {} problem".format(
+                self.original_df["coordinates" + self.check_tag].sum()
+            ))
+
+        if show_only_warning:
+            result = self.original_df[self.original_df["check"]]
+        else:
+            result = self.original_df
+        return result
+
+    def _check_missing_values(self, col_name):
+        self.original_df[col_name + self.check_tag] = self.original_df[col_name].isna() & self.original_df[self.flag_in_italy]
+
+    def plot_result(self, show_only_warning=True, save_in_path=None):
+        n_tot = self.original_df.shape[0]
+        width = 1000
+        width_check = 100
+        row_height = 30
+        if show_only_warning:
+            source = self.original_df[self.original_df["check"]]
+        else:
+            source = self.original_df
+        n_plot = source.shape[0]
+        height = (n_plot + 1) * row_height
+        source["x"] = 0.5
+        source["y"] = range(n_plot)[::-1]
+        source["y"] += 0.5
+        source["check_color"] = "0"
+        pos = source["check"]
+        source.loc[pos, "check_color"] = "2"
+        pos = source["solved"]
+        source.loc[pos, "check_color"] = "1"
+
+        if self.keys is None:
+            keys = "index"
+            source = source.reset_index().rename(columns={source.index.name: keys})
+        else:
+            keys = self.keys
+        #source = source.where(pd.notnull(source), None)
+        propose_col = [a for a in source.columns if self.propose_tag in a]
+        source[propose_col] = source[propose_col].fillna("")
+
+        col_list = [self.nazione_tag, self.regioni_tag, self.province_tag, self.comuni_tag]
+        col_list = [a for a in col_list if a is not None]
+        columns = [TableColumn(field=keys, title=keys)]
+
+
+
+        perc_data = []
+        legend_data = []
+        i = 1
+        for c in col_list:
+            n_check = (source[c + self.check_tag] & (source[c + self.propose_tag] == "")).sum()
+            perc_data.append([i + 0.8, 0.75, "{} ({}%)".format(n_check, int(round(n_check/n_tot*100, 0)))])
+            n_propose = (source[c + self.propose_tag]!="").sum()
+            perc_data.append([i + 0.8, 0.25, "{} ({}%)".format(n_propose, int(round(n_propose/n_tot*100, 0)))])
+            legend_data.append([i + 0.9, 0.75, "0"])
+            legend_data.append([i + 0.9, 0.25, "1"])
+            pos = source[c + self.propose_tag] != ""
+            source[c].fillna("NaN", inplace=True)
+            source[c] = np.where(pos,
+                                 source[c] + "||\n" + source[c + self.propose_tag],
+                                 "||" + source[c])
+            template = """
+                        <div style="background:<%= 
+                            (function colorfromint(){{
+                                if({check}){{
+                                    if({propose} != ""){{
+                                        return("orange")
+                                        }} else {{
+                                        return("red")
+                                    }}
+                                }}
+                            }}()) %>; 
+                            color: black"> 
+                        <strike><%=  value.split("||")[0] %></strike> <%= value.split("||")[1] %>
+                        </div>
+                        """.format(check=c + self.check_tag,
+                                   propose=c + self.propose_tag)
+            formatter = HTMLTemplateFormatter(template=template)
+            columns.append(TableColumn(field=c, title=c, formatter=formatter))
+            i += 1
+
+        if self.latitude_tag:
+            n_check = source["coordinates" + self.check_tag].sum()
+            perc_data.append([i + 0.8, 0.75, "{} ({}%)".format(n_check, int(round(n_check/n_tot*100, 0)))])
+            legend_data.append([i + 0.9, 0.75, "0"])
+            i += 1
+            perc_data.append([i + 0.8, 0.75, "{} ({}%)".format(n_check, int(round(n_check/n_tot*100, 0)))])
+            legend_data.append([i + 0.9, 0.75, "0"])
+            i += 1
+            template = """
+                        <div style="background:<%= 
+                            (function colorfromint(){{
+                                if({}){{
+                                    return("red")}}
+                                }}()) %>; 
+                            color: black"> 
+                        <%= value %>
+                        </div>
+                        """.format("coordinates" + self.check_tag)
+            formatter = HTMLTemplateFormatter(template=template)
+            columns.append(
+                TableColumn(field=self.latitude_tag, title=self.latitude_tag, formatter=formatter))
+            columns.append(
+                TableColumn(field=self.longitude_tag, title=self.longitude_tag, formatter=formatter))
+        source = ColumnDataSource(source)
+        data_table = DataTable(source=source,
+                               columns=columns,
+                               fit_columns=True,
+                               selectable=False,
+                               sortable=False,
+                               index_position=None,
+                               row_height=row_height,
+                               height=height, width=width)
+
+        check_plot = figure(
+            #title="Check",
+            plot_height=height,
+            plot_width=width_check,
+            x_range=(0, 1),
+            y_range=(0, n_plot),
+            x_axis_location="above",
+            tools='')
+        check_plot.xgrid.grid_line_color = None
+        check_plot.ygrid.grid_line_color = None
+        check_plot.yaxis.visible = False
+        check_plot.grid.visible = False
+        check_plot.toolbar.logo = None
+        check_plot.outline_line_color = None
+        #check_plot.xaxis.major_tick_line_color = None
+        #check_plot.xaxis.minor_tick_line_color = None
+        check_plot.xaxis.major_label_text_font_size = '10pt'
+        check_plot.xaxis.ticker = [0.5]
+        check_plot.xaxis.major_label_overrides = {0.5: "Check"}
+
+        check_plot.circle(x="x", y="y", size=9, line_width=0.5,
+                                  fill_color={"field": "check_color", "transform": CategoricalColorMapper(factors=["0", "1", "2"],
+                                                                                 palette=["green", "orange", "red"])},
+                            source=source)
+
+        perc_plot = figure(
+            title="Geographical DataQuality",
+            plot_height=75,
+            plot_width=width,
+            x_range=(0, i),
+            y_range=(0, 1),
+            tools='')
+        perc_plot.title.text_font_size = '16pt'
+        perc_plot.xgrid.grid_line_color = None
+        perc_plot.ygrid.grid_line_color = None
+        perc_plot.yaxis.visible = False
+        perc_plot.xaxis.visible = False
+        perc_plot.grid.visible = False
+        perc_plot.toolbar.logo = None
+        perc_plot.outline_line_color = None
+        perc_plot.xaxis.major_tick_line_color = None
+        perc_plot.xaxis.minor_tick_line_color = None
+        perc_plot.xaxis.major_label_text_font_size = '0pt'
+        legend_data = np.array(legend_data)
+        legend_data = ColumnDataSource(dict(
+            x = legend_data[:, 0].astype(float),
+            y = legend_data[:, 1].astype(float),
+            col = legend_data[:, 2]))
+
+        perc_plot.circle(x="x", y="y", size=9, line_width=0.5,
+                          fill_color={"field": "col",
+                                      "transform": CategoricalColorMapper(factors=["0", "1"],
+                                                                          palette=["red", "orange"])},
+                          source=legend_data)
+        perc_data = np.array(perc_data)
+        perc_data = ColumnDataSource(dict(
+            x=perc_data[:, 0].astype(float),
+            y=perc_data[:, 1].astype(float),
+            perc=perc_data[:, 2]))
+
+        image_perc = LabelSet(x="x", y="y", text="perc", source=perc_data, text_align="right", y_offset=0,
+                              text_font_size="12px", text_baseline="middle")
+        perc_plot.add_layout(image_perc)
+
+        plot = column(perc_plot, row(data_table, check_plot))
+
+        if save_in_path:
+            output_file(save_in_path, mode='inline')
+            save(plot)
+            os.startfile(save_in_path)
+        else:
+            show(plot)
 
 
 # class KDEDensity:

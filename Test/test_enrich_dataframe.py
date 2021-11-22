@@ -1,3 +1,5 @@
+from pandas._testing import assert_frame_equal
+
 from geo_ita.src._enrich_dataframe import __find_coordinates_system
 
 from geo_ita.src._enrich_dataframe import *
@@ -164,7 +166,7 @@ class TestEnrichDataframe(unittest.TestCase):
         self.assertTrue(result["sigla"].equals(result["sl"]))
         self.assertTrue(result["denominazione_regione"].equals(result["regione"]))
 
-    def test_aggregate_point_by_distance(self):
+    def xtest_aggregate_point_by_distance(self):
         df = get_df_comuni()
         df = aggregate_point_by_distance(df, 5000, latitude_columns="center_y", longitude_columns="center_x")
 
@@ -174,6 +176,28 @@ class TestEnrichDataframe(unittest.TestCase):
     def xtest_get_population_nearby_usage(self):
         test_df = get_df_comuni()
         test_df = get_population_nearby(test_df, 100, latitude_columns="center_y", longitude_columns="center_x")
+        prova = ""
+
+    # GeoDataQuality
+
+    def test_GeoDataQuality(self):
+        df = pd.read_excel(root_path / PureWindowsPath(r"data_sources/Test/data_quality_samples.xlsx"))
+        dq = GeoDataQuality(df)
+        dq.set_nazione_tag("nazione")
+        dq.set_regioni_tag("regione")
+        dq.set_province_tag("provincia")
+        dq.set_comuni_tag("comune")
+        dq.set_latitude_longitude_tag("latitudine", "longitudine")
+        result = dq.start_check(show_only_warning=False)
+        dq.plot_result()
+        col_test = ["nazione", "regione", "provincia", "comune",
+                    "nazione_check", "nazione_propose", "regione_check", "regione_propose",
+                    "provincia_check", "provincia_propose", "comune_check", "comune_propose",
+                    "coordinates_check", "check", "solved"]
+        assert_frame_equal(result[col_test],
+                           df[col_test],
+                           check_names=False, check_dtype=False
+                           )
         prova = ""
 
 
