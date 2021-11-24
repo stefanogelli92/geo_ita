@@ -186,19 +186,18 @@ class TestEnrichDataframe(unittest.TestCase):
         dq.set_nazione_tag("nazione")
         dq.set_regioni_tag("regione")
         dq.set_province_tag("provincia")
-        dq.set_comuni_tag("comune")
+        dq.set_comuni_tag("comune", use_for_check_nation=True)
         dq.set_latitude_longitude_tag("latitudine", "longitudine")
         result = dq.start_check(show_only_warning=False, case_sensitive=True)
         dq.plot_result()
         col_test = ["nazione", "regione", "provincia", "comune",
-                    "nazione_check", "nazione_propose", "regione_check", "regione_propose",
-                    "provincia_check", "provincia_propose", "comune_check", "comune_propose",
+                    "nazione_check", "nazione_suggestion", "regione_check", "regione_suggestion",
+                    "provincia_check", "provincia_suggestion", "comune_check", "comune_suggestion",
                     "coordinates_check", "check", "solved"]
         assert_frame_equal(result[col_test],
                            df[col_test],
                            check_names=False, check_dtype=False
                            )
-
         prova = ""
 
 
