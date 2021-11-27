@@ -6,6 +6,9 @@ import logging
 import ssl
 from pathlib import PureWindowsPath
 from datetime import datetime
+from typing import Dict, Union
+
+from valdec.decorators import validate
 
 import unidecode
 from geo_ita.src.definition import *
@@ -64,7 +67,8 @@ def google_query(query, api_key, cse_id, **kwargs):
     return query_results['items']
 
 
-def _clean_htmltext(text):
+@validate
+def _clean_htmltext(text: str) -> str:
     text = text.lower()
     text = re.sub('\s+', ' ', text)
     text = re.sub('[^A-Za-z0-9.]+', ' ', text)
@@ -72,21 +76,16 @@ def _clean_htmltext(text):
     return text
 
 
-def _test_dataframe(df):
-    if not isinstance(df, pd.DataFrame):
-        raise Exception("Pass a Pandas DataFrame as parameter.")
-
-
-def _test_column_in_dataframe(df, col):
+@validate
+def _test_column_in_dataframe(df: pd.DataFrame, col):
     if col not in df.columns:
         raise Exception("Column {} not found in DataFrame.".format(col))
 
 
 class AddGeographicalInfo:
-
-    def __init__(self, df):
+    @validate
+    def __init__(self, df: pd.DataFrame):
         self.original_df = df
-        _test_dataframe(self.original_df)
         self.keys = None
         self.df = None
         self.comuni, self.province, self.sigle, self.regioni = _get_list()
@@ -111,7 +110,8 @@ class AddGeographicalInfo:
         pass
         #for col in self.df.select_dtypes(include='object').columns:
 
-    def set_comuni_tag(self, col_name):
+    @validate
+    def set_comuni_tag(self, col_name: str):
         _test_column_in_dataframe(self.original_df, col_name)
         self.comuni_tag = col_name
         self.comuni_code = _code_or_desc(list(self.original_df[col_name].unique()))
@@ -119,7 +119,8 @@ class AddGeographicalInfo:
         self.geo_tag_input = col_name
         self.code = self.comuni_code
 
-    def set_province_tag(self, col_name):
+    @validate
+    def set_province_tag(self, col_name: str):
         _test_column_in_dataframe(self.original_df, col_name)
         self.province_tag = col_name
         self.province_code = _code_or_desc(list(self.original_df[col_name].unique()))
@@ -128,7 +129,8 @@ class AddGeographicalInfo:
             self.geo_tag_input = col_name
             self.code = self.province_code
 
-    def set_regioni_tag(self, col_name):
+    @validate
+    def set_regioni_tag(self, col_name: str):
         _test_column_in_dataframe(self.original_df, col_name)
         self.regioni_tag = col_name
         self.regioni_code = _code_or_desc(list(self.original_df[col_name].unique()))
@@ -363,7 +365,8 @@ class AddGeographicalInfo:
         else:
             self.frazioni_dict = match_dict
 
-    def run_find_frazioni_from_google(self, n_url_read=1):
+    @validate
+    def run_find_frazioni_from_google(self, n_url_read: int = 1):
         comuni = [_clean_denom_text_value(a) for a in self.comuni]
         match_dict = {}
         for el in self.not_match:
@@ -429,7 +432,8 @@ class AddGeographicalInfo:
     def get_result_frazioni(self):
         return self.frazioni_dict
 
-    def get_result(self, add_missing=False, drop_not_match=False):
+    @validate
+    def get_result(self, add_missing: bool = False, drop_not_match: bool = False) -> pd.DataFrame:
         if self.not_match is None:
             raise Exception("Run simple match before get the result.")
         if len(self.not_match) > 0:
@@ -467,7 +471,8 @@ class AddGeographicalInfo:
 
         return result
 
-    def run_similarity_match(self, unique_flag=False):
+    @validate
+    def run_similarity_match(self, unique_flag: bool = False):
         if unique_flag:
             input_den = self.df[cfg.KEY_UNIQUE].values()
             not_match2 = [a for a in self.list_anag if a not in input_den]
@@ -491,9 +496,10 @@ class AddGeographicalInfo:
         else:
             raise Exception("Run  run_similarity_match before accept_similarity_result.")
 
-    def use_manual_match(self, manual_dict):
-        if not isinstance(manual_dict, dict):
-           raise Exception("Pass a dictionary (name -> replace).")
+    @validate
+    def use_manual_match(self, manual_dict: Dict[str, str]):
+        #if not isinstance(manual_dict, dict):
+        #   raise Exception("Pass a dictionary (name -> replace).")
         self.not_match = [x for x in self.not_match if x not in manual_dict.keys()]
         self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].replace(manual_dict)
 
@@ -680,7 +686,8 @@ def __find_coordinates_system(df, lat=None, lon=None, geometry=None):
     return "epsg:4326"
 
 
-def get_geo_info_from_comune(comune, provincia=None, regione=None):
+@validate
+def get_geo_info_from_comune(comune: str, provincia: str = None, regione: str = None) -> Dict[str, str]:
     df = pd.DataFrame(data=[[comune, provincia, regione]], columns=["comune", "provincia", "regione"])
     addInfo = AddGeographicalInfo(df)
     addInfo.set_comuni_tag("comune")
@@ -705,7 +712,8 @@ def get_geo_info_from_comune(comune, provincia=None, regione=None):
     return result_dict
 
 
-def get_geo_info_from_regione(regione):
+@validate
+def get_geo_info_from_regione(regione: str) -> Dict[str, str]:
     df = pd.DataFrame(data=[[regione]], columns=["regione"])
     addInfo = AddGeographicalInfo(df)
     addInfo.set_regioni_tag("regione")
@@ -723,7 +731,8 @@ def get_geo_info_from_regione(regione):
     return result_dict
 
 
-def get_geo_info_from_provincia(provincia, regione=None):
+@validate
+def get_geo_info_from_provincia(provincia: str, regione:str = None) -> Dict[str, str]:
     df = pd.DataFrame(data=[[provincia, regione]], columns=["provincia", "regione"])
     addInfo = AddGeographicalInfo(df)
     addInfo.set_province_tag("provincia")
@@ -745,8 +754,9 @@ def get_geo_info_from_provincia(provincia, regione=None):
     return result_dict
 
 
-def get_city_from_coordinates(df0, latitude_columns=None, longitude_columns=None):
-    _test_dataframe(df0)
+@validate
+def get_city_from_coordinates(df0: pd.DataFrame,
+                              latitude_columns: str = None, longitude_columns: str = None) -> pd.DataFrame:
     if latitude_columns is not None:
         _test_column_in_dataframe(df0, latitude_columns)
     if longitude_columns is not None:
@@ -862,9 +872,11 @@ def _try_wrong_replace_of_accents(df, address_tag, geocode):
     return df
 
 
-def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=None, regione_tag=None, n_url_read=1):
+@validate
+def get_coordinates_from_address(df0: pd.DataFrame, address_tag: str,
+                                 city_tag: str = None, province_tag: str = None, regione_tag: str = None,
+                                 n_url_read: int = 1) -> pd.DataFrame:
     # TODO add successive tentative (maps api)
-    _test_dataframe(df0)
     _test_column_in_dataframe(df0, address_tag)
     if city_tag is not None:
         _test_column_in_dataframe(df0, city_tag)
@@ -930,8 +942,9 @@ def get_coordinates_from_address(df0, address_tag, city_tag=None, province_tag=N
     return df
 
 
-def get_address_from_coordinates(df0, latitude_columns=None, longitude_columns=None):
-    _test_dataframe(df0)
+@validate
+def get_address_from_coordinates(df0: pd.DataFrame,
+                                 latitude_columns: str = None, longitude_columns: str = None) -> pd.DataFrame:
     if latitude_columns is None or longitude_columns is None:
         flag_coord_found, latitude_columns, longitude_columns = __find_coord_columns(df0)
         if not flag_coord_found:
@@ -962,7 +975,7 @@ def get_address_from_coordinates(df0, latitude_columns=None, longitude_columns=N
         city_col = "city_geo_ita"
     # TODO Ripulire address estraendo solo informazioni utili e uniformi
     df[address_col] = df["location"].apply(lambda loc: loc.address if loc else None).str.lower()
-    df[city_col] = df["location"].apply(lambda loc: loc.raw["address"]["city"] if (loc and "city" in loc.raw["address"]) else None).str.lower()
+    df[city_col] = df["location"].apply(lambda loc: loc.raw["address"]["city"] if (loc and "city" in loc.raw["address"]) else None)
     df = df.drop(["geom", "location"], axis=1)
     ## Join df0
     df = df0.merge(df, how="left", on=[latitude_columns, longitude_columns])
@@ -1019,116 +1032,11 @@ def _distance_to_range_ccord(d):
     return x_dist, y_dist
 
 
-def get_population_nearby2(df, radius, latitude_columns=None, longitude_columns=None):
-    population_df = get_high_resolution_population_density_df()
-    #population_df = __create_geo_dataframe(population_df)
-    long_tag = "Lon"
-    lat_tag = "Lat"
-    df["key_mapping"] = range(df.shape[0])
-    radius_df = __create_geo_dataframe(df, lat_tag=latitude_columns, long_tag=longitude_columns)[["key_mapping", "geometry"]]
-    radius_df = radius_df.to_crs({'init': 'epsg:4326'})
-    x_dist2, y_dist2 = _distance_to_range_ccord(radius*1.1)
-    x_dist, y_dist = _distance_to_range_ccord(radius)
-    dist = (x_dist + y_dist) / 2
-    radius_df["geometry2"] = radius_df["geometry"]
-    more_precision = False
-    if more_precision:
-        radius_df["geometry"] = radius_df.apply(lambda x: x['geometry2'].buffer(dist, cap_style=1), axis=1)
-    radius_df["population0"] = None
-    radius_df["population1"] = None
-    start = time.time()
-    print("Start")
-    for index, row in radius_df.iterrows():
-        signle_population_df = population_df[(population_df[lat_tag].between(row["geometry2"].y-y_dist2, row["geometry2"].y+y_dist2) &
-                                              population_df[long_tag].between(row["geometry2"].x-x_dist2, row["geometry2"].x+x_dist2))]
-        population = signle_population_df["Population"].sum()
-        radius_df.loc[index, 'population0'] = population
-        if more_precision & (population > 0):
-            signle_population_df = gpd.GeoDataFrame(signle_population_df.drop([long_tag, lat_tag], axis=1),
-                                            crs={'init': 'epsg:4326'},
-                                            geometry=gpd.points_from_xy(signle_population_df[long_tag], signle_population_df[lat_tag]))
-            circle = radius_df.loc[radius_df.index == index, ["geometry"]]
-            signle_population_df = gpd.sjoin(signle_population_df, circle, op='within')
-            radius_df.loc[index, 'population1'] = signle_population_df["Population"].sum()
-
-    end = time.time()
-    print('Change coord System', end - start)
-    start = time.time()
-    df["n_residents0"] = df["key_mapping"].map(radius_df.set_index("key_mapping")["population0"])
-    if more_precision:
-        df["n_residents1"] = df["key_mapping"].map(radius_df.set_index("key_mapping")["population1"])
-    end = time.time()
-    df.drop(["key_mapping"], axis=1, inplace=True)
-    print('Mapping', end - start)
-    return df
-
-
-def get_population_nearby(df, radius, latitude_columns=None, longitude_columns=None):
-    population_df = get_high_resolution_population_density_df()
-    radius_df = df.rename_axis('key_mapping').reset_index()
-    radius_df = __create_geo_dataframe(radius_df, lat_tag=latitude_columns, long_tag=longitude_columns)[["key_mapping", "geometry"]]
-    radius_df = radius_df.to_crs({'init': 'epsg:4326'})
-    if radius_df.shape[0] > 1000:
-        log.info("Start creating the geopandas dataframe")
-        start = datetime.now()
-        long_tag = "Lon"
-        lat_tag = "Lat"
-        population_df = gpd.GeoDataFrame(
-            population_df.drop([long_tag, lat_tag], axis=1),
-            crs={'init': 'epsg:4326'},
-            geometry=gpd.points_from_xy(population_df[long_tag], population_df[lat_tag]))
-        end = datetime.now()
-        log.info("Created the geopandas dataframe in {}".format(end - start))
-        x_dist, y_dist = _distance_to_range_ccord(radius)
-        dist = (x_dist + y_dist) / 2
-        radius_df["geometry"] = radius_df.apply(lambda x: x['geometry'].buffer(dist, cap_style=1), axis=1)
-        start = time.time()
-        population_df = gpd.sjoin(population_df, radius_df, op='within')
-        end = time.time()
-        print('Join', end - start)
-        start = time.time()
-        mapping = population_df.groupby("key_mapping")["Population"].sum()
-    else:
-        pass
-    df["n_residents"] = df["key_mapping"].map(mapping) / 10
-    end = time.time()
-    print('Mapping', end - start)
-    return df
-
-
-def _process_high_density_population_df(file_path, split_perc=0.05):
-    file_path = str(file_path)
-    df = pd.read_csv(file_path)
-
-    #df = get_city_from_coordinates(df)
-    #df.drop(["geometry"], axis=1, inplace=True)
-    #df.to_pickle(file_path.replace(".csv", ".pkl"))
-
-    # Split
-    log.info("Start getting city from coordinates")
-    split_path = PureWindowsPath(file_path.rsplit('\\', 1)[0]) / "split"
-    os.mkdir(split_path)
-    n_split = math.ceil(1 / split_perc)
-    df_list = np.split(df, np.arange(1, n_split) * int(split_perc * len(df)))
-    i = 0
-    for df_i in df_list:
-        df_i.to_pickle(split_path / PureWindowsPath(str(i) + ".pkl"))
-        i += 1
-    del df
-    for filename in os.listdir(split_path):
-        df = pd.read_pickle(split_path / filename)
-        df = get_city_from_coordinates(df)
-        df.to_pickle(split_path / filename)
-    df = pd.DataFrame()
-    for filename in os.listdir(split_path):
-        df = pd.concat([pd.read_pickle(split_path / filename), df], ignore_index=True)
-    df.drop(["geometry"], axis=1, inplace=True)
-    log.info("End getting city from coordinates")
-    df.to_pickle(str(file_path).replace(".csv", ".pkl"))
-
-
-def aggregate_point_by_distance(df0, distance_in_meters, latitude_columns=None, longitude_columns=None, agg_column_name="aggregation_code"):
-    _test_dataframe(df0)
+@validate
+def aggregate_point_by_distance(df0: pd.DataFrame,
+                                distance_in_meters: Union[int, float],
+                                latitude_columns: str = None, longitude_columns: str = None,
+                                agg_column_name: str = "aggregation_code") -> pd.DataFrame:
     if latitude_columns is not None:
         _test_column_in_dataframe(df0, latitude_columns)
     if longitude_columns is not None:
@@ -1165,9 +1073,9 @@ def aggregate_point_by_distance(df0, distance_in_meters, latitude_columns=None, 
 
 
 class GeoDataQuality:
-    def __init__(self, df):
+    @validate
+    def __init__(self, df: pd.DataFrame):
         self.original_df = df
-        _test_dataframe(self.original_df)
         self.keys = None
         self.comuni_tag = None
         self.comuni_code = None
@@ -1186,36 +1094,42 @@ class GeoDataQuality:
         self.flag_in_italy = "is_in_italy"
         self.sensitive = None
 
-    def set_keys(self, col_name):
+    @validate
+    def set_keys(self, col_name: str):
         _test_column_in_dataframe(self.original_df, col_name)
         if not self.original_df[col_name].is_unique:
             raise Exception(r"Insert a column with unique values.")
         self.keys = col_name
 
-    def set_nazione_tag(self, col_name):
+    @validate
+    def set_nazione_tag(self, col_name: str):
         _test_column_in_dataframe(self.original_df, col_name)
         self.nazione_tag = col_name
 
-    def set_regioni_tag(self, col_name):
+    @validate
+    def set_regioni_tag(self, col_name: str):
         _test_column_in_dataframe(self.original_df, col_name)
         self.regioni_tag = col_name
         self.regioni_code = _code_or_desc(list(self.original_df[col_name].unique()))
         self.regioni_result_tag = _get_tag_anag(self.regioni_code, cfg.LEVEL_REGIONE)
 
-    def set_comuni_tag(self, col_name, use_for_check_nation=False):
+    @validate
+    def set_comuni_tag(self, col_name: str, use_for_check_nation: bool = False):
         self.use_for_check_nation = use_for_check_nation
         _test_column_in_dataframe(self.original_df, col_name)
         self.comuni_tag = col_name
         self.comuni_code = _code_or_desc(list(self.original_df[col_name].unique()))
         self.comuni_result_tag = _get_tag_anag(self.comuni_code, cfg.LEVEL_COMUNE)
 
-    def set_province_tag(self, col_name):
+    @validate
+    def set_province_tag(self, col_name: str):
         _test_column_in_dataframe(self.original_df, col_name)
         self.province_tag = col_name
         self.province_code = _code_or_desc(list(self.original_df[col_name].unique()))
         self.province_result_tag = _get_tag_anag(self.province_code, cfg.LEVEL_PROVINCIA)
 
-    def set_latitude_longitude_tag(self, lat_col, long_col):
+    @validate
+    def set_latitude_longitude_tag(self, lat_col: str, long_col: str):
         _test_column_in_dataframe(self.original_df, lat_col)
         _test_column_in_dataframe(self.original_df, long_col)
         self.latitude_tag = lat_col
@@ -1425,7 +1339,8 @@ class GeoDataQuality:
         self.original_df.loc[pos, self.comuni_tag + self.check_tag] = True
         self.original_df.loc[pos, self.comuni_tag + self.propose_tag] = None
 
-    def start_check(self, show_only_warning=True, sensitive=False):
+    @validate
+    def start_check(self, show_only_warning: bool = True, sensitive: bool = False) -> pd.DataFrame:
         self.sensitive = sensitive
         col_list = [self.keys, self.nazione_tag, self.regioni_tag, self.province_tag, self.comuni_tag, self.latitude_tag, self.longitude_tag]
         col_list = [a for a in col_list if a is not None]
@@ -1604,7 +1519,12 @@ class GeoDataQuality:
         text_input = TextInput(value="", title=self.keys + ": ", width=200)
         return text_input
 
-    def plot_result(self, background_color="white", text_color="black", title="Geographical DataQuality", subtitle=None, show_only_warning=True, save_in_path=None):
+    @validate
+    def plot_result(self, background_color: str = "white", text_color: str = "black",
+                    title: str = "Geographical DataQuality",
+                    subtitle: str = None,
+                    show_only_warning: bool = True,
+                    save_in_path: Union[str, Path] = None):
         n_tot = self.original_df.shape[0]
         width = 1000
         width_check = 250
@@ -1993,5 +1913,112 @@ class GeoDataQuality:
 #         Z = np.exp(self.kde.score_samples(xy))
 #         return Z[0]
 
+
+# def get_population_nearby2(df, radius, latitude_columns=None, longitude_columns=None):
+#     population_df = get_high_resolution_population_density_df()
+#     #population_df = __create_geo_dataframe(population_df)
+#     long_tag = "Lon"
+#     lat_tag = "Lat"
+#     df["key_mapping"] = range(df.shape[0])
+#     radius_df = __create_geo_dataframe(df, lat_tag=latitude_columns, long_tag=longitude_columns)[["key_mapping", "geometry"]]
+#     radius_df = radius_df.to_crs({'init': 'epsg:4326'})
+#     x_dist2, y_dist2 = _distance_to_range_ccord(radius*1.1)
+#     x_dist, y_dist = _distance_to_range_ccord(radius)
+#     dist = (x_dist + y_dist) / 2
+#     radius_df["geometry2"] = radius_df["geometry"]
+#     more_precision = False
+#     if more_precision:
+#         radius_df["geometry"] = radius_df.apply(lambda x: x['geometry2'].buffer(dist, cap_style=1), axis=1)
+#     radius_df["population0"] = None
+#     radius_df["population1"] = None
+#     start = time.time()
+#     print("Start")
+#     for index, row in radius_df.iterrows():
+#         signle_population_df = population_df[(population_df[lat_tag].between(row["geometry2"].y-y_dist2, row["geometry2"].y+y_dist2) &
+#                                               population_df[long_tag].between(row["geometry2"].x-x_dist2, row["geometry2"].x+x_dist2))]
+#         population = signle_population_df["Population"].sum()
+#         radius_df.loc[index, 'population0'] = population
+#         if more_precision & (population > 0):
+#             signle_population_df = gpd.GeoDataFrame(signle_population_df.drop([long_tag, lat_tag], axis=1),
+#                                             crs={'init': 'epsg:4326'},
+#                                             geometry=gpd.points_from_xy(signle_population_df[long_tag], signle_population_df[lat_tag]))
+#             circle = radius_df.loc[radius_df.index == index, ["geometry"]]
+#             signle_population_df = gpd.sjoin(signle_population_df, circle, op='within')
+#             radius_df.loc[index, 'population1'] = signle_population_df["Population"].sum()
+#
+#     end = time.time()
+#     print('Change coord System', end - start)
+#     start = time.time()
+#     df["n_residents0"] = df["key_mapping"].map(radius_df.set_index("key_mapping")["population0"])
+#     if more_precision:
+#         df["n_residents1"] = df["key_mapping"].map(radius_df.set_index("key_mapping")["population1"])
+#     end = time.time()
+#     df.drop(["key_mapping"], axis=1, inplace=True)
+#     print('Mapping', end - start)
+#     return df
+#
+#
+# def get_population_nearby(df, radius, latitude_columns=None, longitude_columns=None):
+#     population_df = get_high_resolution_population_density_df()
+#     radius_df = df.rename_axis('key_mapping').reset_index()
+#     radius_df = __create_geo_dataframe(radius_df, lat_tag=latitude_columns, long_tag=longitude_columns)[["key_mapping", "geometry"]]
+#     radius_df = radius_df.to_crs({'init': 'epsg:4326'})
+#     if radius_df.shape[0] > 1000:
+#         log.info("Start creating the geopandas dataframe")
+#         start = datetime.now()
+#         long_tag = "Lon"
+#         lat_tag = "Lat"
+#         population_df = gpd.GeoDataFrame(
+#             population_df.drop([long_tag, lat_tag], axis=1),
+#             crs={'init': 'epsg:4326'},
+#             geometry=gpd.points_from_xy(population_df[long_tag], population_df[lat_tag]))
+#         end = datetime.now()
+#         log.info("Created the geopandas dataframe in {}".format(end - start))
+#         x_dist, y_dist = _distance_to_range_ccord(radius)
+#         dist = (x_dist + y_dist) / 2
+#         radius_df["geometry"] = radius_df.apply(lambda x: x['geometry'].buffer(dist, cap_style=1), axis=1)
+#         start = time.time()
+#         population_df = gpd.sjoin(population_df, radius_df, op='within')
+#         end = time.time()
+#         print('Join', end - start)
+#         start = time.time()
+#         mapping = population_df.groupby("key_mapping")["Population"].sum()
+#     else:
+#         pass
+#     df["n_residents"] = df["key_mapping"].map(mapping) / 10
+#     end = time.time()
+#     print('Mapping', end - start)
+#     return df
+#
+#
+# def _process_high_density_population_df(file_path, split_perc=0.05):
+#     file_path = str(file_path)
+#     df = pd.read_csv(file_path)
+#
+#     #df = get_city_from_coordinates(df)
+#     #df.drop(["geometry"], axis=1, inplace=True)
+#     #df.to_pickle(file_path.replace(".csv", ".pkl"))
+#
+#     # Split
+#     log.info("Start getting city from coordinates")
+#     split_path = PureWindowsPath(file_path.rsplit('\\', 1)[0]) / "split"
+#     os.mkdir(split_path)
+#     n_split = math.ceil(1 / split_perc)
+#     df_list = np.split(df, np.arange(1, n_split) * int(split_perc * len(df)))
+#     i = 0
+#     for df_i in df_list:
+#         df_i.to_pickle(split_path / PureWindowsPath(str(i) + ".pkl"))
+#         i += 1
+#     del df
+#     for filename in os.listdir(split_path):
+#         df = pd.read_pickle(split_path / filename)
+#         df = get_city_from_coordinates(df)
+#         df.to_pickle(split_path / filename)
+#     df = pd.DataFrame()
+#     for filename in os.listdir(split_path):
+#         df = pd.concat([pd.read_pickle(split_path / filename), df], ignore_index=True)
+#     df.drop(["geometry"], axis=1, inplace=True)
+#     log.info("End getting city from coordinates")
+#     df.to_pickle(str(file_path).replace(".csv", ".pkl"))
 
 

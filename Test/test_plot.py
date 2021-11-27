@@ -45,7 +45,7 @@ def test_plot_choropleth_map():
                                                 title="Semplificato",
                                                 save_path="comunale_semplificato.html")
     print("ok2")
-    plot_choropleth_map_comunale(test_df, cfg.TAG_COMUNE, "popolazione", filter_regioni=["lazio ", "campania"])
+    plot_choropleth_map_comunale(test_df, cfg.TAG_COMUNE, "popolazione", filter_regione=["lazio ", "campania"])
     print("ok3")
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
     ax[0].set_title("Popolazione")
@@ -58,32 +58,6 @@ def test_plot_choropleth_map():
     print("ok4")
 
 
-def test_2():
-    test_df = get_df_comuni().drop(["geometry"], axis=1)
-    # Aggiungo una finta categoria per i plot non quantitativi
-    test_df["prima_lettera"] = test_df[cfg.TAG_REGIONE].str[0]
-    plot_choropleth_map_comunale_interactive(test_df.sample(100),
-                                             "denominazione_comune",
-                                             {"popolazione": "Popolazione",
-                                              "superficie_km2": "Superficie",
-                                              "prima_lettera": "Prima Lettera"})
-
-    plot_choropleth_map_regionale_interactive(test_df[[cfg.TAG_REGIONE, "prima_lettera"]].drop_duplicates(),
-                                              "denominazione_regione",
-                                              {"prima_lettera": "Prima Lettera"})
-    plot_choropleth_map_provinciale_interactive(
-        test_df.groupby("denominazione_provincia")["popolazione"].sum().reset_index(),
-        "denominazione_provincia",
-        {"popolazione": "Popolazione"})
-    plot_choropleth_map_comunale_interactive(test_df,
-                                             "denominazione_comune",
-                                             {"popolazione": "Popolazione",
-                                              "superficie_km2": "Superficie",
-                                              "prima_lettera": "Prima Lettera"},
-                                             filter_regioni=["Toscana"],
-                                             title="Toscana")
-
-
 def test_point_map():
     # margins0 = _get_margins()
     # margins1 = _get_margins(comune="PRato")
@@ -94,13 +68,13 @@ def test_point_map():
     plot_point_map_interactive(test_df,
                                longitude_columns="center_x",
                                latitude_columns="center_y",
-                               filter_regione="Toscana")
+                               filter_regione="Toscana", show_flag=False)
     plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x',
                    size=12, title="Province", save_in_path="usage_point_map_comuni.png",
                    color_tag="popolazione")
     test_df = get_df_comuni()
     plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x',
-                   regione="Toscana", color_tag="denominazione_provincia",
+                   filter_regione="Toscana", color_tag="denominazione_provincia",
                    size=8, title="Comuni", save_in_path="usage_point_map_comuni2.png")
     plot_point_map(test_df, color_tag="popolazione", provincia="Prato")
     plot_point_map(test_df, color_tag="denominazione_regione", legend_font=5)
@@ -110,8 +84,6 @@ def test_point_map():
 def test_density():
     df = get_high_resolution_population_density_df()
     plot_kernel_density_estimation(df, n_grid_x=500, n_grid_y=500)
-
-
 
     # n = 1000
     # df = pd.DataFrame(index=range(n))
@@ -148,16 +120,14 @@ def test_density():
     # plot_kernel_density_estimation_interactive(test_df, value_tag="Population", provincia="Roma")
     # #plot_kernel_density_estimation(test_df)
 
-
     #plot_kernel_density_estimation_interactive(test_df, value_tag="Population", regione="Toscana")
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     test_plot_choropleth_map()
-    #test_point_map()
-    #test_density()
+    test_point_map()
+    test_density()
     unittest.main()
-    #test_2()
 
 

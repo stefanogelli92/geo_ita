@@ -18,7 +18,7 @@ class TestEnrichDataframe(unittest.TestCase):
 
     # get_coordinates_from_address
 
-    def xtest_get_coordinates_from_address_input(self):
+    def test_get_coordinates_from_address_input(self):
         df, address = ["via corso di Francia"], "address"
         with self.assertRaises(Exception):
             get_coordinates_from_address(df, address)
@@ -35,7 +35,7 @@ class TestEnrichDataframe(unittest.TestCase):
         self.assertEqual(0, result.shape[0])
         self.assertListEqual(["address", "latitude", "longitude"], list(result.columns))
 
-    def xtest_get_coordinates_from_address_match(self):
+    def test_get_coordinates_from_address_match(self):
         df, address = pd.DataFrame(data=[["Corso di Francia Roma"]], columns=["address"]), "address"
         result = get_coordinates_from_address(df, address)
         result = get_city_from_coordinates(result)
@@ -60,7 +60,7 @@ class TestEnrichDataframe(unittest.TestCase):
 
     # get_address_from_coordinates
 
-    def xtest_get_address_from_coordinates_input(self):
+    def test_get_address_from_coordinates_input(self):
         df = ["via corso di Francia"]
         with self.assertRaises(Exception):
             get_address_from_coordinates(df)
@@ -81,9 +81,9 @@ class TestEnrichDataframe(unittest.TestCase):
         result = get_address_from_coordinates(df)
         self.assertTrue(isinstance(result, pd.DataFrame))
         self.assertEqual(0, result.shape[0])
-        self.assertListEqual(['lat', 'lon', 'location', 'address', 'city'], list(result.columns))
+        self.assertListEqual(['lat', 'lon', 'address', 'city'], list(result.columns))
 
-    def xtest_get_address_from_coordinates_match(self):
+    def test_get_address_from_coordinates_match(self):
         df = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]], columns=["lat", "lon"])
         result = get_address_from_coordinates(df)
         self.assertEqual("Roma", result["city"].values[0])
@@ -92,11 +92,11 @@ class TestEnrichDataframe(unittest.TestCase):
         self.assertEqual("Roma", result["city"].values[0])
         df = pd.DataFrame(data=[[43.884609765796114, 8.8971202373737]], columns=["lat", "lon"])
         result = get_address_from_coordinates(df)
-        self.assertEqual("Roma", result["city"].values[0])
+        self.assertEqual(None, result["city"].values[0])
 
     # AddGeographicalInfo
 
-    def xtest_add_geographical_info_input(self):
+    def test_add_geographical_info_input(self):
         df = ["via corso di Francia"]
         with self.assertRaises(Exception):
             AddGeographicalInfo(df)
@@ -144,7 +144,7 @@ class TestEnrichDataframe(unittest.TestCase):
                                        cfg.TAG_AREA_GEOGRAFICA,
                                        cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE], list(result.columns))
 
-    def xtest_add_geographical_info_match(self):
+    def test_add_geographical_info_match(self):
         df = pd.DataFrame(data=[["Milano", "Milano", "Milano", "MI", "Lombardia"],
                                 ["florence", "Firenze", "Firenze", "FI", "Toscana"],
                                 ["porretta terme", "Alto Reno Terme", "Bologna", "BO", "Emilia-Romagna"],
@@ -166,7 +166,7 @@ class TestEnrichDataframe(unittest.TestCase):
         self.assertTrue(result["sigla"].equals(result["sl"]))
         self.assertTrue(result["denominazione_regione"].equals(result["regione"]))
 
-    def xtest_aggregate_point_by_distance(self):
+    def test_aggregate_point_by_distance(self):
         df = get_df_comuni()
         df = aggregate_point_by_distance(df, 5000, latitude_columns="center_y", longitude_columns="center_x")
 
@@ -201,120 +201,6 @@ class TestEnrichDataframe(unittest.TestCase):
         prova = ""
 
 
-def test_add_geographic_info():
-
-    prova = get_geo_info_from_comune("Prato")
-    prova2 = get_geo_info_from_regione("emilia romagna")
-
-    path = root_path / PureWindowsPath(r"data_sources/Test/uniform_name.xlsx")
-    test_df = pd.read_excel(path)
-    n_tot = test_df.shape[0]
-
-    geoInf = AddGeographicalInfo(test_df)
-    geoInf.set_comuni_tag("Citta")
-    geoInf.run_simple_match()
-    geoInf.run_find_frazioni()
-    #geoInf.run_similarity_match(unique_flag=False)
-    #geoInf.accept_similarity_result()
-    result = geoInf.get_result()
-
-    n_right = (result[cfg.TAG_COMUNE].fillna('-').eq(result["comune"].fillna('-'))).sum()
-    n_right2 = (result[cfg.TAG_PROVINCIA].fillna('-').eq(result["provincia"].fillna('-'))).sum()
-    perc_success = n_right / n_tot
-    log.info("Test1: {}, {}".format(round(perc_success * 100, 1), (n_right2 == n_tot - 1)))
-    if perc_success != 1:
-        log.warning("\n" + result.to_string())
-
-    geoInf = AddGeographicalInfo(test_df)
-    geoInf.set_comuni_tag("Citta")
-    geoInf.set_province_tag("sl")
-    geoInf.run_simple_match()
-    geoInf.run_find_frazioni()
-    geoInf.run_similarity_match(unique_flag=False)
-    geoInf.accept_similarity_result()
-    result = geoInf.get_result()
-
-    n_right = ((result[cfg.TAG_COMUNE].fillna('-').eq(result["comune"].fillna('-'))) &
-                (result[cfg.TAG_PROVINCIA].fillna('-').eq(result["provincia"].fillna('-')))).sum()
-    perc_success = n_right / n_tot
-    log.info("Test2:{}".format(round(perc_success * 100, 1)))
-    if perc_success < 1:
-        log.warning("\n" + result.to_string())
-
-    geoInf = AddGeographicalInfo(test_df)
-    geoInf.set_comuni_tag("Citta")
-    geoInf.set_province_tag("provincia")
-    geoInf.run_simple_match()
-    geoInf.run_find_frazioni()
-    geoInf.run_similarity_match(unique_flag=False)
-    geoInf.accept_similarity_result()
-    result = geoInf.get_result()
-
-    n_right = ((result[cfg.TAG_COMUNE].fillna('-').eq(result["comune"].fillna('-'))) &
-               (result[cfg.TAG_PROVINCIA].fillna('-').eq(result["provincia"].fillna('-')))).sum()
-    perc_success = n_right / n_tot
-    log.info("Test3:{}".format(round(perc_success * 100, 1)))
-    if perc_success < 1:
-        log.warning("\n" + result.to_string())
-
-    geoInf = AddGeographicalInfo(test_df)
-    geoInf.set_comuni_tag("Citta")
-    geoInf.set_regioni_tag("regione")
-    geoInf.run_simple_match()
-    geoInf.run_find_frazioni()
-    geoInf.run_similarity_match(unique_flag=False)
-    geoInf.accept_similarity_result()
-    result = geoInf.get_result()
-
-    n_right = ((result[cfg.TAG_COMUNE].fillna('-').eq(result["comune"].fillna('-'))) &
-               (result[cfg.TAG_PROVINCIA].fillna('-').eq(result["provincia"].fillna('-')))).sum()
-    perc_success = n_right / n_tot
-    log.info("Test4:{}".format(round(perc_success * 100, 1)))
-    if perc_success < 1:
-        log.warning("\n" + result.to_string())
-
-    geoInf = AddGeographicalInfo(test_df)
-    geoInf.set_province_tag("sl")
-    geoInf.set_regioni_tag("regione")
-    geoInf.run_simple_match()
-    result = geoInf.get_result()
-
-    n_right = (result[cfg.TAG_PROVINCIA].fillna('-').eq(result["provincia"].fillna('-')) |
-               result["provincia"].isna() | result["sl"].isna()).sum()
-    perc_success = n_right / n_tot
-    log.info("Test5:{}".format(round(perc_success * 100, 1)))
-    if perc_success < 1:
-        log.warning("\n" + result.to_string())
-
-    geoInf = AddGeographicalInfo(test_df)
-    geoInf.set_province_tag("provincia")
-    geoInf.run_simple_match()
-    result = geoInf.get_result()
-
-    n_right = (result[cfg.TAG_SIGLA].fillna('-').eq(result["sl"].fillna('-')) |
-               result["provincia"].isna() | result["sl"].isna()).sum()
-    perc_success = n_right / n_tot
-    log.info("Test6:{}".format(round(perc_success * 100, 1)))
-    if perc_success < 1:
-        log.warning("\n" + result.to_string())
-
-
-def test_find_coordinates_system():
-    test_df = get_df_comuni()
-    result = __find_coordinates_system(test_df, "center_y", "center_x")
-    log.info("Test1: {}".format(result == "epsg:32632"))
-
-    path = root_path / PureWindowsPath(r"data_sources/Test/farmacie_italiane.csv")
-    test_df = pd.read_csv(path, sep=";", engine='python')
-    test_df = test_df[test_df["LATITUDINE"] != "-"]
-    test_df["LATITUDINE"] = test_df["LATITUDINE"].str.replace(",", ".")
-    test_df["LONGITUDINE"] = test_df["LONGITUDINE"].str.replace(",", ".")
-    test_df["LATITUDINE"] = test_df["LATITUDINE"].astype(float)
-    test_df["LONGITUDINE"] = test_df["LONGITUDINE"].astype(float)
-    result = __find_coordinates_system(test_df, "LATITUDINE", "LONGITUDINE")
-    log.info("Test2: {}".format(result == "epsg:4326"))
-
-
 def test_KDEDensity():
     test_df = pd.read_pickle(
         r"C:\Users\A470222\Documents\Python Scripts\ex_mobility\data\Geo/Densita\population_ita_2019-07-01.pkl")
@@ -330,7 +216,5 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     unittest.main()
 
-    #test_add_geographic_info()
-    #test_find_coordinates_system()
     #test_KDEDensity()
 

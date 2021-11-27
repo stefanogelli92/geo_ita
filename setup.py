@@ -7,7 +7,8 @@ with open("README.md", "r") as readme_file:
 requirements = ["pandas", "twine", "geopandas", "geopy",
                 "matplotlib>=3.1.1", "numpy", "descartes",
                 "xlrd==1.2.0", "unidecode", "pyproj",
-                "bokeh", "requests", "beautifulsoup4", "google", "scipy", "google-api-python-client"]
+                "bokeh", "requests", "beautifulsoup4", "google", "scipy",
+                "google-api-python-client", "valdec"]
 
 setup(
     name="geo_ita",

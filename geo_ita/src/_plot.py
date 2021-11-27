@@ -1,11 +1,14 @@
 import os
 import logging
+from typing import Union, Dict, List
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.cm import get_cmap
 from matplotlib.patches import Patch
 from matplotlib.ticker import FuncFormatter
+from matplotlib.axes import Axes
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -22,6 +25,8 @@ from bokeh.models import (ColumnDataSource, Circle,
                           WheelZoomTool, HoverTool, DataTable, TableColumn, Select,
                           CustomJS, GeoJSONDataSource, ColorBar,
                           CategoricalColorMapper, NumberFormatter, NumeralTickFormatter)
+from bokeh.models.plots import Plot
+from valdec.decorators import validate
 
 import geo_ita.src.config as cfg
 from geo_ita.src._data import get_df_comuni, get_df_province, get_df_regioni, _get_shape_italia
@@ -95,7 +100,7 @@ def _plot_choropleth_map(df, color, ax, title, show_colorbar, vmin, vmax, numeri
         df.plot('count', cmap=cmap, vmin=vmin, vmax=vmax, linewidth=line_width, edgecolor='0.8', ax=ax)
         if show_colorbar & numeric_values:
             fmt = lambda x, pos: str(prefix) + _human_format(x) + str(suffix)
-            cbar = fig.colorbar(sm, format=FuncFormatter(fmt))
+            cbar = ax.get_figure().colorbar(sm, format=FuncFormatter(fmt))
             cbar.ax.tick_params(labelsize=10)
     else:
         df.plot('count', linewidth=line_width, edgecolor='0.8', ax=ax, color=df["color"].values)
@@ -290,23 +295,24 @@ def _create_choropleth_map(df0,
     return fig
 
 
-def plot_choropleth_map_regionale(df,
-                                  region_tag,
-                                  value_tag,
+@validate
+def plot_choropleth_map_regionale(df: pd.DataFrame,
+                                  region_tag: str,
+                                  value_tag: str,
                                   ax=None,
-                                  title=None,
+                                  title: str = None,
                                   color="b",
-                                  show_colorbar=True,
-                                  vmin=None,
-                                  vmax=None,
-                                  print_labels=True,
-                                  prefix="",
-                                  suffix="",
-                                  filter_regione=None,
-                                  print_perc=False,
-                                  labels_size=None,
-                                  save_path=None,
-                                  dpi=100):
+                                  show_colorbar: bool = True,
+                                  vmin: Union[float, int] = None,
+                                  vmax: Union[float, int] = None,
+                                  print_labels: bool = True,
+                                  prefix: str = "",
+                                  suffix: str = "",
+                                  filter_regione: Union[str, List[str]] = None,
+                                  print_perc: bool = False,
+                                  labels_size: Union[float, int] = None,
+                                  save_path: Union[str, Path] = None,
+                                  dpi: int = 100):
     _create_choropleth_map(df,
                            region_tag,
                            value_tag,
@@ -328,24 +334,25 @@ def plot_choropleth_map_regionale(df,
                            dpi=dpi)
 
 
-def plot_choropleth_map_provinciale(df,
-                                    province_tag,
-                                    value_tag,
+@validate
+def plot_choropleth_map_provinciale(df: pd.DataFrame,
+                                    province_tag: str,
+                                    value_tag: str,
                                     ax=None,
-                                    title=None,
+                                    title: str = None,
                                     color="b",
-                                    show_colorbar=True,
-                                    vmin=None,
-                                    vmax=None,
-                                    print_labels=False,
-                                    prefix="",
-                                    suffix="",
-                                    filter_regione=None,
-                                    filter_provincia=None,
-                                    print_perc=False,
-                                    labels_size=None,
-                                    save_path=None,
-                                    dpi=100):
+                                    show_colorbar: bool = True,
+                                    vmin: Union[float, int] = None,
+                                    vmax: Union[float, int] = None,
+                                    print_labels: bool = True,
+                                    prefix: str = "",
+                                    suffix: str = "",
+                                    filter_regione: Union[str, List[str]] = None,
+                                    filter_provincia: Union[str, List[str]] = None,
+                                    print_perc: bool = False,
+                                    labels_size: Union[float, int] = None,
+                                    save_path: Union[str, Path] = None,
+                                    dpi: int = 100):
     if filter_regione:
         level_filter = cfg.LEVEL_REGIONE
         filter_list = filter_regione
@@ -376,25 +383,26 @@ def plot_choropleth_map_provinciale(df,
                            dpi=dpi)
 
 
-def plot_choropleth_map_comunale(df,
-                                 comuni_tag,
-                                 value_tag,
+@validate
+def plot_choropleth_map_comunale(df: pd.DataFrame,
+                                 comuni_tag: str,
+                                 value_tag: str,
                                  ax=None,
-                                 title=None,
+                                 title: str = None,
                                  color="b",
-                                 show_colorbar=True,
-                                 vmin=None,
-                                 vmax=None,
-                                 print_labels=False,
-                                 prefix="",
-                                 suffix="",
-                                 filter_regione=None,
-                                 filter_provincia=None,
-                                 filter_comune=None,
-                                 print_perc=False,
-                                 labels_size=None,
-                                 save_path=None,
-                                 dpi=100):
+                                 show_colorbar: bool = True,
+                                 vmin: Union[float, int] = None,
+                                 vmax: Union[float, int] = None,
+                                 print_labels: bool = True,
+                                 prefix: str = "",
+                                 suffix: str = "",
+                                 filter_regione: Union[str, List[str]] = None,
+                                 filter_provincia: Union[str, List[str]] = None,
+                                 filter_comune: Union[str, List[str]] = None,
+                                 print_perc: bool = False,
+                                 labels_size: Union[float, int] = None,
+                                 save_path: Union[str, Path] = None,
+                                 dpi: int = 100):
     if filter_regione:
         level_filter = cfg.LEVEL_REGIONE
         filter_list = filter_regione
@@ -496,19 +504,20 @@ def _create_choropleth_map_interactive(df0,
         shape_regioni = gpd.GeoDataFrame(shape_regioni, geometry="geometry")
         shape_list.append((shape_regioni, 0.5, cfg.LEVEL_REGIONE))
 
-    plot = plot_bokeh_choropleth_map(df, geo_tag_anag, level, dict_values, title=title, shape_list=shape_list)
+    plot = _plot_bokeh_choropleth_map(df, geo_tag_anag, level, dict_values, title=title, shape_list=shape_list)
 
     return plot
 
 
-def plot_choropleth_map_comunale_interactive(df_comunale,
-                                             comuni_tag,
-                                             dict_values,
-                                             title="",
-                                             filter_regione=None,
-                                             filter_provincia=None,
-                                             filter_comune=None,
-                                             save_path=None):
+@validate
+def plot_choropleth_map_comunale_interactive(df_comunale: pd.DataFrame,
+                                             comuni_tag: str,
+                                             dict_values: Dict[str, str],
+                                             title: str = "",
+                                             filter_regione: Union[str, List[str]] = None,
+                                             filter_provincia: Union[str, List[str]] = None,
+                                             filter_comune: Union[str, List[str]] = None,
+                                             save_path: Union[str, Path] = None):
     if filter_regione:
         level_filter = cfg.LEVEL_REGIONE
         filter_list = filter_regione
@@ -536,13 +545,14 @@ def plot_choropleth_map_comunale_interactive(df_comunale,
         show(plot)
 
 
-def plot_choropleth_map_provinciale_interactive(df_provinciale,
-                                                province_tag,
-                                                dict_values,
-                                                title="",
-                                                filter_regione=None,
-                                                filter_provincia=None,
-                                                save_path=None):
+@validate
+def plot_choropleth_map_provinciale_interactive(df_provinciale: pd.DataFrame,
+                                                province_tag: str,
+                                                dict_values: Dict[str, str],
+                                                title: str = "",
+                                                filter_regione: Union[str, List[str]] = None,
+                                                filter_provincia: Union[str, List[str]] = None,
+                                                save_path: Union[str, Path] = None):
     if filter_regione:
         level_filter = cfg.LEVEL_REGIONE
         filter_list = filter_regione
@@ -567,12 +577,13 @@ def plot_choropleth_map_provinciale_interactive(df_provinciale,
         show(plot)
 
 
-def plot_choropleth_map_regionale_interactive(df_regionale,
-                                              regioni_tag,
-                                              dict_values,
-                                              title="",
-                                              filter_regione=None,
-                                              save_path=None):
+@validate
+def plot_choropleth_map_regionale_interactive(df_regionale: pd.DataFrame,
+                                              regioni_tag: str,
+                                              dict_values: Dict[str, str],
+                                              title: str = "",
+                                              filter_regione: Union[str, List[str]] = None,
+                                              save_path: Union[str, Path] = None):
     if filter_regione:
         level_filter = cfg.LEVEL_REGIONE
         filter_list = filter_regione
@@ -594,7 +605,7 @@ def plot_choropleth_map_regionale_interactive(df_regionale,
         show(plot)
 
 
-def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape_list=[]):
+def _plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape_list=[]):
     geodf = gpd.GeoDataFrame(df0)
 
     inverted_dict = {value: key for (key, value) in dict_values.items()}
@@ -794,20 +805,21 @@ def plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape_
     return plot
 
 
-def plot_point_map(df0,
-                   latitude_columns=None,
-                   longitude_columns=None,
-                   filter_comune=None,
-                   filter_provincia=None,
-                   filter_regione=None,
-                   color_tag=None,
+@validate
+def plot_point_map(df0: pd.DataFrame,
+                   latitude_columns: str = None,
+                   longitude_columns: str = None,
+                   filter_comune: Union[str, List[str]] = None,
+                   filter_provincia: Union[str, List[str]] = None,
+                   filter_regione: Union[str, List[str]] = None,
+                   color_tag: str = None,
                    ax=None,
-                   title=None,
-                   legend_font=None,
-                   show_colorbar=True,
-                   size=6,
-                   save_in_path=None,
-                   dpi=100):
+                   title: str = None,
+                   legend_font: Union[int, float] = None,
+                   show_colorbar: bool = True,
+                   size: int = 6,
+                   save_in_path: Union[str, Path] = None,
+                   dpi: int = 100) -> Axes:
     filter_comune = _check_filter(filter_comune)
     filter_provincia = _check_filter(filter_provincia)
     filter_regione = _check_filter(filter_regione)
@@ -933,20 +945,21 @@ def plot_point_map(df0,
     return ax
 
 
-def plot_point_map_interactive(df0,
-                               latitude_columns=None,
-                               longitude_columns=None,
-                               filter_comune=None,
-                               filter_provincia=None,
-                               filter_regione=None,
-                               color_tag=None,
-                               info_dict=None,
-                               title=None,
-                               table=True,
-                               plot_width=1500,
-                               plot_height=800,
-                               save_in_path=None,
-                               show_flag=True):
+@validate("return", exclude=True)
+def plot_point_map_interactive(df0: pd.DataFrame,
+                               latitude_columns: str = None,
+                               longitude_columns: str = None,
+                               filter_comune: Union[str, List[str]] = None,
+                               filter_provincia: Union[str, List[str]] = None,
+                               filter_regione: Union[str, List[str]] = None,
+                               color_tag: str = None,
+                               info_dict: Dict[str, str] = None,
+                               title: str = None,
+                               table: bool = True,
+                               plot_width: int = 1500,
+                               plot_height: int = 800,
+                               save_in_path: Union[str, Path] = None,
+                               show_flag: bool = True) -> Plot:
     filter_comune = _check_filter(filter_comune)
     filter_provincia = _check_filter(filter_provincia)
     filter_regione = _check_filter(filter_regione)
@@ -1153,19 +1166,21 @@ def sizeof_fmt(num, suffix='B'):
         num /= 1024.0
     return "%.1f %s%s" % (num, 'Yi', suffix)
 
-def plot_kernel_density_estimation(df0,
-                                   latitude_columns=None,
-                                   longitude_columns=None,
-                                   value_tag=None,
-                                   comune=None,
-                                   provincia=None,
-                                   regione=None,
-                                   n_grid_x=1000,
-                                   n_grid_y=1000,
+
+@validate
+def plot_kernel_density_estimation(df0: pd.DataFrame,
+                                   latitude_columns: str = None,
+                                   longitude_columns: str = None,
+                                   value_tag: str = None,
+                                   comune: str = None,
+                                   provincia: str = None,
+                                   regione: str = None,
+                                   n_grid_x: int = 1000,
+                                   n_grid_y: int = 1000,
                                    ax=None,
-                                   title=None,
-                                   save_in_path=None,
-                                   dpi=100):
+                                   title: str = None,
+                                   save_in_path: Union[str, Path] = None,
+                                   dpi: int = 100):
 
     df = __create_geo_dataframe(df0, lat_tag=latitude_columns, long_tag=longitude_columns)
     coord_system_input = df.crs['init']
@@ -1256,20 +1271,21 @@ def plot_kernel_density_estimation(df0,
     return ax
 
 
-def plot_kernel_density_estimation_interactive(df0,
-                                               latitude_columns=None,
-                                               longitude_columns=None,
-                                               value_tag=None,
-                                               filter_comune=None,
-                                               filter_provincia=None,
-                                               filter_regione=None,
-                                               n_grid_x=1000,
-                                               n_grid_y=1000,
-                                               title=None,
-                                               plot_width=1500,
-                                               plot_height=800,
-                                               save_in_path=None,
-                                               show_flag=True):
+@validate
+def plot_kernel_density_estimation_interactive(df0: pd.DataFrame,
+                                               latitude_columns: str = None,
+                                               longitude_columns: str = None,
+                                               value_tag: str = None,
+                                               filter_comune: Union[str, List[str]] = None,
+                                               filter_provincia: Union[str, List[str]] = None,
+                                               filter_regione: Union[str, List[str]] = None,
+                                               n_grid_x: int = 1000,
+                                               n_grid_y: int = 1000,
+                                               title: str = None,
+                                               plot_width: Union[int, float] = 1500,
+                                               plot_height: Union[int, float] = 800,
+                                               save_in_path: Union[str, Path] = None,
+                                               show_flag: bool = True) -> Plot:
     df = df0.copy()
     if (latitude_columns is None) or (longitude_columns is None):
         flag_coord_found, latitude_columns, longitude_columns = __find_coord_columns(df)
