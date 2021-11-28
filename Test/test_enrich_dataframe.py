@@ -18,7 +18,7 @@ class TestEnrichDataframe(unittest.TestCase):
 
     # get_coordinates_from_address
 
-    def test_get_coordinates_from_address_input(self):
+    def xtest_get_coordinates_from_address_input(self):
         df, address = ["via corso di Francia"], "address"
         with self.assertRaises(Exception):
             get_coordinates_from_address(df, address)
@@ -35,7 +35,7 @@ class TestEnrichDataframe(unittest.TestCase):
         self.assertEqual(0, result.shape[0])
         self.assertListEqual(["address", "latitude", "longitude"], list(result.columns))
 
-    def test_get_coordinates_from_address_match(self):
+    def xtest_get_coordinates_from_address_match(self):
         df, address = pd.DataFrame(data=[["Corso di Francia Roma"]], columns=["address"]), "address"
         result = get_coordinates_from_address(df, address)
         result = get_city_from_coordinates(result)
@@ -60,7 +60,7 @@ class TestEnrichDataframe(unittest.TestCase):
 
     # get_address_from_coordinates
 
-    def test_get_address_from_coordinates_input(self):
+    def xtest_get_address_from_coordinates_input(self):
         df = ["via corso di Francia"]
         with self.assertRaises(Exception):
             get_address_from_coordinates(df)
@@ -83,7 +83,7 @@ class TestEnrichDataframe(unittest.TestCase):
         self.assertEqual(0, result.shape[0])
         self.assertListEqual(['lat', 'lon', 'address', 'city'], list(result.columns))
 
-    def test_get_address_from_coordinates_match(self):
+    def xtest_get_address_from_coordinates_match(self):
         df = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]], columns=["lat", "lon"])
         result = get_address_from_coordinates(df)
         self.assertEqual("Roma", result["city"].values[0])
@@ -96,7 +96,7 @@ class TestEnrichDataframe(unittest.TestCase):
 
     # AddGeographicalInfo
 
-    def test_add_geographical_info_input(self):
+    def xtest_add_geographical_info_input(self):
         df = ["via corso di Francia"]
         with self.assertRaises(Exception):
             AddGeographicalInfo(df)
@@ -144,7 +144,7 @@ class TestEnrichDataframe(unittest.TestCase):
                                        cfg.TAG_AREA_GEOGRAFICA,
                                        cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE], list(result.columns))
 
-    def test_add_geographical_info_match(self):
+    def xtest_add_geographical_info_match(self):
         df = pd.DataFrame(data=[["Milano", "Milano", "Milano", "MI", "Lombardia"],
                                 ["florence", "Firenze", "Firenze", "FI", "Toscana"],
                                 ["porretta terme", "Alto Reno Terme", "Bologna", "BO", "Emilia-Romagna"],
@@ -166,7 +166,7 @@ class TestEnrichDataframe(unittest.TestCase):
         self.assertTrue(result["sigla"].equals(result["sl"]))
         self.assertTrue(result["denominazione_regione"].equals(result["regione"]))
 
-    def test_aggregate_point_by_distance(self):
+    def xtest_aggregate_point_by_distance(self):
         df = get_df_comuni()
         df = aggregate_point_by_distance(df, 5000, latitude_columns="center_y", longitude_columns="center_x")
 

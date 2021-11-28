@@ -14,3 +14,4 @@ beautifulsoup4
 google
 scipy
 google-api-python-client
+valdec

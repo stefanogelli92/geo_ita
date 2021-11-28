@@ -6,7 +6,7 @@ import logging
 import ssl
 from pathlib import PureWindowsPath
 from datetime import datetime
-from typing import Dict, Union
+from typing import Dict, Union, List
 
 from valdec.decorators import validate
 
@@ -85,7 +85,7 @@ def _test_column_in_dataframe(df: pd.DataFrame, col):
 class AddGeographicalInfo:
     @validate
     def __init__(self, df: pd.DataFrame):
-        self.original_df = df
+        self.original_df = df.where(pd.notnull(df), None)
         self.keys = None
         self.df = None
         self.comuni, self.province, self.sigle, self.regioni = _get_list()
@@ -175,14 +175,17 @@ class AddGeographicalInfo:
         else:
             self._run_denominazione()
 
+    def _check_non_match(self):
+        self.not_match = self.df[self.df[cfg.KEY_UNIQUE].notnull() & (~self.df[cfg.KEY_UNIQUE].isin(self.list_anag))]
+        return self.not_match[cfg.KEY_UNIQUE].nunique()
+
     def _run_sigla(self):
         self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].str.lower()
         self.info_df[cfg.KEY_UNIQUE] = self.info_df[cfg.KEY_UNIQUE].str.lower()
-        list_input = self.df[self.df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique()
-        self.list_anag = self.info_df[self.info_df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique()
-        n_tot = len(list_input)
-        self.not_match = list(set(list_input) - set(self.list_anag))
-        n_not_match = len(self.not_match)
+        self.list_anag = list(self.info_df[self.info_df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique())
+        n_tot = self.df[self.df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].nunique()
+
+        n_not_match = self._check_non_match()
 
         if n_not_match == 0:
             log.info("Matching completed, found {} different sigle.".format(n_tot))
@@ -192,11 +195,11 @@ class AddGeographicalInfo:
     def _run_codice(self):
         self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].astype(int, errors='ignore')
         self.info_df[cfg.KEY_UNIQUE] = self.info_df[cfg.KEY_UNIQUE].astype(int, errors='ignore')
-        list_input = self.df[self.df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique()
-        self.list_anag = self.info_df[self.info_df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique()
-        n_tot = len(list_input)
-        self.not_match = list(set(list_input) - set(self.list_anag))
-        n_not_match = len(self.not_match)
+        self.list_anag = list(self.info_df[self.info_df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique())
+
+        n_tot = self.df[self.df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].nunique()
+
+        n_not_match = self._check_non_match()
 
         if n_not_match == 0:
             log.info("Matching completed, found {} different codes.".format(n_tot))
@@ -212,31 +215,68 @@ class AddGeographicalInfo:
 
         self.df[cfg.KEY_UNIQUE] = _clean_denom_text(self.df[cfg.KEY_UNIQUE])
         self.info_df[cfg.KEY_UNIQUE] = _clean_denom_text(self.info_df[cfg.KEY_UNIQUE])
+        self.list_anag = list(self.info_df[self.info_df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique())
 
         if self.level == cfg.LEVEL_COMUNE:
             self._rename_any_english_name()
             self._find_any_variation_from_istat_history()
 
-        list_den_input = self.df[self.df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique()
-        self.list_anag = self.info_df[self.info_df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique()
+        n_tot = self.df[self.df[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].nunique()
 
-        n_tot = len(list_den_input)
-
-        self.not_match = list(set(list_den_input) - set(self.list_anag))
+        _ = self._check_non_match()
 
         self._try_custom_replace_denom()
 
-        n_not_match = len(self.not_match)
+        n_not_match = self._check_non_match()
 
         if n_not_match == 0:
             log.info("Matching completed, found {} different names.".format(n_tot))
         else:
             log.warning("Matched {} over {}.".format(n_tot - n_not_match, n_tot))
 
-    def get_not_matched(self):
+    def _clean_hierarchical_structure(self):
+        if self.province_tag is not None:
+            self.not_match[self.province_tag + cfg.UNIQUE_TAG] = self.not_match[self.province_tag]
+            if self.province_code != cfg.CODE_DENOMINAZIONE:
+                tag = _get_tag_anag(self.province_code, self.province_tag)
+                mapping = self.info_df[[tag, cfg.TAG_PROVINCIA]].drop_duplicates()
+                if self.province_code == cfg.CODE_CODICE_ISTAT:
+                    mapping[tag] = mapping[tag].astype(int, errors='ignore')
+                    self.not_match[self.province_tag + cfg.UNIQUE_TAG] = self.not_match[self.province_tag + cfg.UNIQUE_TAG].astype(int, errors='ignore')
+                else:
+                    mapping[tag] = mapping[tag].str.lower()
+                    self.not_match[self.province_tag + cfg.UNIQUE_TAG] = self.not_match[self.province_tag + cfg.UNIQUE_TAG].str.lower()
+                mapping = mapping.set_index(tag)[cfg.TAG_PROVINCIA]
+                self.not_match[self.province_tag + cfg.UNIQUE_TAG] = self.not_match[self.province_tag + cfg.UNIQUE_TAG].map(mapping)
+            self.not_match[self.province_tag + cfg.UNIQUE_TAG] = _clean_denom_text(self.not_match[self.province_tag + cfg.UNIQUE_TAG])
+        if self.regioni_tag is not None:
+            self.not_match[self.regioni_tag + cfg.UNIQUE_TAG] = self.not_match[self.regioni_tag]
+            if self.regioni_code == cfg.CODE_DENOMINAZIONE:
+                self.not_match[self.regioni_tag + cfg.UNIQUE_TAG] = _clean_denom_text(
+                    self.not_match[self.regioni_tag + cfg.UNIQUE_TAG])
+            else:
+                tag = _get_tag_anag(self.regioni_code, self.regioni_tag)
+                mapping = self.info_df[[tag, cfg.TAG_REGIONE]].drop_duplicates()
+                mapping[tag] = mapping[tag].astype(int, errors='ignore')
+                self.not_match[self.regioni_tag + cfg.UNIQUE_TAG] = self.not_match[self.regioni_tag + cfg.UNIQUE_TAG].astype(int, errors='ignore')
+                mapping = mapping.set_index(tag)[cfg.TAG_REGIONE]
+                self.not_match[self.regioni_tag + cfg.UNIQUE_TAG] = self.not_match[self.regioni_tag + cfg.UNIQUE_TAG].map(mapping)
+            self.not_match[self.regioni_tag + cfg.UNIQUE_TAG] = _clean_denom_text(self.not_match[self.regioni_tag + cfg.UNIQUE_TAG])
+
+
+    @validate
+    def get_not_matched_list(self) -> List[str]:
         if self.not_match is None:
             raise Exception("Run simple match before get list of not matched values.")
-        return self.not_match
+        result = list(self.not_match[self.not_match[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique())
+        return result
+
+    @validate
+    def get_n_not_matched(self) -> int:
+        if self.not_match is None:
+            raise Exception("Run simple match before get list of not matched values.")
+        result = self.not_match[self.not_match[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].nunique()
+        return result
 
     def _test_if_df_contains_homonym_comuni(self):
         info_tag_details = cfg.TAG_SIGLA
@@ -308,14 +348,13 @@ class AddGeographicalInfo:
 
     def _try_custom_replace_denom(self):
         list_den_anagrafica = self.list_anag
-        list_den_not_found = self.not_match
+        list_den_not_found = self.get_not_matched_list()
         dict_den_anag = {self._custom_replace_denom(a): a for a in list_den_anagrafica}
         dict_den_not_found = {a: self._custom_replace_denom(a) for a in list_den_not_found}
         dict_den_not_found = {k: dict_den_anag[v] for k, v in dict_den_not_found.items() if v in dict_den_anag.keys()}
 
         self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].replace(dict_den_not_found)
-
-        self.not_match = [a for a in self.not_match if a not in dict_den_not_found.keys()]
+        _ = self._check_non_match()
 
     @staticmethod
     def _custom_replace_denom(value):
@@ -325,16 +364,37 @@ class AddGeographicalInfo:
         return value
 
     def run_find_frazioni(self):
+        if (self.code != cfg.CODE_DENOMINAZIONE) & (self.level != cfg.LEVEL_COMUNE):
+            raise Exception("Run find_frazioni only to find comune by denomination.")
+        if self.not_match is None:
+            raise Exception("Run simple match before.")
         geolocator = Nominatim(timeout=10, user_agent=cfg.USER_AGENT)  # "trial"
         geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
         regioni = [_clean_denom_text_value(a) for a in self.regioni]
         province = [_clean_denom_text_value(a) for a in self.province]
         comuni = [_clean_denom_text_value(a) for a in self.comuni]
         match_dict = {}
-        n = len(self.not_match)
+        n = self.get_n_not_matched()
         log.info("Needed at least {} seconds".format(n))
-        for el in self.not_match:
-            p = geocode(el + ", italia")
+        if (n > 0) & ((self.province_tag is not None) | (self.regioni_tag is not None)):
+            self._clean_hierarchical_structure()
+        for index, row in self.not_match.iterrows():
+            check_flag = False
+            check = None
+            if (self.province_tag is not None) and (row[self.province_tag] is not None):
+                check_flag = True
+                check = row[self.province_tag + cfg.UNIQUE_TAG]
+                check_level = cfg.LEVEL_PROVINCIA
+                mapping_value = row[self.province_tag]
+            elif (self.regioni_tag is not None) and (row[self.regioni_tag] is not None):
+                check_flag = True
+                check = row[self.regioni_tag + cfg.UNIQUE_TAG]
+                mapping_value = row[self.regioni_tag]
+            el = row[cfg.KEY_UNIQUE]
+            if check_flag:
+                p = geocode(el + ", " + check + ", italia")
+            else:
+                p = geocode(el + ", italia")
             if p is not None:
                 address = p.address
                 if el in address.lower():
@@ -351,26 +411,56 @@ class AddGeographicalInfo:
                             comune2 = _clean_denom_text_value(comune2[:-2])
                         if (regione in regioni) & (provincia in province):
                             if comune in comuni:
-                                match_dict[el] = comune
+                                pass
                             elif (comune2 is not None) and (comune2 in comuni):
-                                match_dict[el] = comune2
+                                comune = comune2
                             elif provincia in comuni:
-                                match_dict[el] = provincia
+                                comune = provincia
+                            if not check_flag:
+                                self.df[cfg.KEY_UNIQUE].replace(el, comune, inplace=True)
+                                match_dict[el] = comune
+                            elif check_level == cfg.LEVEL_PROVINCIA:
+                                if provincia == check:
+                                    match_dict["{}+{}".format(el, provincia)] = comune
+                                    pos = (self.df[cfg.KEY_UNIQUE] == el) & (self.df[self.province_tag] == mapping_value)
+                                    self.df.loc[pos, "cfg.KEY_UNIQUE"] = comune
+                            elif check_level == cfg.LEVEL_REGIONE:
+                                if regione == check:
+                                    match_dict["{}+{}".format(el, regione)] = comune
+                                    pos = (self.df[cfg.KEY_UNIQUE] == el) & (self.df[self.regioni_tag] == mapping_value)
+                                    self.df.loc[pos, "cfg.KEY_UNIQUE"] = comune
+
         if len(match_dict) > 0:
-            log.info("Match {} name that corrisponds to a possible frazione of a comune:\n{}".format(len(match_dict), match_dict))
-            self.not_match = [x for x in self.not_match if x not in match_dict.keys()]
-            self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].replace(match_dict)
-        if self.frazioni_dict is not None:
-            self.frazioni_dict.update(match_dict)
-        else:
-            self.frazioni_dict = match_dict
+            log.info("Match {} name that corrisponds to a possible frazione of a comune:\n{}".format(len(match_dict),
+                                                                                                     {k.split("-")[0]: v for k,v in match_dict.items()}))
+            _ = self._check_non_match()
+
 
     @validate
     def run_find_frazioni_from_google(self, n_url_read: int = 1):
         comuni = [_clean_denom_text_value(a) for a in self.comuni]
         match_dict = {}
-        for el in self.not_match:
-            query = """ "{}" è una frazione del comune di""".format(el)
+        n = self.get_n_not_matched()
+        log.info("Needed at least {} seconds".format(n))
+        if (n > 0) & ((self.province_tag is not None) | (self.regioni_tag is not None)):
+            self._clean_hierarchical_structure()
+        for index, row in self.not_match.iterrows():
+            check_flag = False
+            check = None
+            if (self.province_tag is not None) and (row[self.province_tag] is not None):
+                check_flag = True
+                check = row[self.province_tag + cfg.UNIQUE_TAG]
+                check_level = cfg.LEVEL_PROVINCIA
+                mapping_value = row[self.province_tag]
+            elif (self.regioni_tag is not None) and (row[self.regioni_tag] is not None):
+                check_flag = True
+                check = row[self.regioni_tag + cfg.UNIQUE_TAG]
+                mapping_value = row[self.regioni_tag]
+            el = row[cfg.KEY_UNIQUE]
+            if check_flag:
+                query = """ "{}" è una frazione del comune di {}""".format(el, check)
+            else:
+                query = """ "{}" è una frazione del comune di""".format(el)
             match_comuni = []
             urls = []
             try:
@@ -416,28 +506,39 @@ class AddGeographicalInfo:
                         test_name = [" ".join(find_comuni[:i + 1]) for i in range(len(find_comuni))]
                         test_list = [a in comuni for a in test_name]
                         if any(test_list):
-                             match_comuni.extend([test_name[i] for i in range(len(find_comuni)) if test_list[i]])
+                            match_comuni.extend([test_name[i] for i in range(len(find_comuni)) if test_list[i]])
             match_comuni = list(set(match_comuni))
-            if len(match_comuni) == 1:
-                match_dict[el] = match_comuni[0]
+            if not check_flag:
+                if len(match_comuni) == 1:
+                    match_dict[el] = match_comuni[0]
+                    self.df[cfg.KEY_UNIQUE].replace(el, match_comuni[0], inplace=True)
+            else:
+                if check_level == cfg.LEVEL_PROVINCIA:
+                    print(match_comuni)
+                    test_list = [a for a in match_comuni if _clean_denom_text_value(get_geo_info_from_comune(a)[cfg.TAG_PROVINCIA]) == check]
+                    if len(test_list) == 1:
+                        match_dict["{}+{}".format(el, check)] = test_list[0]
+                        pos = (self.df[cfg.KEY_UNIQUE] == el) & (self.df[self.province_tag] == check)
+                        self.df.loc[pos, "cfg.KEY_UNIQUE"] = test_list[0]
+                elif check_level == cfg.LEVEL_REGIONE:
+                    test_list = [a for a in match_comuni if
+                                 _clean_denom_text_value(get_geo_info_from_comune(a)[cfg.TAG_REGIONE]) == check]
+                    if len(test_list) == 1:
+                        match_dict["{}+{}".format(el, check)] = test_list[0]
+                        pos = (self.df[cfg.KEY_UNIQUE] == el) & (self.df[self.regioni_tag] == check)
+                        self.df.loc[pos, "cfg.KEY_UNIQUE"] = test_list[0]
         if len(match_dict) > 0:
             log.info("Match {} name that corrisponds to a possible frazione of a comune from google:\n{}".format(len(match_dict), match_dict))
-            self.not_match = [x for x in self.not_match if x not in match_dict.keys()]
-            self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].replace(match_dict)
-        if self.frazioni_dict is not None:
-            self.frazioni_dict.update(match_dict)
-        else:
-            self.frazioni_dict = match_dict
+            _ = self._check_non_match()
 
-    def get_result_frazioni(self):
-        return self.frazioni_dict
 
     @validate
     def get_result(self, add_missing: bool = False, drop_not_match: bool = False) -> pd.DataFrame:
         if self.not_match is None:
             raise Exception("Run simple match before get the result.")
-        if len(self.not_match) > 0:
-            log.warning("Unable to find {} {}: {}".format(len(self.not_match), self.geo_tag_anag, self.not_match))
+        n_not_match = self.not_match[cfg.KEY_UNIQUE].nunique()
+        if n_not_match > 0:
+            log.warning("Unable to find {} {}: {}".format(n_not_match, self.geo_tag_anag, self.get_not_matched_list()))
         else:
             log.info("Found every {}".format(self.geo_tag_anag))
 
@@ -476,10 +577,10 @@ class AddGeographicalInfo:
         if unique_flag:
             input_den = self.df[cfg.KEY_UNIQUE].values()
             not_match2 = [a for a in self.list_anag if a not in input_den]
-            match_dict = self._find_match(not_match2, self.not_match, unique=True)
+            match_dict = self._find_match(not_match2, self.get_not_matched_list(), unique=True)
             self.similarity_dict = {v[0]: (k, v[1]) for k, v in match_dict.items()}
         else:
-            self.similarity_dict = self._find_match(self.not_match, self.list_anag)
+            self.similarity_dict = self._find_match(self.get_not_matched_list(), self.list_anag)
         n = len(self.similarity_dict)
         if n > 1:
             log.info("Match {} name by similarity:\n{}".format(n, self.similarity_dict))
@@ -491,16 +592,14 @@ class AddGeographicalInfo:
 
     def accept_similarity_result(self):
         if self.similarity_dict is not None:
-            self.not_match = [x for x in self.not_match if x not in self.similarity_dict.keys()]
+            _ = self._check_non_match()
             self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].replace({k: v[0] for k, v in self.similarity_dict.items()})
         else:
             raise Exception("Run  run_similarity_match before accept_similarity_result.")
 
     @validate
     def use_manual_match(self, manual_dict: Dict[str, str]):
-        #if not isinstance(manual_dict, dict):
-        #   raise Exception("Pass a dictionary (name -> replace).")
-        self.not_match = [x for x in self.not_match if x not in manual_dict.keys()]
+        _ = self._check_non_match()
         self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].replace(manual_dict)
 
     @staticmethod
@@ -566,6 +665,9 @@ def _code_or_desc(list_values):
 
 
 def _clean_denom_text(series):
+    series = series.fillna("")
+    series = series.astype(str)
+    series = series.where(series != "", None)
     series = series.str.lower()  # All strig in lowercase
     series = series.str.replace(r'[^\w\s]', ' ', regex=True)  # Remove non alphabetic characters
     series = series.str.strip()
@@ -686,7 +788,7 @@ def __find_coordinates_system(df, lat=None, lon=None, geometry=None):
     return "epsg:4326"
 
 
-@validate
+#@validate
 def get_geo_info_from_comune(comune: str, provincia: str = None, regione: str = None) -> Dict[str, str]:
     df = pd.DataFrame(data=[[comune, provincia, regione]], columns=["comune", "provincia", "regione"])
     addInfo = AddGeographicalInfo(df)
@@ -700,15 +802,11 @@ def get_geo_info_from_comune(comune: str, provincia: str = None, regione: str = 
     df = addInfo.get_result()
     if df[cfg.TAG_COMUNE].values[0] is None:
         raise Exception("Unable to find the city {}".format(comune))
-    result_dict = {
-        "comune": df[cfg.TAG_COMUNE].values[0],
-        "provincia": df[cfg.TAG_PROVINCIA].values[0],
-        "sigla": df[cfg.TAG_SIGLA].values[0],
-        "regione": df[cfg.TAG_REGIONE].values[0],
-        "area_geografica": df[cfg.TAG_AREA_GEOGRAFICA].values[0],
-        "popolazione": df[cfg.TAG_POPOLAZIONE].values[0],
-        "superficie": df[cfg.TAG_SUPERFICIE].values[0]
-    }
+    tag_list = [cfg.TAG_COMUNE, cfg.TAG_CODICE_COMUNE,
+                cfg.TAG_PROVINCIA, cfg.TAG_SIGLA, cfg.TAG_CODICE_PROVINCIA,
+                cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE, cfg.TAG_AREA_GEOGRAFICA,
+                cfg.TAG_SUPERFICIE, cfg.TAG_POPOLAZIONE]
+    result_dict = {a: df[a].values[0] for a in tag_list}
     return result_dict
 
 
@@ -1227,11 +1325,11 @@ class GeoDataQuality:
         if self.province_tag:
             addinfo.set_province_tag(self.province_tag)
         addinfo.run_simple_match()
-        try:
-            addinfo.run_find_frazioni()
-            addinfo.run_find_frazioni_from_google()
-        except:
-            pass
+        #try:
+        addinfo.run_find_frazioni()
+        addinfo.run_find_frazioni_from_google()
+        #except:
+        #    pass
         check_df = addinfo.get_result()
         self.original_df[self.comuni_tag] = self._clean_denomination(self.original_df[self.comuni_tag])
         check_df[cfg.TAG_REGIONE] = self._clean_denomination(check_df[cfg.TAG_REGIONE])

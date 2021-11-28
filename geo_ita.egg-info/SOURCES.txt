@@ -1,5 +1,16 @@
 README.md
+requirements.txt
 setup.py
+Test/compress_files.py
+Test/test_data.py
+Test/test_enrich_dataframe.py
+Test/test_plot.html
+Test/test_plot.py
+Test/usage_choropleth_provinciale_interactive.png
+Test/usage_choropleth_regionale.png
+Test/usage_kernel_density_simple.png
+Test/usage_kernel_density_variable.png
+Test/usage_point_map_comuni.png
 geo_ita/__init__.py
 geo_ita/data.py
 geo_ita/enrich_dataframe.py

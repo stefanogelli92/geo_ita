@@ -17,7 +17,7 @@ CODE_CODICE_ISTAT = 0
 CODE_SIGLA = 1
 CODE_DENOMINAZIONE = 2
 KEY_UNIQUE = "key_geo_ita"
-KEY_UNIQUE2 = "key_geo_ita2"
+UNIQUE_TAG = "_geo_ita"
 
 anagrafica_comuni = {
     "path": r"data_sources/Anagrafica",
