@@ -10,6 +10,8 @@ import pandas as pd
 import geopandas as gpd
 import urllib
 import zipfile
+from valdec.decorators import validate
+
 
 from geo_ita.src.definition import *
 import geo_ita.src.config as cfg
@@ -317,6 +319,7 @@ def _download_high_resolution_population_density_df():
     file_path = PureWindowsPath(folder_path) / PureWindowsPath(file_name)
     log.info("Start downloading the high resolution population of Italy (239.0M)")
     start = datetime.now()
+    Path(folder_path).mkdir(parents=True, exist_ok=True)
     urllib.request.urlretrieve(link, file_path)
     end = datetime.now()
     log.info("Dowload High resolution population of Italy ended in {}".format(end-start))
@@ -331,33 +334,17 @@ def _download_high_resolution_population_density_df():
     df = pd.read_csv(new_file_path)
 
     # Reduce memory usage
-    # Remember to divide Population per 1000
     df["Lat"] = df["Lat"].astype('float32')
     df["Lon"] = df["Lon"].astype('float32')
-    df["Population"] = (df["Population"]*10).round(0).astype('int32')
+    df["Population"] = (df["Population"]*cfg.high_resolution_population_density["moltiplicative_factor"]).round(0).astype('int32')
     df = df[df["Population"] > 0]
     df.to_pickle(root_path / PureWindowsPath(cfg.high_resolution_population_density["file_path"]))
     os.remove(new_file_path)
-    # log.info("Start creating the geopandas dataframe")
-    # start = datetime.now()
-    # long_tag = "Lon"
-    # lat_tag = "Lat"
-    # df = gpd.GeoDataFrame(
-    #     df.drop([long_tag, lat_tag], axis=1),
-    #     crs={'init': 'epsg:4326'},
-    #     geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
-    # end = datetime.now()
-    # log.info("Created the geopandas dataframe in {}".format(end - start))
-    # start = datetime.now()
-    # log.info("Start saving the file")
-    # df.to_file(root_path / PureWindowsPath("data_sources/HighResolutionPopulationDensity/high_resolution_population_density.geojson"), driver='GeoJSON')
-    # #df.to_pickle(root_path / PureWindowsPath("data_sources/HighResolutionPopulationDensity/high_resolution_population_density.pkl"))
-    # end = datetime.now()
-    # log.info("File saved in {}".format(end - start))
     return df
 
 
-def get_high_resolution_population_density_df():
+@validate
+def get_high_resolution_population_density_df() -> pd.DataFrame:
     file_path = root_path / PureWindowsPath(cfg.high_resolution_population_density["file_path"])
     if os.path.exists(file_path):
         log.info("Start loading the file")
@@ -367,7 +354,14 @@ def get_high_resolution_population_density_df():
         log.info("File loaded in {}".format(end - start))
     else:
         df = _download_high_resolution_population_density_df()
+    df["Population"] = df["Population"] / cfg.high_resolution_population_density["moltiplicative_factor"]
     return df
+
+
+def remove_high_resolution_population_density_file():
+    file_path = root_path / PureWindowsPath(cfg.high_resolution_population_density["file_path"])
+    if os.path.isfile(file_path):
+        os.remove(file_path)
 
 
 def create_df():

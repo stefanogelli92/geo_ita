@@ -1,5 +1,4 @@
-from geo_ita.data import *
-from geo_ita.src._enrich_dataframe import _process_high_density_population_df
+from geo_ita.src._data import *
 from geo_ita.src.definition import *
 
 import unittest
@@ -10,9 +9,10 @@ from pathlib import PureWindowsPath
 class TestEnrichDataframe(unittest.TestCase):
 
     def test_download_high_density_population_df(self):
-        #path = root_path / PureWindowsPath("data_sources/Test")
+        remove_high_resolution_population_density_file()
         df = get_high_resolution_population_density_df()
-        #_process_high_density_population_df()
+        del df
+        df = get_high_resolution_population_density_df()
 
 
 def test_run():

@@ -4,7 +4,7 @@ import os
 import time
 import logging
 import ssl
-from pathlib import PureWindowsPath
+from pathlib import PureWindowsPath, Path
 from datetime import datetime
 from typing import Dict, Union, List
 
@@ -518,7 +518,7 @@ class AddGeographicalInfo:
                     test_list = [a for a in match_comuni if _clean_denom_text_value(get_geo_info_from_comune(a)[cfg.TAG_PROVINCIA]) == check]
                     if len(test_list) == 1:
                         match_dict["{}+{}".format(el, check)] = test_list[0]
-                        pos = (self.df[cfg.KEY_UNIQUE] == el) & (self.df[self.province_tag] == check)
+                        pos = (self.df[cfg.KEY_UNIQUE] == el) & (self.df[self.province_tag] == mapping_value)
                         self.df.loc[pos, "cfg.KEY_UNIQUE"] = test_list[0]
                 elif check_level == cfg.LEVEL_REGIONE:
                     test_list = [a for a in match_comuni if
@@ -869,6 +869,7 @@ def get_city_from_coordinates(df0: pd.DataFrame,
     df = __create_geo_dataframe(df, lat_tag=latitude_columns, long_tag=longitude_columns)
     df = df[df["geometry"].notnull()]
     df = df[["key_mapping", "geometry"]].drop_duplicates()
+    df["geometry"] = df["geometry"].centroid
     df = df.to_crs({'init': 'epsg:4326'})
 
     n_tot = df.shape[0]
@@ -952,8 +953,8 @@ def _try_replace_abbreviation_on_google(df, n_url_read, geocode):
     return df
 
 
-def _try_wrong_replace_of_accents(df, address_tag, geocode):
-    log.info("Try to find _wrong_replace_of_accents")
+def _try_wrong_replace_of_apostrophe(df, address_tag, geocode):
+    log.info("Try to find wrong replace of apostrophe")
     regex =r"\b(del|dell|d|nell|sull|sant|Sant)([A-Z][^\s]+)"
     pos_replace = (df["location"].isna() &
                    df[address_tag].str.contains(regex))
@@ -1009,7 +1010,7 @@ def get_coordinates_from_address(df0: pd.DataFrame, address_tag: str,
 
     if n_not_found > 0:
         df = _try_replace_abbreviation_on_google(df, n_url_read, geocode)
-        df = _try_wrong_replace_of_accents(df, address_tag, geocode)
+        df = _try_wrong_replace_of_apostrophe(df, address_tag, geocode)
 
     n_found = df["latitude"].notnull().sum()
     n_not_found = n_tot - n_found
@@ -1143,19 +1144,14 @@ def aggregate_point_by_distance(df0: pd.DataFrame,
     df = __create_geo_dataframe(df0, latitude_columns, longitude_columns)
     df = df.to_crs({'init': 'epsg:4326'})
     df = df[["key_mapping", "geometry"]]
+    df["geometry"] = df["geometry"].centroid
     radius_df = df.copy()
-    #TODO Da rivedere
+    #TODO Da rivedere (approssimazione distanza)
     x_dist, y_dist = _distance_to_range_ccord(distance_in_meters)
     dist = (x_dist + y_dist) / 2
     radius_df["geometry"] = radius_df.apply(lambda x: x['geometry'].buffer(dist, cap_style=1), axis=1)
     radius_df = gpd.sjoin(df, radius_df, op='within', how="left")
     radius_df = radius_df[["key_mapping_left", "key_mapping_right"]]
-    #start = datetime.now()
-    #radius_df["value"] = 1
-    #radius_df.set_index(["key_mapping_left", "key_mapping_right"], inplace=True)
-    #n_cc, df[agg_column_name] = connected_components(radius_df["value"].unstack().values, directed=False)
-    #end = datetime.now()
-    #print(end-start)
     n_points = df.shape[0]
     n_cc, df[agg_column_name] = connected_components(
         csr_matrix((np.ones(radius_df.shape[0]),
@@ -1980,6 +1976,52 @@ class GeoDataQuality:
             show(plot)
 
 
+@ validate
+def get_population_nearby(df: pd.DataFrame, radius: Union[int, float],
+                          latitude_columns: str = None, longitude_columns: str = None) -> pd.DataFrame:
+    population_df = get_high_resolution_population_density_df()
+    df = df.rename_axis('key_mapping').reset_index()
+    radius_df = __create_geo_dataframe(df, lat_tag=latitude_columns, long_tag=longitude_columns)[["key_mapping", "geometry"]]
+    radius_df = radius_df.to_crs({'init': 'epsg:4326'})
+    radius_df["geometry"] = radius_df["geometry"].centroid
+    long_tag = "Lon"
+    lat_tag = "Lat"
+    x_dist, y_dist = _distance_to_range_ccord(radius)
+    dist = (x_dist + y_dist) / 2
+    min_x, max_x = radius_df["geometry"].x.min() - x_dist, radius_df["geometry"].x.max() + x_dist
+    min_y, max_y = radius_df["geometry"].y.min() - y_dist, radius_df["geometry"].y.max() + y_dist
+    population_df = population_df[population_df[lat_tag].between(min_y, max_y) &
+                                  population_df[long_tag].between(min_x, max_x)]
+    log.info("Start Filtering population df")
+    start = datetime.now()
+    population_df["filter"] = False
+    for index, row in radius_df.iterrows():
+        pos = (population_df[lat_tag].between(row["geometry"].y-y_dist, row["geometry"].y+y_dist) &
+               population_df[long_tag].between(row["geometry"].x-x_dist, row["geometry"].x+x_dist))
+        population_df.loc[pos, "filter"] = True
+    population_df = population_df[population_df["filter"]]
+    end = datetime.now()
+    log.info("Filtering population df ended in {}".format(end-start))
+    log.info("Start Creating GeoDataframe")
+    start = datetime.now()
+    population_df = gpd.GeoDataFrame(
+            population_df.drop([long_tag, lat_tag], axis=1),
+            crs={'init': 'epsg:4326'},
+            geometry=gpd.points_from_xy(population_df[long_tag], population_df[lat_tag]))
+    end = datetime.now()
+    log.info("Creating GeoDataframe ended in {}".format(end - start))
+    log.info("Start Merging input data with population df")
+    start = datetime.now()
+    radius_df["geometry"] = radius_df.apply(lambda x: x['geometry'].buffer(dist, cap_style=1), axis=1)
+    mapping = gpd.sjoin(population_df, radius_df, op='within').groupby("key_mapping")["Population"].sum()
+    end = datetime.now()
+    log.info("Merging input data with population df ended in {}".format(end - start))
+    df["n_residents"] = df["key_mapping"].map(mapping)
+    df["n_residents"].fillna(0, inplace=True)
+    df = df.drop(["key_mapping"], axis=1)
+    return df
+
+
 # class KDEDensity:
 #
 #     def __init__(self, df_density, lat_tag, long_tag, value_tag=None):
@@ -2012,111 +2054,5 @@ class GeoDataQuality:
 #         return Z[0]
 
 
-# def get_population_nearby2(df, radius, latitude_columns=None, longitude_columns=None):
-#     population_df = get_high_resolution_population_density_df()
-#     #population_df = __create_geo_dataframe(population_df)
-#     long_tag = "Lon"
-#     lat_tag = "Lat"
-#     df["key_mapping"] = range(df.shape[0])
-#     radius_df = __create_geo_dataframe(df, lat_tag=latitude_columns, long_tag=longitude_columns)[["key_mapping", "geometry"]]
-#     radius_df = radius_df.to_crs({'init': 'epsg:4326'})
-#     x_dist2, y_dist2 = _distance_to_range_ccord(radius*1.1)
-#     x_dist, y_dist = _distance_to_range_ccord(radius)
-#     dist = (x_dist + y_dist) / 2
-#     radius_df["geometry2"] = radius_df["geometry"]
-#     more_precision = False
-#     if more_precision:
-#         radius_df["geometry"] = radius_df.apply(lambda x: x['geometry2'].buffer(dist, cap_style=1), axis=1)
-#     radius_df["population0"] = None
-#     radius_df["population1"] = None
-#     start = time.time()
-#     print("Start")
-#     for index, row in radius_df.iterrows():
-#         signle_population_df = population_df[(population_df[lat_tag].between(row["geometry2"].y-y_dist2, row["geometry2"].y+y_dist2) &
-#                                               population_df[long_tag].between(row["geometry2"].x-x_dist2, row["geometry2"].x+x_dist2))]
-#         population = signle_population_df["Population"].sum()
-#         radius_df.loc[index, 'population0'] = population
-#         if more_precision & (population > 0):
-#             signle_population_df = gpd.GeoDataFrame(signle_population_df.drop([long_tag, lat_tag], axis=1),
-#                                             crs={'init': 'epsg:4326'},
-#                                             geometry=gpd.points_from_xy(signle_population_df[long_tag], signle_population_df[lat_tag]))
-#             circle = radius_df.loc[radius_df.index == index, ["geometry"]]
-#             signle_population_df = gpd.sjoin(signle_population_df, circle, op='within')
-#             radius_df.loc[index, 'population1'] = signle_population_df["Population"].sum()
-#
-#     end = time.time()
-#     print('Change coord System', end - start)
-#     start = time.time()
-#     df["n_residents0"] = df["key_mapping"].map(radius_df.set_index("key_mapping")["population0"])
-#     if more_precision:
-#         df["n_residents1"] = df["key_mapping"].map(radius_df.set_index("key_mapping")["population1"])
-#     end = time.time()
-#     df.drop(["key_mapping"], axis=1, inplace=True)
-#     print('Mapping', end - start)
-#     return df
-#
-#
-# def get_population_nearby(df, radius, latitude_columns=None, longitude_columns=None):
-#     population_df = get_high_resolution_population_density_df()
-#     radius_df = df.rename_axis('key_mapping').reset_index()
-#     radius_df = __create_geo_dataframe(radius_df, lat_tag=latitude_columns, long_tag=longitude_columns)[["key_mapping", "geometry"]]
-#     radius_df = radius_df.to_crs({'init': 'epsg:4326'})
-#     if radius_df.shape[0] > 1000:
-#         log.info("Start creating the geopandas dataframe")
-#         start = datetime.now()
-#         long_tag = "Lon"
-#         lat_tag = "Lat"
-#         population_df = gpd.GeoDataFrame(
-#             population_df.drop([long_tag, lat_tag], axis=1),
-#             crs={'init': 'epsg:4326'},
-#             geometry=gpd.points_from_xy(population_df[long_tag], population_df[lat_tag]))
-#         end = datetime.now()
-#         log.info("Created the geopandas dataframe in {}".format(end - start))
-#         x_dist, y_dist = _distance_to_range_ccord(radius)
-#         dist = (x_dist + y_dist) / 2
-#         radius_df["geometry"] = radius_df.apply(lambda x: x['geometry'].buffer(dist, cap_style=1), axis=1)
-#         start = time.time()
-#         population_df = gpd.sjoin(population_df, radius_df, op='within')
-#         end = time.time()
-#         print('Join', end - start)
-#         start = time.time()
-#         mapping = population_df.groupby("key_mapping")["Population"].sum()
-#     else:
-#         pass
-#     df["n_residents"] = df["key_mapping"].map(mapping) / 10
-#     end = time.time()
-#     print('Mapping', end - start)
-#     return df
-#
-#
-# def _process_high_density_population_df(file_path, split_perc=0.05):
-#     file_path = str(file_path)
-#     df = pd.read_csv(file_path)
-#
-#     #df = get_city_from_coordinates(df)
-#     #df.drop(["geometry"], axis=1, inplace=True)
-#     #df.to_pickle(file_path.replace(".csv", ".pkl"))
-#
-#     # Split
-#     log.info("Start getting city from coordinates")
-#     split_path = PureWindowsPath(file_path.rsplit('\\', 1)[0]) / "split"
-#     os.mkdir(split_path)
-#     n_split = math.ceil(1 / split_perc)
-#     df_list = np.split(df, np.arange(1, n_split) * int(split_perc * len(df)))
-#     i = 0
-#     for df_i in df_list:
-#         df_i.to_pickle(split_path / PureWindowsPath(str(i) + ".pkl"))
-#         i += 1
-#     del df
-#     for filename in os.listdir(split_path):
-#         df = pd.read_pickle(split_path / filename)
-#         df = get_city_from_coordinates(df)
-#         df.to_pickle(split_path / filename)
-#     df = pd.DataFrame()
-#     for filename in os.listdir(split_path):
-#         df = pd.concat([pd.read_pickle(split_path / filename), df], ignore_index=True)
-#     df.drop(["geometry"], axis=1, inplace=True)
-#     log.info("End getting city from coordinates")
-#     df.to_pickle(str(file_path).replace(".csv", ".pkl"))
 
 
