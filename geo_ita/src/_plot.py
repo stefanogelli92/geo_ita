@@ -68,7 +68,11 @@ def _linear_colormap(color_name1="white", color_name2=None, minval=0, maxval=1):
     return cmap
 
 
-def _plot_choropleth_map(df, color, ax, title, show_colorbar, vmin, vmax, numeric_values, value_tag, prefix, suffix, line_width=0.8, shape_list=[]):
+def _plot_choropleth_map(df, color, ax, title, show_colorbar, vmin, vmax, numeric_values, value_tag, prefix, suffix, facecolor, labels_size, line_width=0.8, shape_list=[]):
+    if facecolor is True:
+        facecolor = "azure"
+    if facecolor is False:
+        facecolor = "white"
     if numeric_values:
         if vmin is None:
             vmin = df["count"].min()
@@ -91,10 +95,9 @@ def _plot_choropleth_map(df, color, ax, title, show_colorbar, vmin, vmax, numeri
 
     fig = None
     if ax is None:
-        fig, ax = plt.subplots(1, figsize=(20, 10))
+        fig, ax = plt.subplots(1, figsize=(20, 10), facecolor=facecolor)
         if title:
-            ax.set_title(title)
-
+            ax.set_title(title, fontsize=labels_size * 1.1)
     ax.axis('off')
     if numeric_values:
         df.plot('count', cmap=cmap, vmin=vmin, vmax=vmax, linewidth=line_width, edgecolor='0.8', ax=ax)
@@ -121,7 +124,9 @@ def _add_labels_on_plot(df, ax, print_perc, numeric_values, prefix, suffix, labe
         total = df["count"].sum()
         max_value = df["count"].max()
         min_value = df["count"].min()
-        df["tx_color"] = np.where(df["count"]>((max_value+min_value)/2), "white", "black")
+        df["tx_color"] = np.where(df["count"] > ((max_value+min_value)/2), "white", "black")
+        if cfg.TAG_REGIONE in df.columns:
+            df.loc[df[cfg.TAG_REGIONE].isin(["Calabria", "Liguria"]), "tx_color"] = "black"
         for idx, row in df.iterrows():
             threshold = 0
             if print_perc:
@@ -182,6 +187,7 @@ def _create_choropleth_map(df0,
                            prefix,
                            suffix,
                            print_perc,
+                           facecolor,
                            filter_list=None,
                            level2=None,
                            labels_size=None,
@@ -280,6 +286,8 @@ def _create_choropleth_map(df0,
                                    value_tag,
                                    prefix,
                                    suffix,
+                                   labels_size=labels_size,
+                                   facecolor=facecolor,
                                    line_width=line_width,
                                    shape_list=shape_list)
 
@@ -302,6 +310,7 @@ def plot_choropleth_map_regionale(df: pd.DataFrame,
                                   ax=None,
                                   title: str = None,
                                   color="b",
+                                  facecolor: Union[str, bool] = "white",
                                   show_colorbar: bool = True,
                                   vmin: Union[float, int] = None,
                                   vmax: Union[float, int] = None,
@@ -327,6 +336,7 @@ def plot_choropleth_map_regionale(df: pd.DataFrame,
                            prefix,
                            suffix,
                            print_perc,
+                           facecolor,
                            filter_list=filter_regione,
                            level2=cfg.LEVEL_REGIONE,
                            labels_size=labels_size,
@@ -341,6 +351,7 @@ def plot_choropleth_map_provinciale(df: pd.DataFrame,
                                     ax=None,
                                     title: str = None,
                                     color="b",
+                                    facecolor: Union[str, bool] = "white",
                                     show_colorbar: bool = True,
                                     vmin: Union[float, int] = None,
                                     vmax: Union[float, int] = None,
@@ -376,6 +387,7 @@ def plot_choropleth_map_provinciale(df: pd.DataFrame,
                            prefix,
                            suffix,
                            print_perc,
+                           facecolor,
                            filter_list=filter_list,
                            level2=level_filter,
                            labels_size=labels_size,
@@ -390,6 +402,7 @@ def plot_choropleth_map_comunale(df: pd.DataFrame,
                                  ax=None,
                                  title: str = None,
                                  color="b",
+                                 facecolor: Union[str, bool] = "white",
                                  show_colorbar: bool = True,
                                  vmin: Union[float, int] = None,
                                  vmax: Union[float, int] = None,
@@ -429,6 +442,7 @@ def plot_choropleth_map_comunale(df: pd.DataFrame,
                            prefix,
                            suffix,
                            print_perc,
+                           facecolor,
                            filter_list=filter_list,
                            level2=level_filter,
                            labels_size=labels_size,

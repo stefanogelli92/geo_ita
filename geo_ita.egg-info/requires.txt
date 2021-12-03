@@ -15,3 +15,4 @@ google
 scipy
 google-api-python-client
 valdec
+pydantic

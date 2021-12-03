@@ -173,7 +173,7 @@ class TestEnrichDataframe(unittest.TestCase):
     def xtest_get_population_nearby_input(self):
         pass
 
-    def test_get_population_nearby_usage(self):
+    def xtest_get_population_nearby_usage(self):
         test_df = pd.DataFrame([[41.65756068387786, 13.351242360288134]], columns=["center_y", "center_x"])
         #test_df = get_df_comuni()
         test_df = get_population_nearby(test_df, 300, latitude_columns="center_y", longitude_columns="center_x")
@@ -181,7 +181,7 @@ class TestEnrichDataframe(unittest.TestCase):
 
     # GeoDataQuality
 
-    def xtest_GeoDataQuality(self):
+    def test_GeoDataQuality(self):
         df = pd.read_excel(root_path / PureWindowsPath(r"data_sources/Test/data_quality_samples.xlsx"))
         dq = GeoDataQuality(df)
         dq.set_nazione_tag("nazione")

@@ -1976,7 +1976,7 @@ class GeoDataQuality:
             show(plot)
 
 
-@ validate
+@validate
 def get_population_nearby(df: pd.DataFrame, radius: Union[int, float],
                           latitude_columns: str = None, longitude_columns: str = None) -> pd.DataFrame:
     population_df = get_high_resolution_population_density_df()

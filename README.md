@@ -4,13 +4,13 @@ geo_ita is a library for geographical analysis within Italy.
 
 ## Installation
 
-WARNING: Da rivedere!
+WARNING: Da rivedee!
 
  - Download whl file from [here]() (66 Mb)
  - Open Terminal on folder where you put the whl file
 
 ```bash
-pip install geo_ita-0.1.35-py3-none-any.whl
+pip install geo_ita-0.1.66-py3-none-any.whl
 ```
 
 ## Documentation
@@ -29,8 +29,11 @@ Here you can get all the data avaiable in this libraries.
        <br>Contains the population of each *Comune*.
 - **Shape** (source [ISTAT](https://www.istat.it/it/archivio/222527) - updated to 01-01-2020): 
        <br> Contains the shapes of each *Comune*, *Provincia* and *Regione*. The main use of the shapes is to plot the [Choropleth map](https://en.wikipedia.org/wiki/Choropleth_map#:~:text=A%20choropleth%20map%20(from%20Greek,each%20area%2C%20such%20as%20population)).
+- **High density Population** (source [Facebook](https://data.humdata.org/dataset/italy-high-resolution-population-density-maps-demographic-estimates) - updated to 04 -03-2020): 
+       <br> Contains a more detailed density of population estimated by Facebook. They use machine learning techniques to identify buildings from commercially available satellite images to distribute the value of population in a very high-definition map.
+              
 #### Usage
-You can import all the informations listed before with 3 functions: *get_df_comuni*, *get_df_province* and *get_df_regioni* with the 3 different level of aggregation.
+You can import all the informations from ISTAT listed before with 3 functions: *get_df_comuni*, *get_df_province* and *get_df_regioni* with the 3 different level of aggregation.
 ```python
 from geo_ita.data import get_df_comuni
 
@@ -138,6 +141,31 @@ result = addinfo.get_result()
         florence          Firenze   Firenze  FI         Toscana       366927            48017                48              Firenze        102.3187                  Firenze               9          Centro    FI                Toscana
   porretta terme  Alto Reno Terme   Bologna  BO  Emilia romagna         6953            37062                37      Alto Reno Terme             NaN                  Bologna               8        Nord-est    BO         Emilia-Romagna
 ```
+- **Geographical DataQuality**:
+    <br>From a dataset and all possible geographical information (regione, provincia, comune, coordinate) this method check the dataquality and return a list of warning with the correction (when possible).
+```python
+# Usage
+from geo_ita.enrich_dataframe import GeoDataQuality
+
+df = <you dataframe
+
+# Create the class and pass the dataframe
+dq = GeoDataQuality(df)
+# Set alL the columns with geographical information you want to check
+dq.set_nazione_tag("nazione")
+dq.set_regioni_tag("regione")
+dq.set_province_tag("provincia")
+dq.set_comuni_tag("comune")
+dq.set_latitude_longitude_tag("latitudine", "longitudine")
+# Run the check and get the result
+result = dq.start_check(show_only_warning=False, sensitive=True)
+# Plot an interactive view that can help deep dive into the warning
+dq.plot_result()
+
+# Output
+```
+![plot](./Test/usage_geo_data_quality.PNG?raw=true)
+
 - **Aggregation points by distance**:
         <br>From a given list of point we create groups based on distances.
         <br>There are several approaches to the problem based on what we expect from the groups created. In this method point can be in the same group when their distance is bigger than the entered value, but they have a point in common that has a smaller distance to both of them.
@@ -149,7 +177,7 @@ df = pd.DataFrame(data=[[42.000001, 12.000001],
                         [42.000002, 12.000002],
                         [42.001002, 12.001002],
                         [42.001002, 12.001002]], columns=["latitude", "longitude"])
-# Create the class and pass the dataframe
+
 df = aggregate_point_by_distance(df, 1000)
 
 # Output
@@ -159,6 +187,24 @@ df = aggregate_point_by_distance(df, 1000)
   42.0010002      12.0010002                    1
   42.0010002      12.0010002                    1
 ```
+- **Population Neraby**:
+        <br>From a given list of point and a radius this method add the estimated number of people who live in the nearby. this method use the High Resolution Population Density created by Facebook.
+```python
+# Usage
+from geo_ita.enrich_dataframe import get_population_nearby
+
+df = pd.DataFrame(data=[[42.2463245, 11.2457345],
+                        [38.0232362, 12.3242362]], columns=["latitude", "longitude"])
+# The first time you use this method you have to download the dataset so this can take additional 2-3 min.
+df = get_population_nearby(df, 300)
+
+# Output
+    latitude       longitude     n_population
+  42.2463245      11.2457345              127  
+  38.0232362      12.3242362              402
+```
+
+
 ***
 ### Plot
 ***
