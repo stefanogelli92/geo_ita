@@ -94,24 +94,72 @@ def _get_anagrafica_df():
     df[cfg.TAG_CODICE_COMUNE] = df[cfg.TAG_CODICE_COMUNE].astype(int)
     df[cfg.TAG_CODICE_PROVINCIA] = df[cfg.TAG_CODICE_PROVINCIA].astype(int)
     df[cfg.TAG_CODICE_REGIONE] = df[cfg.TAG_CODICE_REGIONE].astype(int)
+    df[cfg.TAG_REGIONE + cfg.TAG_ITA_STRANIERA] = df[cfg.TAG_REGIONE]
     df[cfg.TAG_REGIONE] = df[cfg.TAG_REGIONE].str.split("/").str[0]
     df[cfg.TAG_SIGLA].fillna("NA", inplace=True)
+    df[cfg.TAG_PROVINCIA + cfg.TAG_ITA_STRANIERA] = df[cfg.TAG_PROVINCIA]
     df[cfg.TAG_PROVINCIA] = df[cfg.TAG_PROVINCIA].str.split("/").str[0]
     return df
 
 
-def get_double_languages_mapping():
+def _clean_denom_text(series):
+    series = series.fillna("")
+    series = series.astype(str)
+    series = series.where(series != "", None)
+    series = series.str.lower()  # All strig in lowercase
+    series = series.str.replace(r'[^\w\s]', ' ', regex=True)  # Remove non alphabetic characters
+    series = series.str.strip()
+    series = series.str.replace(r'\s+', ' ', regex=True)
+    series = series.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')  # Remove accent
+    return series
+
+
+def get_double_languages_mapping_comuni():
     df = get_df_comuni()
     tag_ita = cfg.TAG_COMUNE
-    tag_2 = "denominazione_comune_ita_straniera"
+    tag_2 = cfg.TAG_COMUNE + cfg.TAG_ITA_STRANIERA
     df = df[[tag_ita, tag_2]]
     df = df[df[tag_ita] != df[tag_2]]
     sep = "&&"
     df[tag_2] = np.where(df[tag_2].str.contains("/"), df[tag_2].str.replace("/", sep), df[tag_2].str.replace("-", sep))
     df[tag_2] = df[tag_2].str.split(sep)
     df = df.explode(tag_2)
-    df[tag_2] = df[tag_2].str.lower()
-    df[tag_ita] = df[tag_ita].str.lower()
+    df[tag_2] = _clean_denom_text(df[tag_2])
+    df[tag_ita] = _clean_denom_text(df[tag_ita])
+    df = df[df[tag_ita] != df[tag_2]]
+    df = df.set_index(tag_2)[tag_ita].to_dict()
+    return df
+
+
+def get_double_languages_mapping_province():
+    df = get_df_province()
+    tag_ita = cfg.TAG_PROVINCIA
+    tag_2 = cfg.TAG_PROVINCIA + cfg.TAG_ITA_STRANIERA
+    df = df[[tag_ita, tag_2]]
+    df = df[df[tag_ita] != df[tag_2]]
+    sep = "&&"
+    df[tag_2] = np.where(df[tag_2].str.contains("/"), df[tag_2].str.replace("/", sep), df[tag_2].str.replace("-", sep))
+    df[tag_2] = df[tag_2].str.split(sep)
+    df = df.explode(tag_2)
+    df[tag_2] = _clean_denom_text(df[tag_2])
+    df[tag_ita] = _clean_denom_text(df[tag_ita])
+    df = df[df[tag_ita] != df[tag_2]]
+    df = df.set_index(tag_2)[tag_ita].to_dict()
+    return df
+
+
+def get_double_languages_mapping_regioni():
+    df = get_df_regioni()
+    tag_ita = cfg.TAG_REGIONE
+    tag_2 = cfg.TAG_REGIONE + cfg.TAG_ITA_STRANIERA
+    df = df[[tag_ita, tag_2]]
+    df = df[df[tag_ita] != df[tag_2]]
+    sep = "&&"
+    df[tag_2] = np.where(df[tag_2].str.contains("/"), df[tag_2].str.replace("/", sep), df[tag_2])
+    df[tag_2] = df[tag_2].str.split(sep)
+    df = df.explode(tag_2)
+    df[tag_2] = _clean_denom_text(df[tag_2])
+    df[tag_ita] = _clean_denom_text(df[tag_ita])
     df = df[df[tag_ita] != df[tag_2]]
     df = df.set_index(tag_2)[tag_ita].to_dict()
     return df
@@ -259,13 +307,13 @@ def create_df_province():
      - Shape
      - Regione
     """
-    anagrafica = _get_anagrafica_df()[cfg.anagrafica_comuni["column_rename"].values()]
+    anagrafica = _get_anagrafica_df()[list(cfg.anagrafica_comuni["column_rename"].values()) + [cfg.TAG_PROVINCIA + cfg.TAG_ITA_STRANIERA]]
     popolazione = _get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
     df = anagrafica.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
     df["sigla"].fillna("NAN", inplace=True)
     dimensioni = _get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
     df = df.merge(dimensioni, how="left", on=cfg.TAG_CODICE_COMUNE)
-    df = df.groupby([cfg.TAG_PROVINCIA, cfg.TAG_CODICE_PROVINCIA, cfg.TAG_SIGLA,
+    df = df.groupby([cfg.TAG_PROVINCIA, cfg.TAG_PROVINCIA + cfg.TAG_ITA_STRANIERA, cfg.TAG_CODICE_PROVINCIA, cfg.TAG_SIGLA,
                      cfg.TAG_REGIONE, cfg.TAG_AREA_GEOGRAFICA])[[cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]].sum().reset_index()
     df = df.replace({'NAN': None})
     shape = _get_province_shape_df()[cfg.shape_province["column_rename"].values()]
@@ -286,13 +334,13 @@ def create_df_regioni():
      - Dimensione
      - Shape
     """
-    anagrafica = _get_anagrafica_df()[cfg.anagrafica_comuni["column_rename"].values()]
+    anagrafica = _get_anagrafica_df()[list(cfg.anagrafica_comuni["column_rename"].values()) + [cfg.TAG_REGIONE + cfg.TAG_ITA_STRANIERA]]
     popolazione = _get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
     df = anagrafica.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
     df["sigla"].fillna("NAN", inplace=True)
     dimensioni = _get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
     df = df.merge(dimensioni, how="left", on=cfg.TAG_CODICE_COMUNE)
-    df = df.groupby([cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE, cfg.TAG_AREA_GEOGRAFICA])[
+    df = df.groupby([cfg.TAG_REGIONE, cfg.TAG_CODICE_REGIONE, cfg.TAG_REGIONE + cfg.TAG_ITA_STRANIERA, cfg.TAG_AREA_GEOGRAFICA])[
         [cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]].sum().reset_index()
     shape = _get_regioni_shape_df()[cfg.shape_regioni["column_rename"].values()]
     df = df.merge(shape, how="left", on=cfg.TAG_CODICE_REGIONE)

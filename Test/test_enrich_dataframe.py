@@ -96,7 +96,7 @@ class TestEnrichDataframe(unittest.TestCase):
 
     # AddGeographicalInfo
 
-    def xtest_add_geographical_info_input(self):
+    def test_add_geographical_info_input(self):
         df = ["via corso di Francia"]
         with self.assertRaises(Exception):
             AddGeographicalInfo(df)
@@ -144,13 +144,14 @@ class TestEnrichDataframe(unittest.TestCase):
                                        cfg.TAG_AREA_GEOGRAFICA,
                                        cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE], list(result.columns))
 
-    def xtest_add_geographical_info_match(self):
+    def test_add_geographical_info_match(self):
         df = pd.DataFrame(data=[["Milano", "Milano", "Milano", "MI", "Lombardia"],
                                 ["florence", "Firenze", "Firenze", "FI", "Toscana"],
                                 ["porretta terme", "Alto Reno Terme", "Bologna", "BO", "Emilia-Romagna"],
                                 ["marina di ardea", "Ardea", "Roma", "RM", "Lazio"],
                                 ["Baranzate", "Baranzate", "Milano", "MI", "Lombardia"],
                                 ["milano marittima", "Cervia", "Ravenna", "RA", "Emilia-Romagna"],
+                                ["comune di treviglio", "Treviglio", "Bergamo", "BG", "Lombardia"],
                                 ["xxxx", None, None, None, None],
                                 [None, None, None, None, None]],
                           columns=["Citta", "comune", "provincia", "sl", "regione"])
@@ -165,6 +166,14 @@ class TestEnrichDataframe(unittest.TestCase):
         self.assertTrue(result["denominazione_comune"].equals(result["comune"]))
         self.assertTrue(result["sigla"].equals(result["sl"]))
         self.assertTrue(result["denominazione_regione"].equals(result["regione"]))
+        addinfo = AddGeographicalInfo(df)
+        addinfo.set_province_tag("provincia")
+        addinfo.run_simple_match()
+        result = addinfo.get_result()
+        addinfo = AddGeographicalInfo(df)
+        addinfo.set_regioni_tag("regione")
+        addinfo.run_simple_match()
+        result = addinfo.get_result()
 
     def xtest_aggregate_point_by_distance(self):
         df = get_df_comuni()
@@ -181,7 +190,7 @@ class TestEnrichDataframe(unittest.TestCase):
 
     # GeoDataQuality
 
-    def test_GeoDataQuality(self):
+    def xtest_GeoDataQuality(self):
         df = pd.read_excel(root_path / PureWindowsPath(r"data_sources/Test/data_quality_samples.xlsx"))
         dq = GeoDataQuality(df)
         dq.set_nazione_tag("nazione")

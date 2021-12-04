@@ -8,6 +8,7 @@ Test/test_plot.html
 Test/test_plot.py
 Test/usage_choropleth_provinciale_interactive.png
 Test/usage_choropleth_regionale.png
+Test/usage_geo_data_quality.PNG
 Test/usage_kernel_density_simple.png
 Test/usage_kernel_density_variable.png
 Test/usage_point_map_comuni.png

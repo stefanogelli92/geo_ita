@@ -10,6 +10,7 @@ TAG_CODICE_REGIONE = "codice_regione"
 TAG_POPOLAZIONE = "popolazione"
 TAG_SUPERFICIE = "superficie_km2"
 TAG_AREA_GEOGRAFICA = "area_geografica"
+TAG_ITA_STRANIERA = "_ita_straniera"
 LEVEL_COMUNE = 0
 LEVEL_PROVINCIA = 1
 LEVEL_REGIONE = 2
@@ -23,7 +24,7 @@ anagrafica_comuni = {
     "path": r"data_sources/Anagrafica",
     "file_name": "anagrafica.pkl",
     "column_rename": {"Denominazione in italiano": TAG_COMUNE,
-                      "Denominazione (Italiana e straniera)": "denominazione_comune_ita_straniera",
+                      "Denominazione (Italiana e straniera)": TAG_COMUNE + TAG_ITA_STRANIERA,
                       "Codice Comune formato alfanumerico": TAG_CODICE_COMUNE,
                       """Denominazione dell'Unità territoriale sovracomunale 
 (valida a fini statistici)""": TAG_PROVINCIA,
@@ -102,16 +103,43 @@ clear_den_replace = [(" di ", " "),
                      ("santo", "san"),
                      ("sant", "san")]
 
-rename_comuni_nomi = {"rome": "roma",
-                      "milan": "milano",
-                      "naples": "napoli",
-                      "turin": "torino",
-                      "florence": "firenze",
-                      "venice": "venezia",
-                      "padua": "padova",
-                      "syracuse": "siracusa",
-                      "bozen": "bolzano"
-                      }
+clear_provnce_name = {
+    "citta metropolitana di ": "",
+    "provincia di ": "",
+    "provincia del ": "",
+    "province of ": "",
+    "provincia autonoma di ": "",
+    "libero consorzio comunale di ": "",
+    "metropolitan city of ": ""
+}
+
+clear_comuni_name = {
+    "comune di ": "",
+    "localita di ": "",
+    "localita ": "",
+    "frazione di ": "",
+    "frazione ": ""
+}
+
+rename_english_name = {"rome": "roma",
+                       "milan": "milano",
+                       "naples": "napoli",
+                       "turin": "torino",
+                       "florence": "firenze",
+                       "venice": "venezia",
+                       "padua": "padova",
+                       "syracuse": "siracusa",
+                       "bozen": "bolzano",
+                       "south sardinia": "sud sardegna",
+                       "south tyrol": "bolzano",
+                       "sicily": "sicilia",
+                       "piedmont": "piemonte",
+                       "aosta valley": "valle d aosta",
+                       "tuscany": "toscana",
+                       "apulia": "puglia",
+                       "lombardy": "lombardia",
+                       "sardinia": "sardegna"
+                       }
 
 comuni_exceptions = {
     "paterno paterno": "paternò",

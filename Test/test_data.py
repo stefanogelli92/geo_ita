@@ -28,5 +28,5 @@ def test_run():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    #test_run()
+    test_run()
     unittest.main()
