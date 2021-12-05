@@ -194,3 +194,6 @@ simplify_values={LEVEL_REGIONE: 500,
                  LEVEL_PROVINCIA: 500,
                  LEVEL_COMUNE: 250}
 
+google_search_api_key = "AIzaSyDQTlp0F0tExsXg1PZn1FF_ugK_bwBhlqA"
+google_search_cse_id = "8558e6507a2bf9d77"
+

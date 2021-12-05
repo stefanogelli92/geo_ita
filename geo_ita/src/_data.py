@@ -20,12 +20,26 @@ log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
 
 
-def _get_list():
-    df = get_df_comuni()
-    result = [list(df[cfg.TAG_COMUNE].values),
-              list(df[cfg.TAG_PROVINCIA].unique()),
-              list(df[cfg.TAG_SIGLA].unique()),
-              list(df[cfg.TAG_REGIONE].unique())]
+def _get_list(df=None):
+    if df is None:
+        df = get_df_comuni()
+    result = []
+    if cfg.TAG_COMUNE in df.columns:
+        result.append(list(df[cfg.TAG_COMUNE].values))
+    else:
+        result.append(None)
+    if cfg.TAG_PROVINCIA in df.columns:
+        result.append(list(df[cfg.TAG_PROVINCIA].values))
+    else:
+        result.append(None)
+    if cfg.TAG_SIGLA in df.columns:
+        result.append(list(df[cfg.TAG_SIGLA].values))
+    else:
+        result.append(None)
+    if cfg.TAG_REGIONE in df.columns:
+        result.append(list(df[cfg.TAG_REGIONE].values))
+    else:
+        result.append(None)
     return result
 
 
@@ -114,8 +128,9 @@ def _clean_denom_text(series):
     return series
 
 
-def get_double_languages_mapping_comuni():
-    df = get_df_comuni()
+def get_double_languages_mapping_comuni(df=None):
+    if df is None:
+        df = get_df_comuni()
     tag_ita = cfg.TAG_COMUNE
     tag_2 = cfg.TAG_COMUNE + cfg.TAG_ITA_STRANIERA
     df = df[[tag_ita, tag_2]]
@@ -131,8 +146,9 @@ def get_double_languages_mapping_comuni():
     return df
 
 
-def get_double_languages_mapping_province():
-    df = get_df_province()
+def get_double_languages_mapping_province(df=None):
+    if df is None:
+        df = get_df_province()
     tag_ita = cfg.TAG_PROVINCIA
     tag_2 = cfg.TAG_PROVINCIA + cfg.TAG_ITA_STRANIERA
     df = df[[tag_ita, tag_2]]
@@ -148,8 +164,9 @@ def get_double_languages_mapping_province():
     return df
 
 
-def get_double_languages_mapping_regioni():
-    df = get_df_regioni()
+def get_double_languages_mapping_regioni(df=None):
+    if df is None:
+        df = get_df_regioni()
     tag_ita = cfg.TAG_REGIONE
     tag_2 = cfg.TAG_REGIONE + cfg.TAG_ITA_STRANIERA
     df = df[[tag_ita, tag_2]]

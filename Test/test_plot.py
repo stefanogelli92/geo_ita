@@ -70,8 +70,8 @@ def test_point_map():
                                latitude_columns="center_y",
                                filter_regione="Toscana", show_flag=False)
     plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x',
-                   size=12, title="Province", save_in_path="usage_point_map_comuni.png",
-                   color_tag="popolazione")
+                    size=12, title="Province", save_in_path="usage_point_map_comuni.png",
+                    color_tag="popolazione")
     test_df = get_df_comuni()
     plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x',
                    filter_regione="Toscana", color_tag="denominazione_provincia",
@@ -125,9 +125,9 @@ def test_density():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    test_plot_choropleth_map()
+    #test_plot_choropleth_map()
     test_point_map()
-    test_density()
-    unittest.main()
+    #test_density()
+    #unittest.main()
 
 

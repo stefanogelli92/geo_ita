@@ -14,25 +14,27 @@ import pandas as pd
 import geopandas as gpd
 import scipy.ndimage.filters
 from pandas.api.types import is_numeric_dtype, is_string_dtype
-from bokeh.palettes import Blues9, Greens9, Reds9, Greys9, Purples9, Oranges9, Category10, \
-    Category20, RdYlGn11
+from bokeh.palettes import (
+    Blues9, Greens9, Reds9, Greys9, Purples9, Oranges9, Category10, Category20, RdYlGn11
+)
 from bokeh.plotting import save, figure
 from bokeh.layouts import column, row
 from bokeh.io import output_file, show
 from bokeh.models.mappers import LinearColorMapper
 from bokeh.tile_providers import CARTODBPOSITRON, get_provider
-from bokeh.models import (ColumnDataSource, Circle,
-                          WheelZoomTool, HoverTool, DataTable, TableColumn, Select,
-                          CustomJS, GeoJSONDataSource, ColorBar,
-                          CategoricalColorMapper, NumberFormatter, NumeralTickFormatter)
+from bokeh.models import (
+    ColumnDataSource, WheelZoomTool, HoverTool, DataTable, TableColumn, Select, CustomJS, GeoJSONDataSource, ColorBar,
+    CategoricalColorMapper, NumberFormatter, NumeralTickFormatter
+)
 from bokeh.models.plots import Plot
 from valdec.decorators import validate
 
 import geo_ita.src.config as cfg
-from geo_ita.src._data import get_df_comuni, get_df_province, get_df_regioni, _get_shape_italia
-from geo_ita.src._enrich_dataframe import _clean_denom_text_value, _clean_denom_text, _get_tag_anag, _code_or_desc, \
+from geo_ita.src._data import get_df_comuni, get_df_province, get_df_regioni
+from geo_ita.src._enrich_dataframe import (
+    _clean_denom_text_value, _clean_denom_text, _get_tag_anag, _code_or_desc,
     AddGeographicalInfo, __create_geo_dataframe, __find_coord_columns, __find_coordinates_system
-from pyproj import Proj, transform
+)
 
 HEADER_BOKEH = {cfg.LEVEL_COMUNE: 'Comune',
                 cfg.LEVEL_PROVINCIA: 'Provincia',
@@ -97,7 +99,11 @@ def _plot_choropleth_map(df, color, ax, title, show_colorbar, vmin, vmax, numeri
     if ax is None:
         fig, ax = plt.subplots(1, figsize=(20, 10), facecolor=facecolor)
         if title:
-            ax.set_title(title, fontsize=labels_size * 1.1)
+            if labels_size is None:
+                labels_size = 'large'
+            else:
+                labels_size = labels_size * 1.1
+            ax.set_title(title, fontsize=labels_size)
     ax.axis('off')
     if numeric_values:
         df.plot('count', cmap=cmap, vmin=vmin, vmax=vmax, linewidth=line_width, edgecolor='0.8', ax=ax)
@@ -196,7 +202,6 @@ def _create_choropleth_map(df0,
     filter_list = _check_filter(filter_list)
     # Todo add unità di misura labels / clorobar
     # Todo Cambio nome legenda
-    # Todo Set title
     # Todo Plot backgroud regions grey
     # Todo auto check if center scale and use 3 color map
     df = df0.copy()
@@ -1148,10 +1153,6 @@ def _get_margins(filter_comune=None,
                        max([margins_coord[i].bounds[2] for i in range(len(margins_coord))]),
                        max([margins_coord[i].bounds[3] for i in range(len(margins_coord))]))
         margins_coord = [[margins_coord[0], margins_coord[2]], [margins_coord[1], margins_coord[3]]]
-
-    #inProj, outProj = Proj(init='epsg:32632'), Proj(init='epsg:3857')
-    #margins_coord2 = [[], []]
-    #margins_coord2[0], margins_coord2[1] = transform(inProj, outProj, margins_coord[0], margins_coord[1])
 
     return margins_coord, margins
 

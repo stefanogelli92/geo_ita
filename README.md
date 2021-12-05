@@ -303,11 +303,10 @@ plot_kernel_density_estimation_interactive(df, value_tag="popolazione",
 8. Point Map inserire possibilità di plottare più dataset di punti (e forse anche non solo punti)
 9. Kernel Estimation Migliorare guida
 10. Kernel estimation semplificare utilizzo
-11. Possiblità di aggiungere densità demografica da dataset Facebook in un modulo (o forse da guida ma troppo complesso)
-12. Creare calcolo puntuale Kernel estimation per informazioni puntuali e non plot
-13. valutare calcolo distanza da costa
-14. Valutare distanza in linea d'aria da uscite autostrada + plot autostrade + uscite
-15. Da valutare calcolo distanza tra punti su strada (è corretto averlo in questa libreria?)
+11. Creare calcolo puntuale Kernel estimation per informazioni puntuali e non plot
+12. valutare calcolo distanza da costa
+13. Valutare distanza in linea d'aria da uscite autostrada + plot autostrade + uscite
+14. Da valutare calcolo distanza tra punti su strada (è corretto averlo in questa libreria?)
 
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)

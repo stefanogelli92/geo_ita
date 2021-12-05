@@ -96,7 +96,7 @@ class TestEnrichDataframe(unittest.TestCase):
 
     # AddGeographicalInfo
 
-    def test_add_geographical_info_input(self):
+    def xtest_add_geographical_info_input(self):
         df = ["via corso di Francia"]
         with self.assertRaises(Exception):
             AddGeographicalInfo(df)
@@ -144,7 +144,7 @@ class TestEnrichDataframe(unittest.TestCase):
                                        cfg.TAG_AREA_GEOGRAFICA,
                                        cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE], list(result.columns))
 
-    def test_add_geographical_info_match(self):
+    def xtest_add_geographical_info_match(self):
         df = pd.DataFrame(data=[["Milano", "Milano", "Milano", "MI", "Lombardia"],
                                 ["florence", "Firenze", "Firenze", "FI", "Toscana"],
                                 ["porretta terme", "Alto Reno Terme", "Bologna", "BO", "Emilia-Romagna"],
@@ -190,7 +190,7 @@ class TestEnrichDataframe(unittest.TestCase):
 
     # GeoDataQuality
 
-    def xtest_GeoDataQuality(self):
+    def test_GeoDataQuality(self):
         df = pd.read_excel(root_path / PureWindowsPath(r"data_sources/Test/data_quality_samples.xlsx"))
         dq = GeoDataQuality(df)
         dq.set_nazione_tag("nazione")
@@ -199,7 +199,7 @@ class TestEnrichDataframe(unittest.TestCase):
         dq.set_comuni_tag("comune", use_for_check_nation=True)
         dq.set_latitude_longitude_tag("latitudine", "longitudine")
         result = dq.start_check(show_only_warning=False, sensitive=True)
-        dq.plot_result()
+        #dq.plot_result()
         col_test = ["nazione", "regione", "provincia", "comune",
                     "nazione_check", "nazione_suggestion", "regione_check", "regione_suggestion",
                     "provincia_check", "provincia_suggestion", "comune_check", "comune_suggestion",

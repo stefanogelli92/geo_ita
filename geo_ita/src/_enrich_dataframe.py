@@ -1,17 +1,15 @@
 import difflib
 import os
-import time
 import logging
 import ssl
-from pathlib import PureWindowsPath, Path
 from datetime import datetime
 from typing import Dict, Union, List
+import unidecode
+import requests
 
 from valdec.decorators import validate
-
-import unidecode
-from geo_ita.src.definition import *
-
+from bs4 import BeautifulSoup
+import re
 import numpy as np
 import pandas as pd
 from scipy.sparse.csgraph import connected_components
@@ -21,28 +19,28 @@ from geopy.distance import distance
 import geopy.geocoders
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
+from googlesearch import search
+from googleapiclient.discovery import build
 # from sklearn.neighbors import KernelDensity
 
-from bokeh.models import ColumnDataSource, DataTable, TableColumn, HTMLTemplateFormatter, CategoricalColorMapper, \
+from bokeh.models import (
+    ColumnDataSource, DataTable, TableColumn, HTMLTemplateFormatter, CategoricalColorMapper,
     LabelSet, Label, WheelZoomTool, CustomJS, Panel, Tabs, TextInput, HoverTool
+)
 from bokeh.plotting import save, figure
 from bokeh.io import output_file, show
 from bokeh.layouts import column, row
 from bokeh.tile_providers import CARTODBPOSITRON, get_provider
 from pyproj import Proj, transform
 
-inProj, outProj = Proj(init='epsg:4326'), Proj(init='epsg:3857')
-
-from googlesearch import search
-import requests
-from bs4 import BeautifulSoup
-import re
-
-from geo_ita.src._data import (get_df, get_df_comuni, get_variazioni_amministrative_df, _get_list,
-                               get_double_languages_mapping_comuni, get_double_languages_mapping_province,
-                               get_double_languages_mapping_regioni,
-                               _get_shape_italia, get_high_resolution_population_density_df)
+from geo_ita.src.definition import *
 import geo_ita.src.config as cfg
+from geo_ita.src._data import (
+    get_df, get_df_comuni, get_variazioni_amministrative_df, _get_list,
+    get_double_languages_mapping_comuni, get_double_languages_mapping_province,
+    get_double_languages_mapping_regioni,
+    _get_shape_italia, get_high_resolution_population_density_df
+)
 
 log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
@@ -52,10 +50,7 @@ ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 geopy.geocoders.options.default_ssl_context = ctx
 
-from googleapiclient.discovery import build
-
-api_key = "AIzaSyDQTlp0F0tExsXg1PZn1FF_ugK_bwBhlqA"
-cse_id = "8558e6507a2bf9d77"
+inProj, outProj = Proj(init='epsg:4326'), Proj(init='epsg:3857')
 
 
 def google_query(query, api_key, cse_id, **kwargs):
@@ -91,7 +86,7 @@ class AddGeographicalInfo:
         self.original_df = df.where(pd.notnull(df), None)
         self.keys = None
         self.df = None
-        self.comuni, self.province, self.sigle, self.regioni = _get_list()
+        self.comuni, self.province, self.sigle, self.regioni = None, None, None, None
         self.comuni_tag = None
         self.comuni_code = None
         self.province_tag = None
@@ -160,6 +155,7 @@ class AddGeographicalInfo:
         self.df[cfg.KEY_UNIQUE] = self.df[self.geo_tag_input]
 
         self.info_df = get_df(self.level)
+        self.comuni, self.province, self.sigle, self.regioni = _get_list(df=self.info_df)
         self.geo_tag_anag = _get_tag_anag(self.code, self.level)
         self.info_df[cfg.KEY_UNIQUE] = self.info_df[self.geo_tag_anag]
 
@@ -216,7 +212,6 @@ class AddGeographicalInfo:
             self._clean_comuni_name()
         elif self.level == cfg.LEVEL_PROVINCIA:
             self._clean_province_name()
-
 
         self._find_any_bilingual_name()
 
@@ -278,14 +273,14 @@ class AddGeographicalInfo:
     @validate
     def get_not_matched_list(self) -> List[str]:
         if self.not_match is None:
-            raise Exception("Run simple match before get list of not matched values.")
+            raise Exception("Run simple match before getting list of not matched values.")
         result = list(self.not_match[self.not_match[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].unique())
         return result
 
     @validate
     def get_n_not_matched(self) -> int:
         if self.not_match is None:
-            raise Exception("Run simple match before get list of not matched values.")
+            raise Exception("Run simple match before getting number of not matched values.")
         result = self.not_match[self.not_match[cfg.KEY_UNIQUE].notnull()][cfg.KEY_UNIQUE].nunique()
         return result
 
@@ -324,12 +319,12 @@ class AddGeographicalInfo:
 
     def _find_any_bilingual_name(self):
         if self.level == cfg.LEVEL_COMUNE:
-            replace_multilanguage_name = get_double_languages_mapping_comuni()
+            replace_multilanguage_name = get_double_languages_mapping_comuni(self.info_df)
 
         elif self.level == cfg.LEVEL_PROVINCIA:
-            replace_multilanguage_name = get_double_languages_mapping_province()
+            replace_multilanguage_name = get_double_languages_mapping_province(self.info_df)
         elif self.level == cfg.LEVEL_REGIONE:
-            replace_multilanguage_name = get_double_languages_mapping_regioni()
+            replace_multilanguage_name = get_double_languages_mapping_regioni(self.info_df)
         else:
             return
         for k, v in replace_multilanguage_name.items():
@@ -388,6 +383,35 @@ class AddGeographicalInfo:
         value = " ".join(value.split())
         return value
 
+    @staticmethod
+    def _get_info_from_address(address, regioni, province, comuni):
+        regione, provincia, comune = None, None, None
+        extract = re.search(
+            '(?P<comune2>[^,]+, )?(?P<comune1>[^,]+), (?P<provincia>[^,]+), (?P<regione>[^,0-9]+)(?P<cap>, [0-9]{5})?, Italia',
+            address)
+        if extract:
+            regione = _clean_denom_text_value(extract.group("regione"))
+            if regione not in regioni:
+                regione = None
+            provincia = extract.group("provincia")
+            provincia = _clean_denom_text_value(provincia.replace("Roma Capitale", "Roma"))
+            if provincia not in province:
+                provincia = None
+            comune = _clean_denom_text_value(extract.group("comune1"))
+            if (comune is None) or (comune not in comuni):
+                comune = None
+                comune2 = extract.group("comune2")
+                if comune2:
+                    comune = _clean_denom_text_value(comune2[:-2])
+                    if (comune is None) or (comune not in comuni):
+                        comune = None
+                if (comune is None) and (provincia in comuni):
+                    comune = provincia
+        if (regione is not None) and (provincia is not None) and (comune is not None):
+            return regione, provincia, comune
+        else:
+            return None, None, None
+
     def run_find_frazioni(self):
         if (self.code != cfg.CODE_DENOMINAZIONE) & (self.level != cfg.LEVEL_COMUNE):
             raise Exception("Run find_frazioni only to find comune by denomination.")
@@ -423,38 +447,22 @@ class AddGeographicalInfo:
             if p is not None:
                 address = p.address
                 if el in address.lower():
-                    extract = re.search(
-                        '(?P<comune2>[^,]+, )?(?P<comune1>[^,]+), (?P<provincia>[^,]+), (?P<regione>[^,0-9]+)(?P<cap>, [0-9]{5})?, Italia',
-                        address)
-                    if extract:  # and not any(word.lower() in address.lower() for word in ["via", "viale", "piazza"]):
-                        regione = _clean_denom_text_value(extract.group("regione"))
-                        provincia = extract.group("provincia")
-                        provincia = _clean_denom_text_value(provincia.replace("Roma Capitale", "Roma"))
-                        comune = _clean_denom_text_value(extract.group("comune1"))
-                        comune2 = extract.group("comune2")
-                        if comune2:
-                            comune2 = _clean_denom_text_value(comune2[:-2])
-                        if (regione in regioni) & (provincia in province):
-                            if comune in comuni:
-                                pass
-                            elif (comune2 is not None) and (comune2 in comuni):
-                                comune = comune2
-                            elif provincia in comuni:
-                                comune = provincia
-                            if not check_flag:
-                                self.df[cfg.KEY_UNIQUE].replace(el, comune, inplace=True)
-                                match_dict[el] = comune
-                            elif check_level == cfg.LEVEL_PROVINCIA:
-                                if provincia == check:
-                                    match_dict["{}+{}".format(el, provincia)] = comune
-                                    pos = (self.df[cfg.KEY_UNIQUE] == el) & (
-                                                self.df[self.province_tag] == mapping_value)
-                                    self.df.loc[pos, cfg.KEY_UNIQUE] = comune
-                            elif check_level == cfg.LEVEL_REGIONE:
-                                if regione == check:
-                                    match_dict["{}+{}".format(el, regione)] = comune
-                                    pos = (self.df[cfg.KEY_UNIQUE] == el) & (self.df[self.regioni_tag] == mapping_value)
-                                    self.df.loc[pos, cfg.KEY_UNIQUE] = comune
+                    regione, provincia, comune = self._get_info_from_address(address, regioni, province, comuni)
+                    if comune is not None:
+                        if not check_flag:
+                            self.df[cfg.KEY_UNIQUE].replace(el, comune, inplace=True)
+                            match_dict[el] = comune
+                        elif check_level == cfg.LEVEL_PROVINCIA:
+                            if provincia == check:
+                                match_dict["{}+{}".format(el, provincia)] = comune
+                                pos = (self.df[cfg.KEY_UNIQUE] == el) & (
+                                            self.df[self.province_tag] == mapping_value)
+                                self.df.loc[pos, cfg.KEY_UNIQUE] = comune
+                        elif check_level == cfg.LEVEL_REGIONE:
+                            if regione == check:
+                                match_dict["{}+{}".format(el, regione)] = comune
+                                pos = (self.df[cfg.KEY_UNIQUE] == el) & (self.df[self.regioni_tag] == mapping_value)
+                                self.df.loc[pos, cfg.KEY_UNIQUE] = comune
 
         if len(match_dict) > 0:
             log.info("Match {} name that corrisponds to a possible frazione of a comune:\n{}".format(len(match_dict),
@@ -462,6 +470,11 @@ class AddGeographicalInfo:
                                                                                                       for k, v in
                                                                                                       match_dict.items()}))
             _ = self._check_non_match()
+
+    def _get_cleaned_geo_info(self, comune, level):
+        mapping = self.info_df.set_index(cfg.TAG_COMUNE, _get_tag_anag(cfg.CODE_DENOMINAZIONE, level)).to_dict()
+        geo_info = mapping[comune]
+        return _clean_denom_text_value(geo_info)
 
     @validate
     def run_find_frazioni_from_google(self, n_url_read: int = 1):
@@ -498,8 +511,8 @@ class AddGeographicalInfo:
                 log.error('Failed to search on google tentative 1: ' + str(e))
                 try:
                     my_results = google_query(query,
-                                              api_key,
-                                              cse_id,
+                                              cfg.google_search_api_key,
+                                              cfg.google_search_cse_id,
                                               num=n_url_read
                                               )
                     for result in my_results:
@@ -544,14 +557,14 @@ class AddGeographicalInfo:
             else:
                 if check_level == cfg.LEVEL_PROVINCIA:
                     test_list = [a for a in match_comuni if
-                                 _clean_denom_text_value(get_geo_info_from_comune(a)[cfg.TAG_PROVINCIA]) == check]
+                                 self._get_cleaned_geo_info(a, cfg.LEVEL_PROVINCIA) == check]
                     if len(test_list) == 1:
                         match_dict["{}+{}".format(el, check)] = test_list[0]
                         pos = (self.df[cfg.KEY_UNIQUE] == el) & (self.df[self.province_tag] == mapping_value)
                         self.df.loc[pos, cfg.KEY_UNIQUE] = test_list[0]
                 elif check_level == cfg.LEVEL_REGIONE:
                     test_list = [a for a in match_comuni if
-                                 _clean_denom_text_value(get_geo_info_from_comune(a)[cfg.TAG_REGIONE]) == check]
+                                 self._get_cleaned_geo_info(a, cfg.LEVEL_REGIONE) == check]
                     if len(test_list) == 1:
                         match_dict["{}+{}".format(el, check)] = test_list[0]
                         pos = (self.df[cfg.KEY_UNIQUE] == el) & (self.df[self.regioni_tag] == check)
@@ -948,8 +961,8 @@ def _try_replace_abbreviation_on_google(df, n_url_read, geocode):
                 log.error('Failed to search on google tentative 1: ' + str(e))
                 try:
                     my_results = google_query(address,
-                                              api_key,
-                                              cse_id,
+                                              cfg.google_search_api_key,
+                                              cfg.google_search_cse_id,
                                               num=n_url_read
                                               )
                     for result in my_results:
@@ -1029,9 +1042,9 @@ def get_coordinates_from_address(df0: pd.DataFrame, address_tag: str,
     log.info("Run search on OpenStreetMap. Needed at least {} seconds".format(n))
     geolocator = Nominatim(timeout=10, user_agent=cfg.USER_AGENT)
     geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
-    start = time.time()
+    start = datetime.now()
     df["location"] = (df["address_search"]).apply(geocode)
-    log.info("Finding locations from address ended in {} seconds".format(time.time() - start))
+    log.info("Finding locations from address ended in {} seconds".format(datetime.now() - start))
     df["latitude"] = df["location"].apply(lambda loc: loc.latitude if loc else None)
     df["longitude"] = df["location"].apply(lambda loc: loc.longitude if loc else None)
     df["address_test"] = df["location"].apply(lambda loc: loc.address if loc else None).str.lower()
@@ -1097,9 +1110,9 @@ def get_address_from_coordinates(df0: pd.DataFrame,
     log.info("Needed at least {} seconds".format(n))
     geolocator = Nominatim(timeout=10, user_agent=cfg.USER_AGENT)
     reverse = RateLimiter(geolocator.reverse, min_delay_seconds=1)
-    start = time.time()
+    start = datetime.now()
     df["location"] = (df["geom"]).apply(reverse)
-    log.info("Finding address from coordinates ended in {} seconds".format(time.time() - start))
+    log.info("Finding address from coordinates ended in {} seconds".format(datetime.now() - start))
 
     address_col = "address"
     if address_col in df0.columns:
