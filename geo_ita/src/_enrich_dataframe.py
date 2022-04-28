@@ -424,7 +424,7 @@ class AddGeographicalInfo:
         comuni = [_clean_denom_text_value(a) for a in self.comuni]
         match_dict = {}
         n = self.get_n_not_matched()
-        log.info("Needed at least {} seconds".format(n))
+        log.info(f"Needed at least {n} seconds")
         if (n > 0) & ((self.province_tag is not None) | (self.regioni_tag is not None)):
             self._clean_hierarchical_structure()
         for index, row in self.not_match.iterrows():
@@ -441,9 +441,9 @@ class AddGeographicalInfo:
                 mapping_value = row[self.regioni_tag]
             el = row[cfg.KEY_UNIQUE]
             if check_flag:
-                p = geocode(el + ", " + check + ", italia")
+                p = geocode(f"{el}, {check}, italia")
             else:
-                p = geocode(el + ", italia")
+                p = geocode(f"{el}, italia")
             if p is not None:
                 address = p.address
                 if el in address.lower():
@@ -454,7 +454,7 @@ class AddGeographicalInfo:
                             match_dict[el] = comune
                         elif check_level == cfg.LEVEL_PROVINCIA:
                             if provincia == check:
-                                match_dict["{}+{}".format(el, provincia)] = comune
+                                match_dict[f"{el}+{provincia}"] = comune
                                 pos = (self.df[cfg.KEY_UNIQUE] == el) & (
                                             self.df[self.province_tag] == mapping_value)
                                 self.df.loc[pos, cfg.KEY_UNIQUE] = comune
@@ -481,7 +481,7 @@ class AddGeographicalInfo:
         comuni = [_clean_denom_text_value(a) for a in self.comuni]
         match_dict = {}
         n = self.get_n_not_matched()
-        log.info("Needed at least {} seconds".format(n))
+        log.info(f"Needed at least {n} seconds")
         if (n > 0) & ((self.province_tag is not None) | (self.regioni_tag is not None)):
             self._clean_hierarchical_structure()
         for index, row in self.not_match.iterrows():
@@ -862,7 +862,7 @@ def get_geo_info_from_regione(regione: str) -> Dict[str, str]:
     addInfo.run_find_frazioni()
     df = addInfo.get_result()
     if pd.isna(df[cfg.TAG_REGIONE].values[0]):
-        raise Exception("Unable to find the region {}".format(regione))
+        raise Exception(f"Unable to find the region {regione}")
     result_dict = {
         "regione": df[cfg.TAG_REGIONE].values[0],
         "area_geografica": df[cfg.TAG_AREA_GEOGRAFICA].values[0],
@@ -883,7 +883,7 @@ def get_geo_info_from_provincia(provincia: str, regione: str = None) -> Dict[str
     addInfo.run_find_frazioni()
     df = addInfo.get_result()
     if df[cfg.TAG_PROVINCIA].values[0] is None:
-        raise Exception("Unable to find the city {}".format(provincia))
+        raise Exception(f"Unable to find the city {provincia}")
     result_dict = {
         "provincia": df[cfg.TAG_PROVINCIA].values[0],
         "sigla": df[cfg.TAG_SIGLA].values[0],
@@ -977,9 +977,7 @@ def _try_replace_abbreviation_on_google(df, n_url_read, geocode):
                     text = soup.find_all(text=True)
                     output = ' '.join(text)
                     output = _clean_htmltext(output)
-                    pattern = "{prefix} ?{abbreviations} ?{suffix}".format(prefix=prefix,
-                                                                           abbreviations=abbreviations,
-                                                                           suffix=suffix)
+                    pattern = f"{prefix} ?{abbreviations} ?{suffix}"
                     r1 = re.search(pattern, output)
                     match.append(r1.group())
             match = list(set(match))
@@ -1039,7 +1037,7 @@ def get_coordinates_from_address(df0: pd.DataFrame, address_tag: str,
         t = t | df[city_tag].isna()
         df["address_search"] = np.where(t, df["address_search"], df["address_search"] + ", " + df[city_tag].str.lower())
 
-    log.info("Run search on OpenStreetMap. Needed at least {} seconds".format(n))
+    log.info(f"Run search on OpenStreetMap. Needed at least {n} seconds")
     geolocator = Nominatim(timeout=10, user_agent=cfg.USER_AGENT)
     geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
     start = datetime.now()
@@ -1107,7 +1105,7 @@ def get_address_from_coordinates(df0: pd.DataFrame,
     df = df0[[latitude_columns, longitude_columns]].drop_duplicates()
     df['geom'] = df[latitude_columns].map(str) + ', ' + df[longitude_columns].map(str)
     n = df.shape[0]
-    log.info("Needed at least {} seconds".format(n))
+    log.info(f"Needed at least {n} seconds")
     geolocator = Nominatim(timeout=10, user_agent=cfg.USER_AGENT)
     reverse = RateLimiter(geolocator.reverse, min_delay_seconds=1)
     start = datetime.now()

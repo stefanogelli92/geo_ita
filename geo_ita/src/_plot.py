@@ -1013,7 +1013,7 @@ def plot_point_map_interactive(df0: pd.DataFrame,
     if filter_regione or filter_comune or filter_provincia:
         df = gpd.tools.sjoin(df, shape, op='within')
 
-    if info_dict != None:
+    if info_dict is not None:
         table_columns = list(info_dict.keys())
     else:
         table_columns = column_list
