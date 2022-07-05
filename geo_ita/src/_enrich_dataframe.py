@@ -293,8 +293,9 @@ class AddGeographicalInfo:
             info_tag_details = _get_tag_anag(self.regioni_code, cfg.LEVEL_REGIONE)
             self.df = self._split_denom_comuni_omonimi(self.df, cfg.KEY_UNIQUE, self.regioni_tag, info_tag_details)
         else:
-            if (self.df[cfg.KEY_UNIQUE].isin([a.lower() for a in cfg.comuni_omonimi[cfg.TAG_COMUNE]])).sum()>0:
-                log.warning("The dataset contains some homonym comune. You can distinguish them only by using another gerachical information (ex.: provincia or regione).")
+            if (self.df[cfg.KEY_UNIQUE].isin([a.lower() for a in cfg.comuni_omonimi[cfg.TAG_COMUNE]])).sum() > 0:
+                log.warning(
+                    "The dataset contains some homonym comune. You can distinguish them only by using another gerachical information (ex.: provincia or regione).")
         self.info_df = self._split_denom_comuni_omonimi(self.info_df, cfg.KEY_UNIQUE, info_tag_details,
                                                         info_tag_details, log_flag=False)
 
@@ -456,7 +457,7 @@ class AddGeographicalInfo:
                             if provincia == check:
                                 match_dict[f"{el}+{provincia}"] = comune
                                 pos = (self.df[cfg.KEY_UNIQUE] == el) & (
-                                            self.df[self.province_tag] == mapping_value)
+                                        self.df[self.province_tag] == mapping_value)
                                 self.df.loc[pos, cfg.KEY_UNIQUE] = comune
                         elif check_level == cfg.LEVEL_REGIONE:
                             if regione == check:
@@ -934,7 +935,9 @@ def get_city_from_coordinates(df0: pd.DataFrame,
 
 
 def __test_city_in_address(df, city_tag, address_tag):
-    return df.apply(lambda x: x[city_tag].lower() in x[address_tag] if (x[address_tag] and x[city_tag]) else False,
+    return df.apply(lambda x: x[city_tag].lower() in x[address_tag]
+    if (x[address_tag] and x[city_tag])
+    else False,
                     axis=1)
 
 
@@ -979,7 +982,8 @@ def _try_replace_abbreviation_on_google(df, n_url_read, geocode):
                     output = _clean_htmltext(output)
                     pattern = f"{prefix} ?{abbreviations} ?{suffix}"
                     r1 = re.search(pattern, output)
-                    match.append(r1.group())
+                    if r1 is not None:
+                        match.append(r1.group())
             match = list(set(match))
             if len(match) == 1:
                 pos_match = df["address_search"] == address
@@ -1014,73 +1018,83 @@ def _try_wrong_replace_of_apostrophe(df, address_tag, geocode):
     return df
 
 
-@validate
-def get_coordinates_from_address(df0: pd.DataFrame, address_tag: str,
-                                 city_tag: str = None, province_tag: str = None, regione_tag: str = None,
-                                 n_url_read: int = 1) -> pd.DataFrame:
-    # TODO add successive tentative (maps api)
-    _test_column_in_dataframe(df0, address_tag)
-    if city_tag is not None:
-        _test_column_in_dataframe(df0, city_tag)
-    if province_tag is not None:
-        _test_column_in_dataframe(df0, province_tag)
-    if regione_tag is not None:
-        _test_column_in_dataframe(df0, regione_tag)
-
-    col_list = [address_tag, city_tag, province_tag, regione_tag]
-    col_list = [x for x in col_list if x is not None]
-    df = df0[col_list].drop_duplicates()
-    n = df.shape[0]
-    df["address_search"] = df[address_tag].str.lower()
-    if city_tag:
-        t = __test_city_in_address(df, city_tag, "address_search")
-        t = t | df[city_tag].isna()
-        df["address_search"] = np.where(t, df["address_search"], df["address_search"] + ", " + df[city_tag].str.lower())
-
-    log.info(f"Run search on OpenStreetMap. Needed at least {n} seconds")
-    geolocator = Nominatim(timeout=10, user_agent=cfg.USER_AGENT)
-    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+def _find_location_with_openstreetmap(df, geocode):
+    log.info(f"Run search on OpenStreetMap. Needed at least {df.shape[0]} seconds")
     start = datetime.now()
     df["location"] = (df["address_search"]).apply(geocode)
-    log.info("Finding locations from address ended in {} seconds".format(datetime.now() - start))
     df["latitude"] = df["location"].apply(lambda loc: loc.latitude if loc else None)
     df["longitude"] = df["location"].apply(lambda loc: loc.longitude if loc else None)
     df["address_test"] = df["location"].apply(lambda loc: loc.address if loc else None).str.lower()
-    df = df.assign(test=False)
+    log.info("Finding locations from address ended in {} seconds".format(datetime.now() - start))
+    return df
+
+
+def _test_address_with_comune_provincia_regione(df, comuni_tag, province_tag, regioni_tag):
     n_tot = df.shape[0]
-    n_found = df["location"].notnull().sum()
-    n_not_found = n_tot - n_found
-
-    if n_not_found > 0:
-        df = _try_replace_abbreviation_on_google(df, n_url_read, geocode)
-        df = _try_wrong_replace_of_apostrophe(df, address_tag, geocode)
-
     n_found = df["latitude"].notnull().sum()
     n_not_found = n_tot - n_found
-    if city_tag:
-        df["test"] = __test_city_in_address(df, city_tag, "address_test")
+    df["test"] = False
+    if comuni_tag:
+        df["test"] = __test_city_in_address(df, comuni_tag, "address_test")
         df.loc[~df["test"], "latitude"] = None
         df.loc[~df["test"], "longitude"] = None
-        log.info("Found {} location over {} address. But {} are not in the correct city.".format(n_found, n_tot, (
-            ~df["test"]).sum() - n_not_found))
+        test_fail = (~df["test"]).sum() - n_not_found
+        log.info(f"Found {n_found} location over {n_tot} address. But {test_fail} are not in the correct city.")
     elif province_tag:
         df["test"] = df["test"] | __test_city_in_address(df, province_tag, "address_test")
         df.loc[~df["test"], "latitude"] = None
         df.loc[~df["test"], "longitude"] = None
-        log.info("Found {} location over {} address. But {} are not in the correct provincia.".format(
-            n_found, n_tot, (~df["test"]).sum() - n_not_found))
-    elif regione_tag:
-        df["test"] = df["test"] | __test_city_in_address(df, regione_tag, "address_test")
+        test_fail = (~df["test"]).sum() - n_not_found
+        log.info(f"Found {n_found} location over {n_tot} address. But {test_fail} are not in the correct provincia.")
+    elif regioni_tag:
+        df["test"] = df["test"] | __test_city_in_address(df, regioni_tag, "address_test")
         df.loc[~df["test"], "latitude"] = None
         df.loc[~df["test"], "longitude"] = None
-        log.info("Found {} location over {} address. But {} are not in the correct regione.".format(
-            n_found, n_tot, (~df["test"]).sum() - n_not_found))
+        test_fail = (~df["test"]).sum() - n_not_found
+        log.info(f"Found {n_found} location over {n_tot} address. But {test_fail} are not in the correct regione.")
     else:
-        log.info("Found {} location over {} address.".format(n_found, n_tot))
+        log.info(f"Found {n_found} location over {n_tot} address.")
+    return df
+
+
+@validate
+def get_coordinates_from_address(df0: pd.DataFrame, address_tag: str,
+                                 comuni_tag: str = None, province_tag: str = None, regioni_tag: str = None,
+                                 n_url_read: int = 1) -> pd.DataFrame:
+    # TODO add successive tentative (maps api)
+    _test_column_in_dataframe(df0, address_tag)
+    if comuni_tag is not None:
+        _test_column_in_dataframe(df0, comuni_tag)
+    if province_tag is not None:
+        _test_column_in_dataframe(df0, province_tag)
+    if regioni_tag is not None:
+        _test_column_in_dataframe(df0, regioni_tag)
+
+    col_list = [address_tag, comuni_tag, province_tag, regioni_tag]
+    col_list = [x for x in col_list if x is not None]
+    df = df0[col_list].drop_duplicates()
+
+    df["address_search"] = df[address_tag].str.lower()
+    if comuni_tag:
+        t = __test_city_in_address(df, comuni_tag, "address_search")
+        t = t | df[comuni_tag].isna()
+        df["address_search"] = np.where(t, df["address_search"], df["address_search"] + ", " + df[comuni_tag].str.lower())
+
+    geolocator = Nominatim(timeout=10, user_agent=cfg.USER_AGENT)
+    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+    df = _find_location_with_openstreetmap(df, geocode)
+
+    not_found_pos = df["location"].isna()
+
+    if not_found_pos.sum() > 0:
+        df = _try_replace_abbreviation_on_google(df, n_url_read, geocode)
+        df = _try_wrong_replace_of_apostrophe(df, address_tag, geocode)
+
+    df = _test_address_with_comune_provincia_regione(df, comuni_tag, province_tag, regioni_tag)
 
     # drop columns
     df.drop(["address_search", "location", "address_test", "test"], axis=1, inplace=True)
-    ## Join df0
+    # Join df0
     df = df0.merge(df, how="left", on=col_list)
     return df
 
@@ -1345,7 +1359,7 @@ class GeoDataQuality:
         not_found_position = check_df[tag].isna() & self.original_df[self.flag_in_italy]
         self.original_df.loc[not_found_position, self.province_tag + self.check_tag] = True
         wrong_position = check_df[tag].notnull() & (check_df[tag] != check_df[self.province_tag]) & (
-                    check_df[tag] != check_df[self.province_tag])
+                check_df[tag] != check_df[self.province_tag])
         self.original_df.loc[wrong_position, self.province_tag + self.check_tag] = True
         self.original_df.loc[wrong_position, self.province_tag + self.propose_tag] = check_df.loc[
             wrong_position, tag]
@@ -1365,8 +1379,8 @@ class GeoDataQuality:
             pos, self.regioni_result_tag + "_provincia"]
         pos = self.original_df[self.regioni_result_tag + "_provincia"].notnull() & self.original_df[
             self.regioni_result_tag + "_regione"].notnull() & (
-                          self.original_df[self.regioni_result_tag + "_provincia"] != self.original_df[
-                      self.regioni_result_tag + "_regione"])
+                      self.original_df[self.regioni_result_tag + "_provincia"] != self.original_df[
+                  self.regioni_result_tag + "_regione"])
         self.original_df.loc[pos, self.regioni_tag + self.check_tag] = True
         self.original_df.loc[pos, self.regioni_tag + self.propose_tag] = None
 
@@ -1441,8 +1455,8 @@ class GeoDataQuality:
             pos, self.province_result_tag + "_comune"]
         pos = self.original_df[self.province_result_tag + "_comune"].notnull() & self.original_df[
             self.province_result_tag + "_provincia"].notnull() & (
-                          self.original_df[self.province_result_tag + "_comune"] != self.original_df[
-                      self.province_result_tag + "_provincia"])
+                      self.original_df[self.province_result_tag + "_comune"] != self.original_df[
+                  self.province_result_tag + "_provincia"])
         self.original_df.loc[pos, self.province_tag + self.check_tag] = True
         self.original_df.loc[pos, self.province_tag + self.propose_tag] = None
 
@@ -1510,8 +1524,8 @@ class GeoDataQuality:
             pos, cfg.TAG_COMUNE + "_coordinates"]
         pos = self.original_df[self.comuni_result_tag + "_coordinates"].notnull() & self.original_df[
             self.comuni_result_tag + "_comune"].notnull() & (
-                          self.original_df[self.comuni_result_tag + "_coordinates"] != self.original_df[
-                      self.comuni_result_tag + "_comune"])
+                      self.original_df[self.comuni_result_tag + "_coordinates"] != self.original_df[
+                  self.comuni_result_tag + "_comune"])
         self.original_df.loc[pos, self.comuni_tag + self.check_tag] = True
         self.original_df.loc[pos, self.comuni_tag + self.propose_tag] = None
 

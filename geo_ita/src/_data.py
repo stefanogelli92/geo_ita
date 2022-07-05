@@ -1,5 +1,6 @@
 import math
 import os
+import shutil
 from datetime import datetime
 from pathlib import PureWindowsPath
 import logging
@@ -61,13 +62,13 @@ def get_list_regioni():
     return result
 
 
-def __get_last_file_from_folder(path):
+def __get_last_file_from_folder(path, date_format="%d_%m_%Y"):
     files = os.listdir(path)
     last_files = ""
     last_date = datetime(1999, 1, 1)
     for f in files:
         try:
-            date = pd.to_datetime(f.split(".")[0][-10:], format="%d_%m_%Y")
+            date = pd.to_datetime(f.split(".")[0][-10:], format=date_format)
             if date > last_date:
                 last_date = date
                 last_files = f
@@ -186,7 +187,7 @@ def create_variazioni_amministrative_df():
     path = root_path / PureWindowsPath(cfg.variazioni_amministrative["path"])
     last_files, _ = __get_last_file_from_folder(path)
 
-    df = pd.read_csv(path / PureWindowsPath(last_files), encoding='latin-1') #, sep=";"
+    df = pd.read_csv(path / PureWindowsPath(last_files), encoding='latin-1', sep=";")  #
 
     __rename_col(df, cfg.variazioni_amministrative["column_rename"])
     df = df[df["tipo_variazione"].isin(["ES", "CD"])]
@@ -206,10 +207,9 @@ def _get_popolazione_df():
     Restituisce un dataset contenente la popolazione dei singoli comuni italiani (dato ISTAT)
     """
     path = root_path / PureWindowsPath(cfg.popolazione_comuni["path"])
-    last_files, _ = __get_last_file_from_folder(path)
-    df = pd.read_csv(path / PureWindowsPath(last_files))
-    df = df[df["Territorio"] != "Italia"]
+    df = pd.read_pickle(path / PureWindowsPath(path))
     __rename_col(df, cfg.popolazione_comuni["column_rename"])
+    df = df[df[cfg.TAG_CODICE_COMUNE].notnull()]
     df[cfg.TAG_CODICE_COMUNE] = df[cfg.TAG_CODICE_COMUNE].astype(int)
     return df
 
@@ -269,7 +269,6 @@ def _get_dimensioni_df():
     appartenenza e delle regioni.
     """
     path = root_path / PureWindowsPath(cfg.dimensioni_comuni["path"])
-    #last_files, _ = __get_last_file_from_folder(path)
 
     df = pd.read_pickle(path / PureWindowsPath(path))
 
@@ -387,8 +386,8 @@ def _download_high_resolution_population_density_df():
     Path(folder_path).mkdir(parents=True, exist_ok=True)
     urllib.request.urlretrieve(link, file_path)
     end = datetime.now()
-    log.info("Dowload High resolution population of Italy ended in {}".format(end-start))
-    new_file_path = PureWindowsPath(folder_path) / PureWindowsPath(file_name.replace(".zip", ""))
+    log.info(f"Dowload High resolution population of Italy ended in {end-start}")
+    new_file_path = PureWindowsPath(folder_path) / PureWindowsPath(file_name.replace(".zip", "").replace("_csv", ".csv"))
     log.info("Start unzipping the file")
     start = datetime.now()
     with zipfile.ZipFile(file_path, 'r') as zip_ref:
@@ -398,6 +397,7 @@ def _download_high_resolution_population_density_df():
     log.info("Unzipping ended in {}".format(end-start))
     df = pd.read_csv(new_file_path)
 
+    df.columns = ["Lon", "Lat", "Population"]
     # Reduce memory usage
     df["Lat"] = df["Lat"].astype('float32')
     df["Lon"] = df["Lon"].astype('float32')
@@ -436,11 +436,37 @@ def create_df():
     create_variazioni_amministrative_df()
 
 
-def upload_data_istat_from_api():
-    year = 2020
+def _update_dimension_info(ref_year, i=0):
+    year = ref_year - 1
     path1 = root_path / PureWindowsPath(cfg.dimensioni_comuni["path"].replace("pkl", "csv"))
     path2 = root_path / PureWindowsPath(cfg.dimensioni_comuni["path"])
-    base_url = "http://sdmx.istat.it/SDMXWS/rest/data/729_1050/A..TOTAREA2?startPeriod={year}".format(year=year)
+    base_url = f"http://sdmx.istat.it/SDMXWS/rest/data/729_1050/A..TOTAREA2?startPeriod={year}"
+    response = requests.get(base_url, headers={'Accept': 'application/vnd.sdmx.data+csv;version=1.0.0'}, verify=False)
+    url_content = response.content
+    csv_file = open(path1, 'wb')
+    csv_file.write(url_content)
+    csv_file.close()
+    df = pd.read_csv(path1)
+    if df.shape[0] == 0:
+        if i == 4:
+            raise Exception(f"Data on ISTAT api not found. Verify internet conenction.")
+        else:
+            log.warning(f"Data on ISTAT api not found for year {year}.")
+            _update_dimension_info(year, i=i+1)
+    else:
+        df = df[(df["TIME_PERIOD"] == year) &
+                (df["ITTER107"].astype(str).str.isnumeric())]
+        df = df[["ITTER107", "OBS_VALUE"]]
+        df.columns = ["Codice Comune", "Superficie totale (Km2)"]
+        df.to_pickle(path2)
+        os.remove(path1)
+
+
+def _update_population_info(ref_year, i=0):
+    year = ref_year
+    path1 = root_path / PureWindowsPath(cfg.popolazione_comuni["path"].replace("pkl", "csv"))
+    path2 = root_path / PureWindowsPath(cfg.popolazione_comuni["path"])
+    base_url = f"http://sdmx.istat.it/SDMXWS/rest/data/22_289/A.TOTAL..9.99..?startPeriod={year}"
     response = requests.get(base_url, headers={'Accept': 'application/vnd.sdmx.data+csv;version=1.0.0'}, verify=False)
     url_content = response.content
     csv_file = open(path1, 'wb')
@@ -449,7 +475,67 @@ def upload_data_istat_from_api():
     df = pd.read_csv(path1)
     df = df[(df["TIME_PERIOD"] == year) &
             (df["ITTER107"].astype(str).str.isnumeric())]
-    df = df[["ITTER107", "OBS_VALUE"]]
-    df.columns = ["Codice Comune", "Superficie totale (Km2)"]
-    df.to_pickle(path2)
-    os.remove(path1)
+    if df.shape[0] == 0:
+        if i == 2:
+            raise Exception(f"Data on ISTAT api not found. Verify internet conenction.")
+        else:
+            log.warning(f"Data on ISTAT api not found for year {year}.")
+            _update_population_info(year, i=i+1)
+    else:
+        df = df[["ITTER107", "OBS_VALUE"]]
+        df.columns = ["Codice Comune", "Popolazione"]
+        df.to_pickle(path2)
+        os.remove(path1)
+
+
+def _update_shape_comuni(year):
+    link = f"{cfg.shape_comuni['link']}0101{year}.zip"
+    file_name = link.split("/")[-1]
+    folder_path = (root_path / PureWindowsPath(cfg.shape_comuni["path"])).parent
+    file_path = PureWindowsPath(folder_path) / PureWindowsPath(file_name)
+    log.info("Start downloading the Shape File (63.4M)")
+    start = datetime.now()
+    Path(folder_path).mkdir(parents=True, exist_ok=True)
+    try:
+        urllib.request.urlretrieve(link, file_path)
+    except:
+        raise Exception(f"Link for update ISTAT shape file not found (link:{link}). \n"
+                        f"Verify internet conenction or ISTAT hasn't published shape file for {year} yet.")
+    end = datetime.now()
+    log.info(f"Dowload Shape File ended in {end - start}")
+    new_file_path = PureWindowsPath(folder_path) / PureWindowsPath(
+        file_name.replace(".zip", ""))
+    log.info("Start unzipping the file")
+    start = datetime.now()
+    with zipfile.ZipFile(file_path, 'r') as zip_ref:
+        zip_ref.extractall(folder_path)
+    os.remove(file_path)
+    end = datetime.now()
+    log.info("Unzipping ended in {}".format(end - start))
+
+    # Move Files
+    for _folder in os.listdir(new_file_path):
+        if _folder.startswith("Com"):
+            _folder_path = PureWindowsPath(new_file_path) / PureWindowsPath(_folder)
+            shutil.rmtree(root_path / cfg.shape_comuni["path"])
+            os.replace(_folder_path, root_path / cfg.shape_comuni["path"])
+        elif _folder.startswith("Prov"):
+            _folder_path = PureWindowsPath(new_file_path) / PureWindowsPath(_folder)
+            shutil.rmtree(root_path / cfg.shape_province["path"])
+            os.replace(_folder_path, root_path / cfg.shape_province["path"])
+        elif _folder.startswith("Reg"):
+            _folder_path = PureWindowsPath(new_file_path) / PureWindowsPath(_folder)
+            shutil.rmtree(root_path / cfg.shape_regioni["path"])
+            os.replace(_folder_path, root_path / cfg.shape_regioni["path"])
+
+    shutil.rmtree(new_file_path)
+    return
+
+
+def upload_data_istat_from_api():
+    year = datetime.now().year
+    _update_shape_comuni(year)
+    _update_dimension_info(year)
+    _update_population_info(year)
+    create_df()
+

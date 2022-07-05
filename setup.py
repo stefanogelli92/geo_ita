@@ -6,19 +6,19 @@ with open("README.md", "r") as readme_file:
 
 requirements = ["pandas", "twine", "geopandas", "geopy",
                 "matplotlib>=3.1.1", "numpy", "descartes",
-                "xlrd==1.2.0", "unidecode", "pyproj",
+                "xlrd", "unidecode", "pyproj", "rtree",
                 "bokeh", "requests", "beautifulsoup4", "google", "scipy",
                 "google-api-python-client", "valdec", "pydantic"]
 
 setup(
     name="geo_ita",
-    version="0.1.70",
+    version="0.0.1",
     author="Stefano Gelli",
     author_email="stefano.mat92@gmail.com",
     description="A package for geo analysis for Italy",
     long_description=readme,
     long_description_content_type="text/markdown",
-    url="https://github.com/enelx-customer-business-analytics/geo_ita.git",
+    url="https://github.com/stefanogelli92/geo_ita.git",
     packages=find_packages(exclude=("geo_ita.src")),
     install_requires=requirements,
     include_package_data=True,
@@ -26,7 +26,7 @@ setup(
             "geo_ita": ["data_sources/*.*"]
         },
     classifiers=[
-        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.9",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     ],
 )

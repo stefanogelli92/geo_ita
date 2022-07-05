@@ -21,6 +21,10 @@ geo_ita.egg-info/SOURCES.txt
 geo_ita.egg-info/dependency_links.txt
 geo_ita.egg-info/requires.txt
 geo_ita.egg-info/top_level.txt
+geo_ita/data_sources/df_comuni.pkl
+geo_ita/data_sources/df_province.pkl
+geo_ita/data_sources/df_regioni.pkl
+geo_ita/data_sources/df_variazioni_mapping.pkl
 geo_ita/src/_data.py
 geo_ita/src/_enrich_dataframe.py
 geo_ita/src/_plot.py

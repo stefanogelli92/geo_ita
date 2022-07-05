@@ -1,4 +1,4 @@
-from pandas._testing import assert_frame_equal
+from pandas._testing import assert_frame_equal, assert_series_equal
 
 from geo_ita.src._enrich_dataframe import __find_coordinates_system
 
@@ -6,6 +6,7 @@ from geo_ita.src._enrich_dataframe import *
 from geo_ita.src._data import *
 from geo_ita.src.definition import *
 from pathlib import PureWindowsPath
+from geo_ita.src.config import *
 import logging
 
 log = logging.getLogger(__name__)
@@ -14,11 +15,10 @@ log.addHandler(logging.NullHandler())
 import unittest
 
 
-class TestEnrichDataframe(unittest.TestCase):
+class TestGetCoordinatesFromAddress(unittest.TestCase):
 
-    # get_coordinates_from_address
-
-    def xtest_get_coordinates_from_address_input(self):
+    def test_get_coordinates_from_address_input(self):
+        # Use wrong input type
         df, address = ["via corso di Francia"], "address"
         with self.assertRaises(Exception):
             get_coordinates_from_address(df, address)
@@ -35,32 +35,35 @@ class TestEnrichDataframe(unittest.TestCase):
         self.assertEqual(0, result.shape[0])
         self.assertListEqual(["address", "latitude", "longitude"], list(result.columns))
 
-    def xtest_get_coordinates_from_address_match(self):
+    def test_get_coordinates_from_address_match(self):
         df, address = pd.DataFrame(data=[["Corso di Francia Roma"]], columns=["address"]), "address"
         result = get_coordinates_from_address(df, address)
         result = get_city_from_coordinates(result)
-        self.assertEqual("Roma", result["denominazione_comune"].values[0])
+        self.assertEqual("Roma", result[TAG_COMUNE].values[0])
         df, address = pd.DataFrame(data=[["Corso di Francia Roma", "Firenze"]], columns=["address", "city"]), "address"
         city = "city"
         result = get_coordinates_from_address(df, address, city)
         self.assertEqual(None, result["latitude"].values[0])
-        df, address = pd.DataFrame(data=[["Corso di Francia Roma", "Firenze"],
-                                         ["Corso di Francia", "Roma"],
-                                         ["Viale G. P. da Palestrina", "Latina"],
-                                         ["Via S. Barbara", "Paola"],
-                                         ["Via dellAquila Reale", "Roma"],
-                                         ["xxxx", None]], columns=["address", "city"]), "address"
+        df, address = pd.DataFrame(data=[["Corso di Francia Roma", "Firenze", None],
+                                         ["Corso di Francia", "Roma", "Roma"],
+                                         ["Viale G. P. da Palestrina", "Latina", "Latina"],
+                                         ["Via dellAquila Reale", "Roma", "Roma"],
+                                         ["xxxx", None, None]], columns=["address", "city", "comune_check"]), "address"
         city = "city"
         result = get_coordinates_from_address(df, address, city)
         result = get_city_from_coordinates(result)
-        self.assertTrue(pd.isnull(result["latitude"].values[0]))
-        self.assertTrue(pd.isnull(result["latitude"].values[-1]))
-        self.assertEqual("Roma", result["denominazione_comune"].values[1])
-        self.assertEqual("Roma", result["denominazione_comune"].values[4])
+        result.loc[result[TAG_PROVINCIA].isnull(), TAG_PROVINCIA] = None
+        assert_series_equal(result["comune_check"],
+                            result[TAG_PROVINCIA],
+                            check_names=False, check_dtype=False
+                           )
+
+
+class Prova():
 
     # get_address_from_coordinates
 
-    def xtest_get_address_from_coordinates_input(self):
+    def test_get_address_from_coordinates_input(self):
         df = ["via corso di Francia"]
         with self.assertRaises(Exception):
             get_address_from_coordinates(df)
@@ -83,7 +86,7 @@ class TestEnrichDataframe(unittest.TestCase):
         self.assertEqual(0, result.shape[0])
         self.assertListEqual(['lat', 'lon', 'address', 'city'], list(result.columns))
 
-    def xtest_get_address_from_coordinates_match(self):
+    def test_get_address_from_coordinates_match(self):
         df = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]], columns=["lat", "lon"])
         result = get_address_from_coordinates(df)
         self.assertEqual("Roma", result["city"].values[0])
@@ -96,7 +99,7 @@ class TestEnrichDataframe(unittest.TestCase):
 
     # AddGeographicalInfo
 
-    def xtest_add_geographical_info_input(self):
+    def test_add_geographical_info_input(self):
         df = ["via corso di Francia"]
         with self.assertRaises(Exception):
             AddGeographicalInfo(df)
@@ -144,7 +147,7 @@ class TestEnrichDataframe(unittest.TestCase):
                                        cfg.TAG_AREA_GEOGRAFICA,
                                        cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE], list(result.columns))
 
-    def xtest_add_geographical_info_match(self):
+    def test_add_geographical_info_match(self):
         df = pd.DataFrame(data=[["Milano", "Milano", "Milano", "MI", "Lombardia"],
                                 ["florence", "Firenze", "Firenze", "FI", "Toscana"],
                                 ["porretta terme", "Alto Reno Terme", "Bologna", "BO", "Emilia-Romagna"],
@@ -175,14 +178,14 @@ class TestEnrichDataframe(unittest.TestCase):
         addinfo.run_simple_match()
         result = addinfo.get_result()
 
-    def xtest_aggregate_point_by_distance(self):
+    def test_aggregate_point_by_distance(self):
         df = get_df_comuni()
         df = aggregate_point_by_distance(df, 5000, latitude_columns="center_y", longitude_columns="center_x")
 
-    def xtest_get_population_nearby_input(self):
+    def test_get_population_nearby_input(self):
         pass
 
-    def xtest_get_population_nearby_usage(self):
+    def test_get_population_nearby_usage(self):
         test_df = pd.DataFrame([[41.65756068387786, 13.351242360288134]], columns=["center_y", "center_x"])
         #test_df = get_df_comuni()
         test_df = get_population_nearby(test_df, 300, latitude_columns="center_y", longitude_columns="center_x")
@@ -190,7 +193,7 @@ class TestEnrichDataframe(unittest.TestCase):
 
     # GeoDataQuality
 
-    def test_GeoDataQuality(self):
+    def xtest_GeoDataQuality(self):
         df = pd.read_excel(root_path / PureWindowsPath(r"data_sources/Test/data_quality_samples.xlsx"))
         dq = GeoDataQuality(df)
         dq.set_nazione_tag("nazione")
@@ -224,6 +227,8 @@ def test_KDEDensity():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
+    unit = TestGetCoordinatesFromAddress()
+    unit.main()
     unittest.main()
 
     #test_KDEDensity()

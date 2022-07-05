@@ -42,12 +42,14 @@ variazioni_amministrative = {
                        "Tipo variazione": "tipo_variazione"}}
 
 popolazione_comuni = {
-    "path": r"data_sources/Comuni/Popolazione",
-    "column_rename": {"ITTER107": TAG_CODICE_COMUNE,
-                      "Value": TAG_POPOLAZIONE}
+    #"path": r"data_sources/Comuni/Popolazione",
+    "path": r"data_sources/Comuni/Popolazione/popolazione.pkl",
+    "column_rename": {"Codice Comune": TAG_CODICE_COMUNE,
+                      "Popolazione": TAG_POPOLAZIONE}
 }
 
 shape_comuni = {
+    "link": r"https://www.istat.it/storage/cartografia/confini_amministrativi/non_generalizzati/Limiti",
     "path": r"data_sources/Comuni/Shape",
     "column_rename": {"PRO_COM": TAG_CODICE_COMUNE,
                       "geometry": "geometry",
@@ -183,8 +185,9 @@ comuni_omonimi = {
 high_resolution_population_density = {
     "folder_path": "data_sources/HighResolutionPopulationDensity",
     "file_path": "data_sources/HighResolutionPopulationDensity/high_resolution_population_density.pkl",
-    "link": r"https://data.humdata.org/dataset/0eb77b21-06be-42c8-9245-2edaff79952f/resource/1e96f272-7d86-4108-b4ca-5a951a8b11a0/download/population_ita_2019-07-01.csv.zip",
-    "moltiplicative_factor": 10
+    #"link": r"https://data.humdata.org/dataset/0eb77b21-06be-42c8-9245-2edaff79952f/resource/1e96f272-7d86-4108-b4ca-5a951a8b11a0/download/population_ita_2019-07-01.csv.zip",
+    "link": r"https://data.humdata.org/dataset/0eb77b21-06be-42c8-9245-2edaff79952f/resource/1e96f272-7d86-4108-b4ca-5a951a8b11a0/download/ita_general_2020_csv.zip",
+    "moltiplicative_factor": 10,
 }
 
 regex_find_frazioni = r"({}) ?(\[[^\[.]+\])? ?(\([^\(.]+\))? ?([^.]{{0,40}}) (si trova nel comune|fa parte del comune|frazione ?(\([^.]+\))? ?[^.]{{0,20}} ?(\([^.]+\))? comune|borgo del comune|località del comune) (di ?)([^.]+)"

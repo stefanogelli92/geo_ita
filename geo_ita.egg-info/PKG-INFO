@@ -1,13 +1,13 @@
 Metadata-Version: 2.1
 Name: geo-ita
-Version: 0.1.70
+Version: 0.0.1
 Summary: A package for geo analysis for Italy
-Home-page: https://github.com/enelx-customer-business-analytics/geo_ita.git
+Home-page: https://github.com/stefanogelli92/geo_ita.git
 Author: Stefano Gelli
 Author-email: stefano.mat92@gmail.com
 License: UNKNOWN
 Platform: UNKNOWN
-Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.9
 Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)
 Description-Content-Type: text/markdown
 
