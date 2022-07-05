@@ -5,9 +5,10 @@ geopy
 matplotlib>=3.1.1
 numpy
 descartes
-xlrd==1.2.0
+xlrd
 unidecode
 pyproj
+rtree
 bokeh
 requests
 beautifulsoup4
