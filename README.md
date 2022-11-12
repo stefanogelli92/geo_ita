@@ -6,7 +6,7 @@ geo_ita is a library for geographical analysis within Italy.
 
 WARNING: Da rivedee!
 
- - Download whl file from [here](https://downgit.github.io/#/home?url=https://github.com/stefanogelli92/geo_ita/blob/main/dist/geo_ita-0.0.1-py3-none-any.whl) (63 Mb)
+ - Download whl file from [here](https://github.com/stefanogelli92/geo_ita/raw/main/dist/geo_ita-0.0.1-py3-none-any.whl) (63 Mb)
  - Open Terminal on folder where you put the whl file
 
 ```bash
