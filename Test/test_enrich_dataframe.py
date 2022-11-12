@@ -59,9 +59,7 @@ class TestGetCoordinatesFromAddress(unittest.TestCase):
                            )
 
 
-class Prova():
-
-    # get_address_from_coordinates
+class TestGetAddressFromCoordinates(unittest.TestCase):
 
     def test_get_address_from_coordinates_input(self):
         df = ["via corso di Francia"]
@@ -70,7 +68,8 @@ class Prova():
         df = pd.DataFrame(data=[["via corso di Francia"]], columns=["address"])
         with self.assertRaises(Exception):
             get_address_from_coordinates(df)
-        df, latitude_columns, longitude_columns = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]], columns=["latitude", "longitude"]), \
+        df, latitude_columns, longitude_columns = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]],
+                                                               columns=["latitude", "longitude"]), \
                                                   "lat", "lon"
         with self.assertRaises(Exception):
             get_address_from_coordinates(df, latitude_columns=latitude_columns, longitude_columns=longitude_columns)
@@ -97,7 +96,8 @@ class Prova():
         result = get_address_from_coordinates(df)
         self.assertEqual(None, result["city"].values[0])
 
-    # AddGeographicalInfo
+
+class TestAddGeographicalInfo(unittest.TestCase):
 
     def test_add_geographical_info_input(self):
         df = ["via corso di Francia"]
@@ -178,6 +178,17 @@ class Prova():
         addinfo.run_simple_match()
         result = addinfo.get_result()
 
+
+class Prova():
+
+    # get_address_from_coordinates
+
+
+
+    # AddGeographicalInfo
+
+
+
     def test_aggregate_point_by_distance(self):
         df = get_df_comuni()
         df = aggregate_point_by_distance(df, 5000, latitude_columns="center_y", longitude_columns="center_x")
@@ -193,7 +204,7 @@ class Prova():
 
     # GeoDataQuality
 
-    def xtest_GeoDataQuality(self):
+    def test_GeoDataQuality(self):
         df = pd.read_excel(root_path / PureWindowsPath(r"data_sources/Test/data_quality_samples.xlsx"))
         dq = GeoDataQuality(df)
         dq.set_nazione_tag("nazione")
@@ -229,7 +240,9 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     unit = TestGetCoordinatesFromAddress()
     unit.main()
-    unittest.main()
+
+    unit = TestGetAddressFromCoordinates()
+    unit.main()
 
     #test_KDEDensity()
 
