@@ -1,12 +1,10 @@
 Metadata-Version: 2.1
 Name: geo-ita
-Version: 0.0.2
+Version: 0.0.1
 Summary: A package for geo analysis for Italy
 Home-page: https://github.com/stefanogelli92/geo_ita.git
 Author: Stefano Gelli
 Author-email: stefano.mat92@gmail.com
-License: UNKNOWN
-Platform: UNKNOWN
 Classifier: Programming Language :: Python :: 3.9
 Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)
 Description-Content-Type: text/markdown
@@ -23,7 +21,7 @@ WARNING: Da rivedee!
  - Open Terminal on folder where you put the whl file
 
 ```bash
-pip install geo_ita-0.1.66-py3-none-any.whl
+pip install geo_ita-0.0.01-py3-none-any.whl
 ```
 
 ## Documentation
@@ -34,13 +32,13 @@ pip install geo_ita-0.1.66-py3-none-any.whl
 ### Data
 ***
 Here you can get all the data avaiable in this libraries.
-- **Anagrafica** (source [ISTAT](https://www.istat.it/it/archivio/6789) - updated to 31-12-2020): 
+- **Anagrafica** (source [ISTAT](https://www.istat.it/storage/codici-unita-amministrative/Archivio-elenco-comuni-codici-e-denominazioni_Anno_2022.zip) - updated to 01-08-2022): 
        <br>Contains the list of each *Comune* with the hierarchical structure of *Province* and *Regioni*.
-- **Superficie** (source API Istat - updated to 31-12-2020):
+- **Superficie** (source API Istat - updated to 31-12-2021):
        <br>Contains the area of each *Comune* in Km2.
-- **Popolazione** (source [ISTAT](http://dati.istat.it/Index.aspx?DataSetCode=DCIS_POPRES1) - updated to 01-01-2020): 
+- **Popolazione** (source API Istat - updated to 31-12-2021): 
        <br>Contains the population of each *Comune*.
-- **Shape** (source [ISTAT](https://www.istat.it/it/archivio/222527) - updated to 01-01-2020): 
+- **Shape** (source [ISTAT](https://www.istat.it/storage/cartografia/confini_amministrativi/non_generalizzati/Limiti01012022.zip) - updated to 01-01-2022): 
        <br> Contains the shapes of each *Comune*, *Provincia* and *Regione*. The main use of the shapes is to plot the [Choropleth map](https://en.wikipedia.org/wiki/Choropleth_map#:~:text=A%20choropleth%20map%20(from%20Greek,each%20area%2C%20such%20as%20population)).
 - **High density Population** (source [Facebook](https://data.humdata.org/dataset/italy-high-resolution-population-density-maps-demographic-estimates) - updated to 04 -03-2020): 
        <br> Contains a more detailed density of population estimated by Facebook. They use machine learning techniques to identify buildings from commercially available satellite images to distribute the value of population in a very high-definition map.
@@ -59,6 +57,8 @@ denominazione_comune  codice_comune denominazione_provincia  codice_provincia de
              Airasca           1002                  Torino                 1              Piemonte               1    TO         3598  POLYGON ((380700.909 4977305.520, 380702.627 4...  380324.100684  4.975382e+06         15.7395 
 ```
 You can also get the list of *Comuni*, *Province* and *Regioni* with *get_list_comuni*, *get_list_province* and *get_list_regioni*.
+
+For High density Population use *get_high_resolution_population_density_df* (the first time it will download it from the source.
 ***
 ### Enrich Dataframe
 ***
@@ -160,7 +160,7 @@ result = addinfo.get_result()
 # Usage
 from geo_ita.enrich_dataframe import GeoDataQuality
 
-df = <you dataframe
+df = <you dataframe>
 
 # Create the class and pass the dataframe
 dq = GeoDataQuality(df)
@@ -306,22 +306,17 @@ plot_kernel_density_estimation_interactive(df, value_tag="popolazione",
 ![plot](./Test/usage_kernel_density_variable.png?raw=true)
 ***
 ## TODO
-1. Condividere libreria senza whl
-2. Completare test Units
-3. Aggiornamento dati automatico
-4. Valutare utilizzo dei dati storici ISTAT e non solo ultimi
-5. Trovare nome piÃ¹ parlante per Enrich Dataset
-6. Utilizzo possibile delle api di Google con codice in input
-7. Semplificare utilizzo AddGeoInfo (forse non classe)
-8. Point Map inserire possibilitÃ  di plottare piÃ¹ dataset di punti (e forse anche non solo punti)
-9. Kernel Estimation Migliorare guida
-10. Kernel estimation semplificare utilizzo
-11. Creare calcolo puntuale Kernel estimation per informazioni puntuali e non plot
-12. valutare calcolo distanza da costa
-13. Valutare distanza in linea d'aria da uscite autostrada + plot autostrade + uscite
+1. Completare test Units
+2. Aggiornamento dati automatico (manca anagrafica e variazioni comuni)
+3. Valutare utilizzo dei dati storici ISTAT e non solo ultimi
+4. Trovare nome piÃ¹ parlante per Enrich Dataset
+5. Utilizzo possibile delle api di Google con codice in input
+6. Semplificare utilizzo AddGeoInfo (forse non classe)
+7. Point Map inserire possibilitÃ  di plottare piÃ¹ dataset di punti (e forse anche non solo punti)
+8. RIvedere tutta la parte di Kernel Estimation
+10. valutare calcolo distanza da costa
+12. Valutare distanza in linea d'aria da uscite autostrada + plot autostrade + uscite
 14. Da valutare calcolo distanza tra punti su strada (Ã¨ corretto averlo in questa libreria?)
 
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)
-
-
