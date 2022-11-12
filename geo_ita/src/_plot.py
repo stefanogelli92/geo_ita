@@ -1188,9 +1188,9 @@ def plot_kernel_density_estimation(df0: pd.DataFrame,
                                    latitude_columns: Union[str, None] = None,
                                    longitude_columns: Union[str, None] = None,
                                    value_tag: Union[str, None] = None,
-                                   comune: Union[str, None] = None,
-                                   provincia: Union[str, None] = None,
-                                   regione: Union[str, None] = None,
+                                   filter_comune: Union[str, None] = None,
+                                   filter_provincia: Union[str, None] = None,
+                                   filter_regione: Union[str, None] = None,
                                    n_grid_x: int = 1000,
                                    n_grid_y: int = 1000,
                                    ax=None,
@@ -1203,37 +1203,37 @@ def plot_kernel_density_estimation(df0: pd.DataFrame,
 
     shape_list = []
 
-    if regione:
+    if filter_regione:
         polygon_df = get_df_regioni()
-        polygon_df = polygon_df[polygon_df[cfg.TAG_REGIONE] == regione][["geometry"]]
+        polygon_df = polygon_df[polygon_df[cfg.TAG_REGIONE] == filter_regione][["geometry"]]
         polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': f"epsg:{coord_system_input}"})
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
         shape = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
-        shape = shape[shape[cfg.TAG_REGIONE] == regione]
+        shape = shape[shape[cfg.TAG_REGIONE] == filter_regione]
         shape = gpd.GeoDataFrame(shape, geometry="geometry")
         shape.crs = {'init': "epsg:32632"}
         shape = shape.to_crs({'init': f"epsg:{coord_system_input}"})
         shape_list.append((shape, 0.2, "0.8"))
-    elif provincia:
+    elif filter_provincia:
         polygon_df = get_df_province()
-        polygon_df = polygon_df[polygon_df[cfg.TAG_PROVINCIA] == provincia][["geometry"]]
+        polygon_df = polygon_df[polygon_df[cfg.TAG_PROVINCIA] == filter_provincia][["geometry"]]
         polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': f"epsg:{coord_system_input}"})
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
         shape = _get_shape_from_level(cfg.LEVEL_COMUNE)
-        shape = shape[shape[cfg.TAG_PROVINCIA] == provincia]
+        shape = shape[shape[cfg.TAG_PROVINCIA] == filter_provincia]
         shape = gpd.GeoDataFrame(shape, geometry="geometry")
         shape.crs = {'init': "epsg:32632"}
         shape = shape.to_crs({'init': f"epsg:{coord_system_input}"})
         shape_list.append((shape, 0.2, "0.8"))
-    elif comune:
+    elif filter_comune:
         polygon_df = get_df_comuni()
-        polygon_df = polygon_df[polygon_df[cfg.TAG_COMUNE] == comune][["geometry"]]
+        polygon_df = polygon_df[polygon_df[cfg.TAG_COMUNE] == filter_comune][["geometry"]]
         polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
         polygon_df.crs = {'init': "epsg:32632"}
         polygon_df = polygon_df.to_crs({'init': f"epsg:{coord_system_input}"})
