@@ -25,12 +25,12 @@ from googleapiclient.discovery import build
 
 from bokeh.models import (
     ColumnDataSource, DataTable, TableColumn, HTMLTemplateFormatter, CategoricalColorMapper,
-    LabelSet, Label, WheelZoomTool, CustomJS, Panel, Tabs, TextInput, HoverTool
+    LabelSet, Label, WheelZoomTool, CustomJS, TabPanel, Tabs, TextInput, HoverTool
 )
 from bokeh.plotting import save, figure
 from bokeh.io import output_file, show
 from bokeh.layouts import column, row
-from bokeh.tile_providers import CARTODBPOSITRON, get_provider
+import xyzservices.providers as xyz
 from pyproj import Proj, transform
 
 from geo_ita.src.definition import *
@@ -1634,7 +1634,7 @@ class GeoDataQuality:
     def _create_header(width, background_color, text_color, title, subtitle):
         height = 100 if subtitle is not None else 50
         header = figure(x_range=(0, 1), y_range=(0, 1),
-                        plot_width=width, plot_height=height,
+                        width=width, height=height,
                         tools="")
         header.background_fill_color = background_color
         header.xgrid.grid_line_color = None
@@ -1664,15 +1664,14 @@ class GeoDataQuality:
         return header
 
     def _create_map_plot(self, width, source_info):
-        tile_provider = get_provider(CARTODBPOSITRON)
 
         margins = [[723576.6901562785, 2070542.52875489], [4355801.264971882, 5999391.278141545]]
 
         map_plot = figure(x_range=(margins[0][0], margins[0][1]),
                           y_range=(margins[1][0], margins[1][1]),
-                          x_axis_type="mercator", y_axis_type="mercator", plot_width=width,
+                          x_axis_type="mercator", y_axis_type="mercator", width=width,
                           tools='pan,tap,wheel_zoom')
-        map_plot.add_tile(tile_provider)
+        map_plot.add_tile(xyz.CartoDB.Positron)
         map_plot.xgrid.grid_line_color = None
         map_plot.ygrid.grid_line_color = None
         map_plot.yaxis.visible = False
@@ -1722,7 +1721,7 @@ class GeoDataQuality:
         width = 1000
         width_check = 250
         row_height = 30
-        perc_plot_height = 50
+        perc_height = 50
         ok_tag = "OK"
         warning_tag = "Warning"
         solved_tag = "Warning solved"
@@ -1934,8 +1933,8 @@ class GeoDataQuality:
                                      )
 
         check_plot = figure(
-            plot_height=height,
-            plot_width=width_check,
+            height=height,
+            width=width_check,
             x_range=(0, 1),
             y_range=(0, n_plot),
             x_axis_location="above",
@@ -1954,12 +1953,12 @@ class GeoDataQuality:
                           fill_color={"field": "check_color",
                                       "transform": CategoricalColorMapper(factors=[ok_tag, solved_tag, warning_tag],
                                                                           palette=["green", "orange", "red"])},
-                          source=source, legend="check_color")
+                          source=source, legend_label="check_color")
         check_plot.add_layout(check_plot.legend[0], 'right')
 
         perc_plot = figure(
-            plot_height=perc_plot_height,
-            plot_width=width,
+            height=perc_height,
+            width=width,
             x_range=(0, i),
             y_range=(0, 1),
             tools='tap')
@@ -2067,7 +2066,7 @@ class GeoDataQuality:
         plot = column(perc_plot, row(data_table, check_plot))
         if self.latitude_tag:
             map_plot = self._create_map_plot(width + width_check, source)
-            tabs = [Panel(child=plot, title="Details"), Panel(child=map_plot, title="Map")]
+            tabs = [TabPanel(child=plot, title="Details"), TabPanel(child=map_plot, title="Map")]
             plot = Tabs(tabs=tabs, tabs_location='left')
 
         plot = column(header, text_input, plot)

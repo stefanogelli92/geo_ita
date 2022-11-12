@@ -179,15 +179,7 @@ class TestAddGeographicalInfo(unittest.TestCase):
         result = addinfo.get_result()
 
 
-class Prova():
-
-    # get_address_from_coordinates
-
-
-
-    # AddGeographicalInfo
-
-
+class Prova(unittest.TestCase):
 
     def test_aggregate_point_by_distance(self):
         df = get_df_comuni()
@@ -222,7 +214,6 @@ class Prova():
                            df[col_test],
                            check_names=False, check_dtype=False
                            )
-        prova = ""
 
 
 def test_KDEDensity():
@@ -234,15 +225,3 @@ def test_KDEDensity():
     prova1 = kde.evaluate_in_point(43.89243338039644, 11.07762361613304)
     prova2 = kde.evaluate_in_point(43.874280169137386, 11.065771494973662)
     prova = "Ciao"
-
-
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    unit = TestGetCoordinatesFromAddress()
-    unit.main()
-
-    unit = TestGetAddressFromCoordinates()
-    unit.main()
-
-    #test_KDEDensity()
-

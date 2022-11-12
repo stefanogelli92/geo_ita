@@ -21,13 +21,13 @@ from bokeh.plotting import save, figure
 from bokeh.layouts import column, row
 from bokeh.io import output_file, show
 from bokeh.models.mappers import LinearColorMapper
-from bokeh.tile_providers import CARTODBPOSITRON, get_provider
 from bokeh.models import (
     ColumnDataSource, WheelZoomTool, HoverTool, DataTable, TableColumn, Select, CustomJS, GeoJSONDataSource, ColorBar,
     CategoricalColorMapper, NumberFormatter, NumeralTickFormatter
 )
 from bokeh.models.plots import Plot
 from valdec.decorators import validate
+import xyzservices.providers as xyz
 
 import geo_ita.src.config as cfg
 from geo_ita.src._data import get_df_comuni, get_df_province, get_df_regioni
@@ -662,10 +662,11 @@ def _plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape
     simplify_values = cfg.simplify_values[level]
     geodf["geometry"] = geodf["geometry"].simplify(simplify_values)
     geosource = GeoJSONDataSource(geojson=geodf.to_json())
+    geosource2 = ColumnDataSource(data=geodf[["denominazione_comune", "popolazione", "superficie_km2"]])
     mapper = palette_list[field_list[0]]
     p = figure(title=title,
-               plot_height=900,
-               plot_width=800,
+               height=900,
+               width=800,
                tools='pan, wheel_zoom, box_zoom, reset')
     p.title.text_font_size = "25px"
     p.xgrid.grid_line_color = None
@@ -693,7 +694,7 @@ def _plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape
     else:
         line_width = 0.1
 
-    data_table = DataTable(source=geosource, columns=columns, selectable=False)
+    data_table = DataTable(source=geosource2, columns=columns, selectable=False)
     image = p.patches('xs', 'ys', source=geosource,
                       fill_color=mapper,
                       fill_alpha=0.7,
@@ -740,7 +741,7 @@ def _plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape
                                                "y": [],
                                                "color": [],
                                                "factor": []})
-    legend_image = p.circle(x="x", y="y", size=0, fill_color="color", legend="factor", line_width=0,
+    legend_image = p.circle(x="x", y="y", size=0, fill_color="color", legend_field="factor", line_width=0,
                             source=source_legend)
     p.legend.title = list(dict_values.values())[0]
     p.legend.title_text_font_size = "20px"
@@ -749,13 +750,16 @@ def _plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape
         p.legend.border_line_width = 0
 
     geosource.selected.js_on_change('indices', CustomJS(
-        args=dict(source=geosource),
+        args=dict(source=geosource, source2=geosource2),
         code="""
             var f = cb_obj.indices[0];
             console.log(f);
             var data = source.data;
             data["line_color"][f] = "blue";
             source.change.emit();
+            var data2 = source2.data;
+            data2["line_color"][f] = "blue";
+            source2.change.emit();
             """
     ))
 
@@ -975,8 +979,8 @@ def plot_point_map_interactive(df0: pd.DataFrame,
                                info_dict: Dict[str, str] = None,
                                title: str = None,
                                table: bool = True,
-                               plot_width: int = 1500,
-                               plot_height: int = 800,
+                               width: int = 1500,
+                               height: int = 800,
                                save_in_path: Union[str, Path] = None,
                                show_flag: bool = True) -> Plot:
     filter_comune = _check_filter(filter_comune)
@@ -986,12 +990,10 @@ def plot_point_map_interactive(df0: pd.DataFrame,
                                   filter_provincia=filter_provincia,
                                   filter_regione=filter_regione)
 
-    tile_provider = get_provider(CARTODBPOSITRON)
-
     plot = figure(x_range=(margins[0][0], margins[0][1]),
                   y_range=(margins[1][0], margins[1][1]),
-                  x_axis_type="mercator", y_axis_type="mercator", plot_width=plot_width, plot_height=plot_height)
-    plot.add_tile(tile_provider)
+                  x_axis_type="mercator", y_axis_type="mercator", width=width, height=height)
+    plot.add_tile(xyz.CartoDB.Positron)
 
     if title is not None:
         plot.title.text = title
@@ -1062,7 +1064,7 @@ def plot_point_map_interactive(df0: pd.DataFrame,
 
     if legend:
         plot1 = plot.circle(x="x", y="y", size=7, fill_color=fill_color, line_width=0.5,
-                            legend=color_tag,
+                            legend_field=color_tag,
                             source=source)
         plot.legend.title = color_tag
         plot.legend.title_text_font_size = "20px"
@@ -1182,23 +1184,22 @@ def sizeof_fmt(num, suffix='B'):
     return "%.1f %s%s" % (num, 'Yi', suffix)
 
 
-@validate
 def plot_kernel_density_estimation(df0: pd.DataFrame,
-                                   latitude_columns: str = None,
-                                   longitude_columns: str = None,
-                                   value_tag: str = None,
-                                   comune: str = None,
-                                   provincia: str = None,
-                                   regione: str = None,
+                                   latitude_columns: Union[str, None] = None,
+                                   longitude_columns: Union[str, None] = None,
+                                   value_tag: Union[str, None] = None,
+                                   comune: Union[str, None] = None,
+                                   provincia: Union[str, None] = None,
+                                   regione: Union[str, None] = None,
                                    n_grid_x: int = 1000,
                                    n_grid_y: int = 1000,
                                    ax=None,
-                                   title: str = None,
-                                   save_in_path: Union[str, Path] = None,
+                                   title: Union[str, None] = None,
+                                   save_in_path: Union[str, Path, None] = None,
                                    dpi: int = 100):
 
     df = __create_geo_dataframe(df0, lat_tag=latitude_columns, long_tag=longitude_columns)
-    coord_system_input = df.crs['init']
+    coord_system_input = df.crs.to_epsg()
 
     shape_list = []
 
@@ -1207,47 +1208,47 @@ def plot_kernel_density_estimation(df0: pd.DataFrame,
         polygon_df = polygon_df[polygon_df[cfg.TAG_REGIONE] == regione][["geometry"]]
         polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
         polygon_df.crs = {'init': "epsg:32632"}
-        polygon_df = polygon_df.to_crs({'init': coord_system_input})
+        polygon_df = polygon_df.to_crs({'init': f"epsg:{coord_system_input}"})
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
         shape = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
         shape = shape[shape[cfg.TAG_REGIONE] == regione]
         shape = gpd.GeoDataFrame(shape, geometry="geometry")
         shape.crs = {'init': "epsg:32632"}
-        shape = shape.to_crs({'init': coord_system_input})
+        shape = shape.to_crs({'init': f"epsg:{coord_system_input}"})
         shape_list.append((shape, 0.2, "0.8"))
     elif provincia:
         polygon_df = get_df_province()
         polygon_df = polygon_df[polygon_df[cfg.TAG_PROVINCIA] == provincia][["geometry"]]
         polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
         polygon_df.crs = {'init': "epsg:32632"}
-        polygon_df = polygon_df.to_crs({'init': coord_system_input})
+        polygon_df = polygon_df.to_crs({'init': f"epsg:{coord_system_input}"})
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
         shape = _get_shape_from_level(cfg.LEVEL_COMUNE)
         shape = shape[shape[cfg.TAG_PROVINCIA] == provincia]
         shape = gpd.GeoDataFrame(shape, geometry="geometry")
         shape.crs = {'init': "epsg:32632"}
-        shape = shape.to_crs({'init': coord_system_input})
+        shape = shape.to_crs({'init': f"epsg:{coord_system_input}"})
         shape_list.append((shape, 0.2, "0.8"))
     elif comune:
         polygon_df = get_df_comuni()
         polygon_df = polygon_df[polygon_df[cfg.TAG_COMUNE] == comune][["geometry"]]
         polygon_df = gpd.GeoDataFrame(polygon_df, geometry="geometry")
         polygon_df.crs = {'init': "epsg:32632"}
-        polygon_df = polygon_df.to_crs({'init': coord_system_input})
+        polygon_df = polygon_df.to_crs({'init': f"epsg:{coord_system_input}"})
         df = gpd.tools.sjoin(df, polygon_df, op='within')
         shape_list.append((polygon_df, 0.4, "0.6"))
     else:
         shape = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
         shape = gpd.GeoDataFrame(shape, geometry="geometry")
         shape.crs = {'init': "epsg:32632"}
-        shape = shape.to_crs({'init': coord_system_input})
+        shape = shape.to_crs({'init': f"epsg:{coord_system_input}"})
         shape_list.append((shape, 0.2, "0.8"))
         shape = _get_shape_from_level(cfg.LEVEL_REGIONE)
         shape = gpd.GeoDataFrame(shape, geometry="geometry")
         shape.crs = {'init': "epsg:32632"}
-        shape = shape.to_crs({'init': coord_system_input})
+        shape = shape.to_crs({'init': f"epsg:{coord_system_input}"})
         shape_list.append((shape, 0.4, "0.6"))
 
     x, y = df["geometry"].x.values, df["geometry"].y.values
@@ -1297,8 +1298,8 @@ def plot_kernel_density_estimation_interactive(df0: pd.DataFrame,
                                                n_grid_x: int = 1000,
                                                n_grid_y: int = 1000,
                                                title: str = None,
-                                               plot_width: Union[int, float] = 1500,
-                                               plot_height: Union[int, float] = 800,
+                                               width: Union[int, float] = 1500,
+                                               height: Union[int, float] = 800,
                                                save_in_path: Union[str, Path] = None,
                                                show_flag: bool = True) -> Plot:
     df = df0.copy()
@@ -1339,12 +1340,10 @@ def plot_kernel_density_estimation_interactive(df0: pd.DataFrame,
 
     z[z <= 0] = 0
 
-    tile_provider = get_provider(CARTODBPOSITRON)
-
     plot = figure(x_range=(margins[0][0], margins[0][1]),
                   y_range=(margins[1][0], margins[1][1]),
-                  x_axis_type="mercator", y_axis_type="mercator", plot_width=plot_width, plot_height=plot_height)
-    plot.add_tile(tile_provider)
+                  x_axis_type="mercator", y_axis_type="mercator", width=width, height=height)
+    plot.add_tile(xyz.CartoDB.Positron)
     plot.xgrid.grid_line_color = None
     plot.ygrid.grid_line_color = None
     plot.yaxis.visible = False

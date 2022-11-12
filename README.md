@@ -147,7 +147,7 @@ result = addinfo.get_result()
 # Usage
 from geo_ita.enrich_dataframe import GeoDataQuality
 
-df = <you dataframe
+df = <you dataframe>
 
 # Create the class and pass the dataframe
 dq = GeoDataQuality(df)

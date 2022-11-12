@@ -6,7 +6,7 @@ with open("README.md", "r") as readme_file:
 
 requirements = ["pandas", "twine", "geopandas", "geopy",
                 "matplotlib>=3.1.1", "numpy", "descartes",
-                "xlrd", "unidecode", "pyproj", "rtree",
+                "xlrd", "openpyxl", "unidecode", "pyproj", "rtree",
                 "bokeh", "requests", "beautifulsoup4", "google", "scipy",
                 "google-api-python-client", "valdec", "pydantic"]
 

@@ -29,105 +29,68 @@ class TestPlot(unittest.TestCase):
     def test_plot_choropleth_map_input(self):
         pass
 
+    def test_plot_choropleth_map(self):
+        test_df = get_df_regioni()
 
-def test_plot_choropleth_map():
-    test_df = get_df_regioni()
+        plot_choropleth_map_regionale(test_df, cfg.TAG_REGIONE,
+                                      "popolazione",
+                                      title="Popolazione Regionale", save_path="usage_choropleth_regionale.png",
+                                      dpi=50)
+        print("ok1")
 
-    plot_choropleth_map_regionale(test_df, cfg.TAG_REGIONE,
-                                  "popolazione",
-                                  title="Popolazione Regionale", save_path="usage_choropleth_regionale.png",
-                                  dpi=50)
-    print("ok1")
+        test_df = get_df_comuni()
+        plot_choropleth_map_comunale_interactive(test_df, cfg.TAG_COMUNE, {"popolazione": "Popolazione",
+                                                                                 "superficie_km2": "Superficie"},
+                                                    title="Semplificato",
+                                                    save_path="comunale_semplificato.html")
+        print("ok2")
+        plot_choropleth_map_comunale(test_df, cfg.TAG_COMUNE, "popolazione", filter_regione=["lazio ", "campania"])
+        print("ok3")
+        fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+        ax[0].set_title("Popolazione")
+        plot_choropleth_map_regionale(test_df, "denominazione_regione", "popolazione", ax=ax[0], print_labels=True,
+                                      print_perc=False)
+        plot_choropleth_map_regionale(test_df, "denominazione_regione", "superficie_km2", ax=ax[1], print_labels=True,
+                                      print_perc=False, labels_size=15)
+        ax[1].set_title("Superficie")
+        plt.show()
+        print("ok4")
 
-    test_df = get_df_comuni()
-    plot_choropleth_map_comunale_interactive(test_df, cfg.TAG_COMUNE, {"popolazione": "Popolazione",
-                                                                             "superficie_km2": "Superficie"},
-                                                title="Semplificato",
-                                                save_path="comunale_semplificato.html")
-    print("ok2")
-    plot_choropleth_map_comunale(test_df, cfg.TAG_COMUNE, "popolazione", filter_regione=["lazio ", "campania"])
-    print("ok3")
-    fig, ax = plt.subplots(1, 2, figsize=(15, 5))
-    ax[0].set_title("Popolazione")
-    plot_choropleth_map_regionale(test_df, "denominazione_regione", "popolazione", ax=ax[0], print_labels=True,
-                                  print_perc=False)
-    plot_choropleth_map_regionale(test_df, "denominazione_regione", "superficie_km2", ax=ax[1], print_labels=True,
-                                  print_perc=False, labels_size=15)
-    ax[1].set_title("Superficie")
-    plt.show()
-    print("ok4")
+    def test_point_map(self):
+        test_df = get_df_province()
+        plot_point_map_interactive(test_df,
+                                   longitude_columns="center_x",
+                                   latitude_columns="center_y",
+                                   filter_regione="Toscana", show_flag=False,
+                                   save_in_path="usage_point_map_1.html")
+        plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x',
+                        size=12, title="Province", save_in_path="usage_point_map_comuni.png",
+                        color_tag="popolazione")
+        test_df = get_df_comuni()
+        plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x',
+                       filter_regione="Toscana", color_tag="denominazione_provincia",
+                       size=8, title="Comuni", save_in_path="usage_point_map_comuni2.png")
+        plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x', color_tag="popolazione", filter_provincia="Prato")
+        plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x', color_tag="denominazione_regione", legend_font=5)
+        plot_point_map_interactive(test_df, latitude_columns='center_y', longitude_columns='center_x',
+                                   color_tag="denominazione_regione", save_in_path="usage_point_map_2.html")
 
+    def test_density(self):
+        #df = get_high_resolution_population_density_df()
+        #plot_kernel_density_estimation(df, n_grid_x=500, n_grid_y=500)
 
-def test_point_map():
-    # margins0 = _get_margins()
-    # margins1 = _get_margins(comune="PRato")
-    # margins3 = _get_margins(provincia="Firenze")
-    # margins4 = _get_margins(regione="Toscana")
-    # margins5 = _get_margins(regione="Tascana")
-    test_df = get_df_province()
-    plot_point_map_interactive(test_df,
-                               longitude_columns="center_x",
-                               latitude_columns="center_y",
-                               filter_regione="Toscana", show_flag=False)
-    plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x',
-                    size=12, title="Province", save_in_path="usage_point_map_comuni.png",
-                    color_tag="popolazione")
-    test_df = get_df_comuni()
-    plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x',
-                   filter_regione="Toscana", color_tag="denominazione_provincia",
-                   size=8, title="Comuni", save_in_path="usage_point_map_comuni2.png")
-    plot_point_map(test_df, color_tag="popolazione", provincia="Prato")
-    plot_point_map(test_df, color_tag="denominazione_regione", legend_font=5)
-    plot_point_map_interactive(test_df, color_tag="denominazione_regione")
+        test_df = get_df_comuni()
+        plot_kernel_density_estimation(test_df, latitude_columns='center_y', longitude_columns='center_x',
+                                       n_grid_x=500, n_grid_y=500,
+                                       save_in_path="usage_kernel_density_simple.png")
+        plot_kernel_density_estimation(test_df, value_tag="popolazione", latitude_columns='center_y', longitude_columns='center_x',
+                                       n_grid_x=500, n_grid_y=500,
+                                       save_in_path="usage_kernel_density_variable.png")
+        plot_kernel_density_estimation_interactive(test_df, value_tag="popolazione", latitude_columns='center_y',
+                                       longitude_columns='center_x',
+                                       n_grid_x=500, n_grid_y=500,
+                                       filter_regione="Lazio",
+                                                   save_in_path="usage_kernel_density_estimation_1.html")
 
-
-def test_density():
-    df = get_high_resolution_population_density_df()
-    plot_kernel_density_estimation(df, n_grid_x=500, n_grid_y=500)
-
-    # n = 1000
-    # df = pd.DataFrame(index=range(n))
-    #
-    # df["lat"] = np.random.normal((42 + 41.8)/2, (42 - 41.8)/10,  size=(n, 1))
-    # df["lon"] = np.random.normal((12.6 + 12.37)/2, (12.6 - 12.37)/10, size=(n, 1))
-    # df["popolazione"] = np.random.uniform(0, 100, size=(n, 1))
-    # test_df = get_df_comuni()
-    # plot_kernel_density_estimation(test_df, latitude_columns='center_y', longitude_columns='center_x',
-    #                                n_grid_x=500, n_grid_y=500,
-    #                                save_in_path="usage_kernel_density_simple.png")
-    # plot_kernel_density_estimation(test_df, value_tag="popolazione", latitude_columns='center_y', longitude_columns='center_x',
-    #                                n_grid_x=500, n_grid_y=500,
-    #                                save_in_path="usage_kernel_density_variable.png")
-    # plot_kernel_density_estimation_interactive(test_df, value_tag="popolazione", latitude_columns='center_y',
-    #                                longitude_columns='center_x',
-    #                                n_grid_x=500, n_grid_y=500,
-    #                                filter_regione="Lazio")
-    #
-    #
-    #
-    # # path = root_path / PureWindowsPath(r"data_sources/Test/farmacie_italiane.csv")
-    # # test_df = pd.read_csv(path, sep=";", engine='python')
-    # # test_df = test_df[test_df["LATITUDINE"] != "-"]
-    # # test_df["LATITUDINE"] = test_df["LATITUDINE"].str.replace(",", ".")
-    # # test_df["LONGITUDINE"] = test_df["LONGITUDINE"].str.replace(",", ".")
-    # # plot_kernel_density_estimation_interactive(test_df, n_grid_x=50, n_grid_y=50, comune="Prato")
-    #
-    # test_df = pd.read_pickle(r"C:\Users\A470222\Documents\Python Scripts\ex_mobility\data\Geo/Densita\population_ita_2019-07-01.pkl")
-    # #plot_kernel_density_estimation_interactive(test_df)
-    # test_df = test_df[test_df["denominazione_comune"] == "Prato"]
-    # pop_total = test_df["Population"].sum()
-    # #plot_point_map_interactive(test_df, comune="Prato", info_dict={"Population": "Popolazione"})
-    # plot_kernel_density_estimation_interactive(test_df, value_tag="Population", provincia="Roma")
-    # #plot_kernel_density_estimation(test_df)
-
-    #plot_kernel_density_estimation_interactive(test_df, value_tag="Population", regione="Toscana")
-
-
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    #test_plot_choropleth_map()
-    test_point_map()
-    #test_density()
-    #unittest.main()
 
 
