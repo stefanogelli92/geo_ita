@@ -103,7 +103,7 @@ def _get_anagrafica_df():
     path = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"])
     last_files, _ = __get_last_file_from_folder(path)
 
-    df = pd.read_excel(path / PureWindowsPath(last_files))
+    df = pd.read_excel(path / PureWindowsPath(last_files), keep_default_na=False)
 
     __rename_col(df, cfg.anagrafica_comuni["column_rename"])
     df[cfg.TAG_CODICE_COMUNE] = df[cfg.TAG_CODICE_COMUNE].astype(int)

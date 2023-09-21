@@ -109,7 +109,7 @@ def _plot_choropleth_map(df, color, ax, title, show_colorbar, vmin, vmax, numeri
         df.plot('count', cmap=cmap, vmin=vmin, vmax=vmax, linewidth=line_width, edgecolor='0.8', ax=ax)
         if show_colorbar & numeric_values:
             fmt = lambda x, pos: str(prefix) + _human_format(x) + str(suffix)
-            cbar = ax.get_figure().colorbar(sm, format=FuncFormatter(fmt))
+            cbar = plt.colorbar(sm, format=FuncFormatter(fmt), ax=ax)
             cbar.ax.tick_params(labelsize=10)
     else:
         df.plot('count', linewidth=line_width, edgecolor='0.8', ax=ax, color=df["color"].values)
@@ -929,7 +929,7 @@ def plot_point_map(df0: pd.DataFrame,
             if show_colorbar:
                 sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
                 sm._A = []
-                cbar = fig.colorbar(sm)
+                cbar = plt.colorbar(sm, ax=plt.gca())
                 if legend_font is None:
                     legend_font = 12
                 cbar.ax.tick_params(labelsize=legend_font)

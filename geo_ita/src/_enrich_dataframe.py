@@ -329,10 +329,10 @@ class AddGeographicalInfo:
         else:
             return
         for k, v in replace_multilanguage_name.items():
-            self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].str.replace(r"\b{}\b".format(k),
+            self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].str.replace(f"\b{k}\b",
                                                                           v,
                                                                           regex=True)
-        self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].str.replace(r"([A-Za-z](?s).*) ?[\/] ?\1",
+        self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].str.replace(r"(?s)([A-Za-z].*) ?[\/] ?\1",
                                                                       r"\1",
                                                                       regex=True)
 
@@ -700,7 +700,7 @@ def _code_or_desc(list_values):
     n_tot = len(list_values)
     if n_tot == 0:
         result = cfg.CODE_DENOMINAZIONE
-    elif (sum([isinstance(item, np.integer) or isinstance(item, np.float) or item.isdigit() for item in
+    elif (sum([isinstance(item, int) or isinstance(item, float) or item.isdigit() for item in
                list_values]) / n_tot) > 0.8:
         result = cfg.CODE_CODICE_ISTAT
     elif (sum([isinstance(item, str) and item.isalpha() and len(item) == 2 for item in list_values]) / n_tot) > 0.8:
