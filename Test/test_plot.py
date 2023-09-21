@@ -37,15 +37,20 @@ class TestPlot(unittest.TestCase):
                                       title="Popolazione Regionale", save_path="usage_choropleth_regionale.png",
                                       dpi=50)
         print("ok1")
+        plot_choropleth_map_regionale_interactive(test_df, cfg.TAG_REGIONE, {"popolazione": "Popolazione",
+                                                                           "superficie_km2": "Superficie"},
+                                                 title="Semplificato",
+                                                 save_path="regionale_semplificato.html")
+        print("ok2")
 
         test_df = get_df_comuni()
         plot_choropleth_map_comunale_interactive(test_df, cfg.TAG_COMUNE, {"popolazione": "Popolazione",
                                                                                  "superficie_km2": "Superficie"},
                                                     title="Semplificato",
                                                     save_path="comunale_semplificato.html")
-        print("ok2")
-        plot_choropleth_map_comunale(test_df, cfg.TAG_COMUNE, "popolazione", filter_regione=["lazio ", "campania"])
         print("ok3")
+        plot_choropleth_map_comunale(test_df, cfg.TAG_COMUNE, "popolazione", filter_regione=["lazio ", "campania"])
+        print("ok4")
         fig, ax = plt.subplots(1, 2, figsize=(15, 5))
         ax[0].set_title("Popolazione")
         plot_choropleth_map_regionale(test_df, "denominazione_regione", "popolazione", ax=ax[0], print_labels=True,

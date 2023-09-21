@@ -662,7 +662,7 @@ def _plot_bokeh_choropleth_map(df0, geo_tag, level, dict_values, title="", shape
     simplify_values = cfg.simplify_values[level]
     geodf["geometry"] = geodf["geometry"].simplify(simplify_values)
     geosource = GeoJSONDataSource(geojson=geodf.to_json())
-    geosource2 = ColumnDataSource(data=geodf[["denominazione_comune", "popolazione", "superficie_km2"]])
+    geosource2 = ColumnDataSource(data=geodf[[_get_tag_anag(cfg.CODE_DENOMINAZIONE, level)] + list(dict_values.keys())])
     mapper = palette_list[field_list[0]]
     p = figure(title=title,
                height=900,
@@ -1110,7 +1110,8 @@ def plot_point_map_interactive(df0: pd.DataFrame,
 
 def _get_margins(filter_comune=None,
                  filter_provincia=None,
-                 filter_regione=None):
+                 filter_regione=None,
+                 epsg=3857):
     filter_comune = _check_filter(filter_comune)
     filter_provincia = _check_filter(filter_provincia)
     filter_regione = _check_filter(filter_regione)
@@ -1148,7 +1149,7 @@ def _get_margins(filter_comune=None,
     else:
         margins = margins[["geometry"]]
         margins.crs = {'init': "epsg:32632"}
-        margins = margins.to_crs({'init': 'epsg:3857'})
+        margins = margins.to_crs({'init': f'epsg:{epsg}'})
         margins_coord = margins["geometry"].values
         margins_coord = (min([margins_coord[i].bounds[0] for i in range(len(margins_coord))]),
                        min([margins_coord[i].bounds[1] for i in range(len(margins_coord))]),
