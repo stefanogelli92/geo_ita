@@ -45,18 +45,30 @@ def _get_list(df=None):
 
 
 def get_list_comuni():
+    """
+        Returns
+        The list of names of italian comuni.
+    """
     df = get_df_comuni()
     result = list(df[cfg.TAG_COMUNE].values)
     return result
 
 
 def get_list_province():
+    """
+        Returns
+        The list of names of italian province.
+    """
     df = get_df_province()
     result = list(df[cfg.TAG_PROVINCIA].unique())
     return result
 
 
 def get_list_regioni():
+    """
+        Returns
+        The list of names of italian regioni.
+    """
     df = get_df_regioni()
     result = list(df[cfg.TAG_REGIONE].unique())
     return result
@@ -97,8 +109,7 @@ def __rename_col(df, rename_dict):
 def _get_anagrafica_df():
     """
     Returns
-    Restituisce un dataset contenente un'anagrafica ISTAT dei comuni italiani con il dettaglio delle province di
-    appartenenza e delle regioni.
+    A Dataframe containing the ISTAT registry of italian comuni with details of the corresponding provincia and regione.
     """
     path = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"])
     last_files, _ = __get_last_file_from_folder(path)
@@ -183,7 +194,7 @@ def get_double_languages_mapping_regioni(df=None):
     return df
 
 
-def create_variazioni_amministrative_df():
+def create_administrative_changes_df():
     path = root_path / PureWindowsPath(cfg.variazioni_amministrative["path"])
     last_files, _ = __get_last_file_from_folder(path)
 
@@ -197,7 +208,7 @@ def create_variazioni_amministrative_df():
     return
 
 
-def get_variazioni_amministrative_df():
+def get_administrative_changes_df():
     return pd.read_pickle(root_path / PureWindowsPath(cfg.df_variazioni_mapping["path"]))
 
 
@@ -291,14 +302,6 @@ def get_df(level):
 
 
 def create_df_comuni():
-    """
-    Returns
-    Restituisce un dataset con le seguenti info a livello di comune:
-     - Popolazione
-     - Dimensione
-     - Shape
-     - provincia + Regione
-    """
     anagrafica = _get_anagrafica_df()[cfg.anagrafica_comuni["column_rename"].values()]
     popolazione = _get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
     df = anagrafica.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
@@ -311,18 +314,18 @@ def create_df_comuni():
 
 
 def get_df_comuni():
+    """
+        Returns
+        A dataframe with all the following details for each comune:
+         - Population
+         - Area
+         - Shape
+         - provincia and Regione
+    """
     return pd.read_pickle(root_path / PureWindowsPath(cfg.df_comuni["path"]))
 
 
 def create_df_province():
-    """
-    Returns
-    Restituisce un dataset con le seguenti info a livello di provincia:
-     - Popolazione
-     - Dimensione
-     - Shape
-     - Regione
-    """
     anagrafica = _get_anagrafica_df()[list(cfg.anagrafica_comuni["column_rename"].values()) + [cfg.TAG_PROVINCIA + cfg.TAG_ITA_STRANIERA]]
     popolazione = _get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
     df = anagrafica.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
@@ -339,17 +342,18 @@ def create_df_province():
 
 
 def get_df_province():
+    """
+        Returns
+        A dataframe with all the following details for each provincia:
+         - Population
+         - Area
+         - Shape
+         - Regione
+    """
     return pd.read_pickle(root_path / PureWindowsPath(cfg.df_province["path"]))
 
 
 def create_df_regioni():
-    """
-    Returns
-    Restituisce un dataset con le seguenti info a livello di regione:
-     - Popolazione
-     - Dimensione
-     - Shape
-    """
     anagrafica = _get_anagrafica_df()[list(cfg.anagrafica_comuni["column_rename"].values()) + [cfg.TAG_REGIONE + cfg.TAG_ITA_STRANIERA]]
     popolazione = _get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
     df = anagrafica.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
@@ -365,6 +369,13 @@ def create_df_regioni():
 
 
 def get_df_regioni():
+    """
+        Returns
+        A dataframe with all the following details for each Regione:
+         - Population
+         - Area
+         - Shape
+    """
     return pd.read_pickle(root_path / PureWindowsPath(cfg.df_regioni["path"]))
 
 
@@ -433,11 +444,11 @@ def create_df():
     create_df_comuni()
     create_df_province()
     create_df_regioni()
-    create_variazioni_amministrative_df()
+    create_administrative_changes_df()
 
 
 def _update_dimension_info(ref_year, i=0):
-    year = ref_year - 1
+    year = ref_year - i
     path1 = root_path / PureWindowsPath(cfg.dimensioni_comuni["path"].replace("pkl", "csv"))
     path2 = root_path / PureWindowsPath(cfg.dimensioni_comuni["path"])
     base_url = f"http://sdmx.istat.it/SDMXWS/rest/data/729_1050/A..TOTAREA2?startPeriod={year}"
@@ -449,10 +460,10 @@ def _update_dimension_info(ref_year, i=0):
     df = pd.read_csv(path1)
     if df.shape[0] == 0:
         if i == 4:
-            raise Exception(f"Data on ISTAT api not found. Verify internet conenction.")
+            raise Exception(f"Data on ISTAT api not found. Verify internet connection.")
         else:
             log.warning(f"Data on ISTAT api not found for year {year}.")
-            _update_dimension_info(year, i=i+1)
+            _update_dimension_info(ref_year, i=i+1)
     else:
         df = df[(df["TIME_PERIOD"] == year) &
                 (df["ITTER107"].astype(str).str.isnumeric())]
@@ -488,8 +499,12 @@ def _update_population_info(ref_year, i=0):
         os.remove(path1)
 
 
-def _update_shape_comuni(year):
-    link = f"{cfg.shape_comuni['link']}0101{year}.zip"
+def _update_shape_comuni(year, i=0):
+    links = [
+        f"{cfg.shape_comuni['link']}0101{year}.zip",
+        f"https://www.istat.it/storage/cartografia/confini_amministrativi/non_generalizzati/{year}/Limiti0101{year}.zip"
+    ]
+    link = links[i]
     file_name = link.split("/")[-1]
     folder_path = (root_path / PureWindowsPath(cfg.shape_comuni["path"])).parent
     file_path = PureWindowsPath(folder_path) / PureWindowsPath(file_name)
@@ -499,8 +514,12 @@ def _update_shape_comuni(year):
     try:
         urllib.request.urlretrieve(link, file_path)
     except:
-        raise Exception(f"Link for update ISTAT shape file not found (link:{link}). \n"
-                        f"Verify internet conenction or ISTAT hasn't published shape file for {year} yet.")
+        if i < len(links):
+            _update_shape_comuni(year, i=i+1)
+            return
+        else:
+            raise Exception(f"Link for update ISTAT shape file not found (link:{link}). \n"
+                            f"Verify internet conenction or ISTAT hasn't published shape file for {year} yet.")
     end = datetime.now()
     log.info(f"Dowload Shape File ended in {end - start}")
     new_file_path = PureWindowsPath(folder_path) / PureWindowsPath(
@@ -532,10 +551,12 @@ def _update_shape_comuni(year):
     return
 
 
-def upload_data_istat_from_api():
-    year = datetime.now().year
+def upload_data_istat_from_api(year=None):
+    if year is None:
+        year = datetime.now().year
     _update_shape_comuni(year)
     _update_dimension_info(year)
     _update_population_info(year)
     create_df()
+
 

@@ -36,7 +36,7 @@ from pyproj import Proj, transform
 from geo_ita.src.definition import *
 import geo_ita.src.config as cfg
 from geo_ita.src._data import (
-    get_df, get_df_comuni, get_variazioni_amministrative_df, _get_list,
+    get_df, get_df_comuni, get_administrative_changes_df, _get_list,
     get_double_languages_mapping_comuni, get_double_languages_mapping_province,
     get_double_languages_mapping_regioni,
     _get_shape_italia, get_high_resolution_population_density_df
@@ -353,7 +353,7 @@ class AddGeographicalInfo:
             self.df[cfg.KEY_UNIQUE] = self.df[cfg.KEY_UNIQUE].str.replace(k, v)
 
     def _find_any_variation_from_istat_history(self):
-        df_variazioni = get_variazioni_amministrative_df()
+        df_variazioni = get_administrative_changes_df()
         df_variazioni[cfg.TAG_COMUNE] = _clean_denom_text(df_variazioni[cfg.TAG_COMUNE])
         df_variazioni["new_denominazione_comune"] = _clean_denom_text(df_variazioni["new_denominazione_comune"])
         df_variazioni["data_decorrenza"] = pd.to_datetime(df_variazioni["data_decorrenza"])

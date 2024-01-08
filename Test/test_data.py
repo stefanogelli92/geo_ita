@@ -15,16 +15,39 @@ class TestEnrichDataframe(unittest.TestCase):
         df = get_df_comuni()
         self.assertTrue(isinstance(df, pd.DataFrame))
         self.assertGreater(df.shape[0], 0)
+        non_emphty_columns = [cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_REGIONE, cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]
+        self.assertTrue(set(df.columns).issuperset(set(non_emphty_columns)))
+        for col in non_emphty_columns:
+            pos = df[col].notnull()
+            if pos.sum() > 0:
+                log.warning(f"{col} not found for comuni: {','.join(df[pos][cfg.TAG_COMUNE].values)}")
+            self.assertGreater(pos.mean(), 0.1)
 
     def test_get_df_province(self):
         df = get_df_province()
         self.assertTrue(isinstance(df, pd.DataFrame))
         self.assertGreater(df.shape[0], 0)
+        non_emphty_columns = [cfg.TAG_PROVINCIA, cfg.TAG_REGIONE]
+        numeric_columns = [cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]
+        non_emphty_columns = non_emphty_columns + numeric_columns
+        self.assertTrue(set(df.columns).issuperset(set(non_emphty_columns)))
+        for col in non_emphty_columns:
+            self.assertEqual(df[col].isna().sum(), 0)
+        for col in numeric_columns:
+            self.assertEqual((df[col] <= 0).sum(), 0)
 
     def test_get_df_regioni(self):
         df = get_df_regioni()
         self.assertTrue(isinstance(df, pd.DataFrame))
         self.assertGreater(df.shape[0], 0)
+        non_emphty_columns = [cfg.TAG_REGIONE]
+        numeric_columns = [cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]
+        non_emphty_columns = non_emphty_columns + numeric_columns
+        self.assertTrue(set(df.columns).issuperset(set(non_emphty_columns)))
+        for col in non_emphty_columns:
+            self.assertEqual(df[col].isna().sum(), 0)
+        for col in numeric_columns:
+            self.assertEqual((df[col] <= 0).sum(), 0)
 
     def test_get_list_comuni(self):
         result = get_list_comuni()
@@ -50,7 +73,7 @@ class TestEnrichDataframe(unittest.TestCase):
         self.assertGreater(df.shape[0], 0)
 
     def test_upload_data_istat_from_api(self):
-        upload_data_istat_from_api()
+        upload_data_istat_from_api(year=2023)
 
 
 if __name__ == '__main__':
