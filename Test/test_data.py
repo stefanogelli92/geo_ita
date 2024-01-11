@@ -1,7 +1,7 @@
 import pandas as pd
 
 from geo_ita.src._data import *
-from geo_ita.src._data import upload_data_istat_from_api
+from geo_ita.src._data import update_data_istat
 from geo_ita.src.definition import *
 
 import unittest
@@ -9,7 +9,7 @@ import logging
 from pathlib import PureWindowsPath
 
 
-class TestEnrichDataframe(unittest.TestCase):
+class TestData(unittest.TestCase):
 
     def test_get_df_comuni(self):
         df = get_df_comuni()
@@ -72,8 +72,15 @@ class TestEnrichDataframe(unittest.TestCase):
         self.assertTrue(isinstance(df, pd.DataFrame))
         self.assertGreater(df.shape[0], 0)
 
-    def test_upload_data_istat_from_api(self):
-        upload_data_istat_from_api(year=2023)
+    def test_update_data_istat(self):
+        logging.basicConfig(level=logging.INFO)
+        update_data_istat(year=2022)
+        df = get_df_comuni()
+        n_population_2022 = 59019317.0  # 58991941.0
+        self.assertEqual(df[cfg.TAG_POPOLAZIONE].sum(), n_population_2022)
+        update_data_istat()
+        df = get_df_comuni()
+        self.assertNotEqual(df[cfg.TAG_POPOLAZIONE].sum(), n_population_2022)
 
 
 if __name__ == '__main__':

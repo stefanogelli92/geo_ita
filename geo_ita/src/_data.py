@@ -112,9 +112,7 @@ def _get_anagrafica_df():
     A Dataframe containing the ISTAT registry of italian comuni with details of the corresponding provincia and regione.
     """
     path = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"])
-    last_files, _ = __get_last_file_from_folder(path)
-
-    df = pd.read_excel(path / PureWindowsPath(last_files), keep_default_na=False)
+    df = pd.read_pickle(path)
 
     __rename_col(df, cfg.anagrafica_comuni["column_rename"])
     df[cfg.TAG_CODICE_COMUNE] = df[cfg.TAG_CODICE_COMUNE].astype(int)
@@ -196,10 +194,7 @@ def get_double_languages_mapping_regioni(df=None):
 
 def create_administrative_changes_df():
     path = root_path / PureWindowsPath(cfg.variazioni_amministrative["path"])
-    last_files, _ = __get_last_file_from_folder(path)
-
-    df = pd.read_csv(path / PureWindowsPath(last_files), encoding='latin-1', sep=";")  #
-
+    df = pd.read_pickle(path)
     __rename_col(df, cfg.variazioni_amministrative["column_rename"])
     df = df[df["tipo_variazione"].isin(["ES", "CD"])]
     df["Contenuto del provvedimento"].fillna("", inplace=True)
@@ -447,7 +442,57 @@ def create_df():
     create_administrative_changes_df()
 
 
-def _update_dimension_info(ref_year, i=0):
+def _update_anagrafica1():
+    link = cfg.anagrafica_comuni["link"]
+
+    path1 = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"].replace("pkl", "csv"))
+    path2 = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"])
+
+    log.info(f"Start downloading the list of comuni from link {link}.")
+
+    urllib.request.urlretrieve(link, path1)
+    df = pd.read_csv(path1, keep_default_na=False, encoding='latin-1', sep=";")
+    df.to_pickle(path2)
+    os.remove(path1)
+
+
+def _update_anagrafica2(year):
+    path1 = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"].replace("pkl", "zip"))
+    first_year = 2012
+    n_range = int((year - first_year) / 5)
+    year0 = first_year + n_range * 5
+    year1 = year0 + 4
+    log.info(f"Start downloading the list of comuni ISTAT.")
+    start = datetime.now()
+    for i in range(3):
+        try:
+            link = f"https://www.istat.it/storage/codici-unita-amministrative/Archivio-elenco-comuni-codici-e-denominazioni_Anni_{year0}-{year1 - i}.zip"
+            urllib.request.urlretrieve(link, path1)
+            break
+        except:
+            pass
+    end = datetime.now()
+    log.info(f"DowloadFile ended in {end - start}")
+    path2 = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"].replace(".pkl", ""))
+    log.info("Start unzipping the file")
+    start = datetime.now()
+    with zipfile.ZipFile(path1, 'r') as zip_ref:
+        zip_ref.extractall(path2)
+    os.remove(path1)
+    end = datetime.now()
+    log.info("Unzipping ended in {}".format(end - start))
+
+    path3 = f"Codici-statistici-e-denominazioni-al-01_01_{year}.xls"
+    for root, dirs, files in os.walk(path2):
+        if path3 in files:
+            path3 = os.path.join(root, path3)
+            break
+    df = pd.read_excel(path3, keep_default_na=False)
+    df.to_pickle(root_path / PureWindowsPath(cfg.anagrafica_comuni["path"]))
+    shutil.rmtree(path2)
+
+
+def _update_dimension_info(ref_year, i=0, force_year=False):
     year = ref_year - i
     path1 = root_path / PureWindowsPath(cfg.dimensioni_comuni["path"].replace("pkl", "csv"))
     path2 = root_path / PureWindowsPath(cfg.dimensioni_comuni["path"])
@@ -459,11 +504,15 @@ def _update_dimension_info(ref_year, i=0):
     csv_file.close()
     df = pd.read_csv(path1)
     if df.shape[0] == 0:
-        if i == 4:
+        if i == 2:
             raise Exception(f"Data on ISTAT api not found. Verify internet connection.")
         else:
             log.warning(f"Data on ISTAT api not found for year {year}.")
-            _update_dimension_info(ref_year, i=i+1)
+            if force_year:
+                i = i
+            else:
+                i += 1
+            _update_dimension_info(ref_year, i=i)
     else:
         df = df[(df["TIME_PERIOD"] == year) &
                 (df["ITTER107"].astype(str).str.isnumeric())]
@@ -473,8 +522,8 @@ def _update_dimension_info(ref_year, i=0):
         os.remove(path1)
 
 
-def _update_population_info(ref_year, i=0):
-    year = ref_year
+def _update_population_info(ref_year, i=0, force_year=False):
+    year = ref_year - i
     path1 = root_path / PureWindowsPath(cfg.popolazione_comuni["path"].replace("pkl", "csv"))
     path2 = root_path / PureWindowsPath(cfg.popolazione_comuni["path"])
     base_url = f"http://sdmx.istat.it/SDMXWS/rest/data/22_289/A.TOTAL..9.99..?startPeriod={year}"
@@ -484,22 +533,28 @@ def _update_population_info(ref_year, i=0):
     csv_file.write(url_content)
     csv_file.close()
     df = pd.read_csv(path1)
-    df = df[(df["TIME_PERIOD"] == year) &
-            (df["ITTER107"].astype(str).str.isnumeric())]
-    if df.shape[0] == 0:
+    if "TIME_PERIOD" not in df.columns:
+        df["TIME_PERIOD"] = None
+    if (df.shape[0] == 0) | ((df["TIME_PERIOD"] == year).sum() == 0):
         if i == 2:
             raise Exception(f"Data on ISTAT api not found. Verify internet conenction.")
         else:
             log.warning(f"Data on ISTAT api not found for year {year}.")
-            _update_population_info(year, i=i+1)
+            if force_year:
+                i = i
+            else:
+                i += 1
+            _update_population_info(ref_year, i=i)
     else:
+        df = df[(df["TIME_PERIOD"] == year) &
+                (df["ITTER107"].astype(str).str.isnumeric())]
         df = df[["ITTER107", "OBS_VALUE"]]
         df.columns = ["Codice Comune", "Popolazione"]
         df.to_pickle(path2)
         os.remove(path1)
 
 
-def _update_shape_comuni(year, i=0):
+def _update_shape_comuni(year, i=0, force_year=False):
     links = [
         f"{cfg.shape_comuni['link']}0101{year}.zip",
         f"https://www.istat.it/storage/cartografia/confini_amministrativi/non_generalizzati/{year}/Limiti0101{year}.zip"
@@ -508,14 +563,19 @@ def _update_shape_comuni(year, i=0):
     file_name = link.split("/")[-1]
     folder_path = (root_path / PureWindowsPath(cfg.shape_comuni["path"])).parent
     file_path = PureWindowsPath(folder_path) / PureWindowsPath(file_name)
-    log.info("Start downloading the Shape File (63.4M)")
+    log.info(f"Start downloading the Shape File (63.4M) for the year {year} from link {link}.")
     start = datetime.now()
     Path(folder_path).mkdir(parents=True, exist_ok=True)
     try:
         urllib.request.urlretrieve(link, file_path)
     except:
-        if i < len(links):
-            _update_shape_comuni(year, i=i+1)
+        if i < len(links)-1:
+            _update_shape_comuni(year, i=i+1, force_year=force_year)
+            return
+        elif not force_year:
+            log.info(f"Link for update ISTAT shape file not found (link:{link}). \n"
+                     f"ISTAT may hasn't published shape file for {year} yet, try to get file for year {year-1}.")
+            _update_shape_comuni(year - 1, i=0, force_year=True)
             return
         else:
             raise Exception(f"Link for update ISTAT shape file not found (link:{link}). \n"
@@ -551,12 +611,43 @@ def _update_shape_comuni(year, i=0):
     return
 
 
-def upload_data_istat_from_api(year=None):
+def _update_administrative_changes(year):
+    path1 = root_path / PureWindowsPath(cfg.variazioni_amministrative["path"].replace("pkl", "zip"))
+    link = cfg.variazioni_amministrative["link"]
+    urllib.request.urlretrieve(link, path1)
+    path2 = root_path / PureWindowsPath(cfg.variazioni_amministrative["path"].replace(".pkl", ""))
+    log.info("Start unzipping the file")
+    start = datetime.now()
+    with zipfile.ZipFile(path1, 'r') as zip_ref:
+        zip_ref.extractall(path2)
+    os.remove(path1)
+    end = datetime.now()
+    log.info("Unzipping ended in {}".format(end - start))
+
+    for root, dirs, files in os.walk(path2):
+        for f in files:
+            if r".csv" in f:
+                path3 = os.path.join(root, f)
+                break
+    df = pd.read_csv(path3, encoding='latin-1', sep=";")
+    if year is not None:
+        df = df[df["Anno"] <= year]
+    df.to_pickle(root_path / PureWindowsPath(cfg.variazioni_amministrative["path"]))
+    shutil.rmtree(path2)
+
+
+def update_data_istat(year=None):
     if year is None:
         year = datetime.now().year
-    _update_shape_comuni(year)
-    _update_dimension_info(year)
-    _update_population_info(year)
+        force_year = False
+        _update_anagrafica1()
+    else:
+        force_year = True
+        _update_anagrafica2(year)
+    _update_shape_comuni(year, force_year=force_year)
+    _update_dimension_info(year, force_year=force_year)
+    _update_population_info(year, force_year=force_year)
+    _update_administrative_changes(year)
     create_df()
 
 

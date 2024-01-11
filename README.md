@@ -296,16 +296,13 @@ plot_kernel_density_estimation_interactive(df, value_tag="popolazione",
 ***
 ## TODO
 1. Completare test Units
-2. Aggiornamento dati automatico (manca anagrafica e variazioni comuni)
-3. Valutare utilizzo dei dati storici ISTAT e non solo ultimi
-4. Trovare nome più parlante per Enrich Dataset
-5. Utilizzo possibile delle api di Google con codice in input
-6. Semplificare utilizzo AddGeoInfo (forse non classe)
-7. Point Map inserire possibilità di plottare più dataset di punti (e forse anche non solo punti)
-8. RIvedere tutta la parte di Kernel Estimation
-10. valutare calcolo distanza da costa
-12. Valutare distanza in linea d'aria da uscite autostrada + plot autostrade + uscite
-14. Da valutare calcolo distanza tra punti su strada (è corretto averlo in questa libreria?)
+2. Trovare nome più parlante per Enrich Dataset
+3. Semplificare utilizzo AddGeoInfo (forse non classe)
+4. Point Map inserire possibilità di plottare più dataset di punti (e forse anche non solo punti)
+5. Rivedere tutta la parte di Kernel Estimation
+6. Valutare calcolo distanza da costa
+7. Valutare distanza in linea d'aria da uscite autostrada + plot autostrade + uscite
+8. Da valutare calcolo distanza tra punti su strada (è corretto averlo in questa libreria?)
 
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)

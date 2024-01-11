@@ -21,8 +21,8 @@ KEY_UNIQUE = "key_geo_ita"
 UNIQUE_TAG = "_geo_ita"
 
 anagrafica_comuni = {
-    "path": r"data_sources/Anagrafica",
-    "file_name": "anagrafica.pkl",
+    "path": r"data_sources/Anagrafica/anagrafica_istat.pkl",
+    "link": "https://www.istat.it/storage/codici-unita-amministrative/Elenco-comuni-italiani.csv",
     "column_rename": {"Denominazione in italiano": TAG_COMUNE,
                       "Denominazione (Italiana e straniera)": TAG_COMUNE + TAG_ITA_STRANIERA,
                       "Codice Comune formato alfanumerico": TAG_CODICE_COMUNE,
@@ -35,7 +35,8 @@ anagrafica_comuni = {
                        "Ripartizione geografica": TAG_AREA_GEOGRAFICA}}
 
 variazioni_amministrative = {
-    "path": r"data_sources/Variazioni",
+    "path": r"data_sources/Variazioni/Variazioni amministrative e territoriali_dal 01.01.1991.pkl",
+    "link": r"https://www.istat.it/storage/codici-unita-amministrative/Variazioni-amministrative-e-territoriali-dal-1991.zip",
     "column_rename": {"Denominazione Comune": TAG_COMUNE,
                       "Denominazione Comune associata alla variazione o nuova denominazione": "new_denominazione_comune",
                       "Data decorrenza validità amministrativa": "data_decorrenza",

@@ -793,6 +793,8 @@ def __create_geo_dataframe(df0, lat_tag=None, long_tag=None):
 
 def __find_coordinates_system(df, lat=None, lon=None, geometry=None):
     n_test = min(100, df.shape[0])
+    if n_test == 0:
+        return "epsg:4326"
     test = df.sample(n=n_test)
     if isinstance(df, gpd.GeoDataFrame):
         pass
@@ -2082,6 +2084,9 @@ class GeoDataQuality:
 @validate
 def get_population_nearby(df: pd.DataFrame, radius: Union[int, float],
                           latitude_columns: str = None, longitude_columns: str = None) -> pd.DataFrame:
+    min_radius = 50
+    if radius < min_radius:
+        raise Exception(f"Unable to find population with radius of less than {min_radius}, increase the radius.")
     population_df = get_high_resolution_population_density_df()
     df = df.rename_axis('key_mapping').reset_index()
     radius_df = __create_geo_dataframe(df, lat_tag=latitude_columns, long_tag=longitude_columns)[
@@ -2116,7 +2121,8 @@ def get_population_nearby(df: pd.DataFrame, radius: Union[int, float],
     log.info("Creating GeoDataframe ended in {}".format(end - start))
     log.info("Start Merging input data with population df")
     start = datetime.now()
-    radius_df["geometry"] = radius_df.apply(lambda x: x['geometry'].buffer(dist, cap_style=1), axis=1)
+    if radius_df.shape[0] > 0:
+        radius_df["geometry"] = radius_df.apply(lambda x: x['geometry'].buffer(dist, cap_style=1), axis=1)
     mapping = gpd.sjoin(population_df, radius_df, op='within').groupby("key_mapping")["Population"].sum()
     end = datetime.now()
     log.info("Merging input data with population df ended in {}".format(end - start))
