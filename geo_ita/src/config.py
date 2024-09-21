@@ -201,3 +201,8 @@ simplify_values={LEVEL_REGIONE: 500,
 google_search_api_key = "AIzaSyDQTlp0F0tExsXg1PZn1FF_ugK_bwBhlqA"
 google_search_cse_id = "8558e6507a2bf9d77"
 
+overpass_url = 'http://overpass-api.de/api/interptreter'
+
+highway_shape_file_path = r"data/highway/highway_shape.pkl"
+highway_exit_file_path = r"data/highway/highway_exits.pkl"
+

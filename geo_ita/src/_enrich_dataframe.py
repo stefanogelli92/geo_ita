@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 import re
 import numpy as np
 import pandas as pd
+from scipy import spatial
 from scipy.sparse.csgraph import connected_components
 from scipy.sparse import csr_matrix
 import geopandas as gpd
@@ -39,7 +40,7 @@ from geo_ita.src._data import (
     get_df, get_df_comuni, get_administrative_changes_df, _get_list,
     get_double_languages_mapping_comuni, get_double_languages_mapping_province,
     get_double_languages_mapping_regioni,
-    _get_shape_italia, get_high_resolution_population_density_df
+    _get_shape_italia, get_high_resolution_population_density_df, get_highway_shapes, get_highway_exits
 )
 
 log = logging.getLogger(__name__)
@@ -2129,6 +2130,54 @@ def get_population_nearby(df: pd.DataFrame, radius: Union[int, float],
     df["n_residents"] = df["key_mapping"].map(mapping)
     df["n_residents"].fillna(0, inplace=True)
     df = df.drop(["key_mapping"], axis=1)
+    return df
+
+
+def check_locations_in_highway(df, lat_col, long_col, radius_max=50):
+    highway = get_highway_shapes()
+    x_dist, y_dist = _distance_to_range_ccord(radius_max)
+    dist = (x_dist + y_dist) / 2
+    point_df = df[[lat_col, long_col]].drop_duplicates().copy()
+    point_df = gpd.GeoDataFrame(
+        point_df, geometry=gpd.points_from_xy(point_df[long_col], point_df[lat_col]))
+    point_df["geometry"] = point_df.apply(lambda x: x['geometry'].buffer(dist, cap_style=1), axis=1)
+    point_df = gpd.tools.sjoin(point_df, highway[highway["classificazione"] == "Autostrada"], op='intersects', how="left")
+    point_df["in_highway"] = point_df["id"].notnull()
+    point_df = point_df[[lat_col, long_col, "in_highway"]]
+    df = df.merge(point_df, on=[lat_col, long_col], how="left")
+    return df
+
+
+def _get_nearests_hightway_exits(df, lat_col, long_col, highway_exits, n=1):
+    point_list = highway_exits["point"].to_list()
+
+    def find_nearest_exit(point):
+        tree = spatial.KDTree(point_list)
+        _, nearest_index = tree.query([point], k=n)
+        nearest_index = list(nearest_index)
+        return [point_list[a] for a in nearest_index]
+
+    df["point"] = [(x, y) for x, y in zip(df[long_col], df[lat_col])]
+    df["nearest_exits"] = df["point"].apply(find_nearest_exit)
+    return df
+
+
+def _get_distance_to_exit_list(df):
+    def fing_distance_from_points(row):
+        return [distance(row["point"], a).m for a in row["nearest_exits"]]
+
+    df["distances_to_exits"] = df.apply(fing_distance_from_points, axis=1)
+    return df
+
+
+def get_distance_to_highway(df, lat_col, long_col):
+    highway_exits = get_highway_exits()
+    highway_exits = highway_exits[highway_exits["classificazione"] == "Autostrada"]
+    highway_exits["point"] = [(x, y) for x, y in zip(highway_exits["geometry"].x, highway_exits["geometry"].y)]
+    df = _get_nearests_hightway_exits(df, lat_col, long_col, highway_exits, n=1)
+    df = _get_distance_to_exit_list(df)
+    df["distance_from_highway"] = df["distances_to_exits"].str[0]
+    del df["nearest_exits"], df["distances_to_exits"]
     return df
 
 # class KDEDensity:

@@ -9,6 +9,7 @@ import requests
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+from osm2geojson import json2geojson
 import urllib
 import zipfile
 from valdec.decorators import validate
@@ -651,3 +652,155 @@ def update_data_istat(year=None):
     create_df()
 
 
+def _download_highway_shape():
+    tags = ["motorway", "motorway_link", "trunk"]
+    df = []
+    for tag in tags:
+        query = """
+            [out:json];
+            area["name"="Italia"]->.boundaryarea;
+            (
+            nwr(area.boundaryarea)["highway"="{}"];
+            );
+            out geom;
+            """.format(tag)
+        _df = requests.get(cfg.overpass_url, params={'data': query}, verify=False)
+        _df = json2geojson(_df.json())
+        _df = gpd.GeoDataFrame.from_features(_df['features'])
+        _df["type"] = tag
+        df.append(_df)
+    df = pd.concat(df)
+    df.crs = {'init': "epsg:4326"}
+    return df
+
+
+def _process_dataset_highway_shape(df):
+    df["type_shape"] = df["geometry"].apply(lambda x: x.geom_type)
+    df = df[df["type_shape"] == "LineString"]
+
+    df["name"] = df["tags"].apply(lambda x: x.get('name:it'))
+    df["name2"] = df["tags"].apply(lambda x: x.get('name'))
+    df["ref"] = df["tags"].apply(lambda x: x.get('ref'))
+    df["ref2"] = df["tags"].apply(lambda x: x.get('int_ref'))
+    df["ref3"] = df["tags"].apply(lambda x: x.get('nat_ref'))
+    df["ref4"] = df["tags"].apply(lambda x: x.get('official_ref'))
+    df["toll"] = df["tags"].apply(lambda x: x.get('toll'))
+    df["name2"] = df["tags"].apply(lambda x: x.get('name'))
+    df["name"] = np.where(df["name"].notnull(), df["name"], df["name2"])
+    df["id"] = df["ref"].str.replace(" ", "")
+    df["id"] = df["id"].str.replace("dir", "")
+    df["id"] = df["id"].str.replace("var", "")
+    df["id"] = np.where(df["id"].notnull(), df["id"], df["ref2"])
+    df["id"] = np.where(df["id"].notnull(), df["id"], df["ref3"])
+    df["id"] = np.where(df["id"].notnull(), df["id"], df["ref4"])
+
+    repalce_dict = {
+        "A": "RA13",
+        "A1-R6": "A1",
+        "R6": "A1",
+        "A29/A": "A29racc",
+        "A29racc/bis": "A29",
+        "A3ì2": "A2",
+        "A57;D25;MF;R11;R37": "A57",
+        "A9;A2": "A9/A2",
+        "E 80": "A10",
+        "GRA": "A90",
+        "E 45": "RA-",
+        "S70": "RA13"
+    }
+    df["id"] = df["id"].replace(repalce_dict)
+    drop_id_list = ["A1-R5", "A21racc"]
+    df = df[~df["id"].isin(drop_id_list)]
+    pos = df["name"] == "Diramazione A21"
+    df.loc[pos, "id"] = "A21"
+    df["classificazione"] = "Superstrada"
+    pos = df["id"].astype(str).str.startswith("A") | df["id"].astype(str).str.startswith("RA")
+    df.loc[pos, "classificazione"] = "Autostrada"
+    pos = df["type"] == "motorway_link"
+    df.loc[pos, "classificazione"] = "Congiunzione autostradale"
+    df = df[["id", "classificazione", "name", "geometry"]]
+    return df
+
+
+def _update_highway_shapes():
+    df = _download_highway_shape()
+    df = _process_dataset_highway_shape(df)
+    df.to_pickle(root_path / PureWindowsPath(cfg.highway_shape_file_path))
+
+
+def get_highway_shapes():
+    file_path = root_path / PureWindowsPath(cfg.highway_shape_file_path)
+    if os.path.exists(file_path):
+        update_highway()
+    df = pd.read_pickle(file_path)
+    df.crs = {'init': "epsg:4326"}
+    return df
+
+
+def _download_highway_exits():
+    query = f"""
+        [out:json];
+        area["name"="Italia"]->.boundaryarea;
+        (
+        nwr(area.boundaryarea)["highway"="motorway_junction"];
+        );
+        out geom;
+        """
+    r = requests.get(cfg.overpass_url, params={'data': query}, verify=False)
+    df = json2geojson(r.json())
+    df = gpd.GeoDataFrame.from_features(df['features'])
+    df.crs = {'init': "epsg:4326"}
+    return df
+
+
+def _process_dataset_highway_exits(df, highway):
+    df["name"] = df["tags"].apply(lambda x: x.get('name'))
+    df["name"].fillna("", inplace=True)
+    drop_list = ["area di servizio", "ads", "parcheggio", "polizia"]
+    df["exit"] = ~(df["name"].str.contains('[0-9]', regex=True))
+    for drop in drop_list:
+        df["exit"] = df["exit"] & ~(df["name"].str.lower().str.contains(drop))
+    df["exit"] = df["exit"] & ~(df["name"].str.lower().str.contains(r"\bvia\b", regex=True))
+    df = gpd.sjoin(df[["id", "name", "geometry", "exit"]],
+                   highway[highway["classificazione"].isin(["Autostrada", "Congiunzione autostradale"])][
+                       ["id", "geometry"]],
+                   op='intersects', how="left",
+                   lsuffix="", rsuffix="highway")
+    df = df.rename(columns={'id_': 'id'})
+    df["highway"] = df["index_highway"].notnull()
+    df = df.drop(["index_highway", "id_highway"], axis=1).drop_duplicates()
+    df = gpd.sjoin(df, highway[highway["classificazione"] == "Superstrada"][["id", "geometry"]],
+                   op='intersects', how="left",
+                   lsuffix="", rsuffix="trunk")
+    df = df.rename(columns={'id_': 'id'})
+    df["trunk"] = df["index_trunk"].notnull()
+    df = df.drop(["index_trunk", "id_trunk"], axis=1).drop_duplicates()
+    df["classificazione"] = None
+    df.loc[df["trunk"], "classificazione"] = "Superstrada"
+    df.loc[df["highway"], "classificazione"] = "Autostrada"
+    df = df[df["exit"] & (df["classificazione"].notnull())][["id", "name", "geometry", "exit", "classificazione"]]
+    df.crs = {'init': "epsg:4326"}
+    return df
+
+
+def _update_highway_exits():
+    df = _download_highway_exits()
+    highway_shapes = get_highway_shapes()
+
+    df = _process_dataset_highway_exits(df, highway_shapes)
+
+    df.to_pickle(root_path / PureWindowsPath(cfg.highway_exit_file_path))
+
+
+def get_highway_exits():
+    file_path = root_path / PureWindowsPath(cfg.highway_exit_file_path)
+    if os.path.exists(file_path):
+        update_highway()
+    df = pd.read_pickle(file_path)
+    df.crs = {'init': "epsg:4326"}
+    return df
+
+
+def update_highway():
+    _update_highway_shapes()
+    _update_highway_exits()

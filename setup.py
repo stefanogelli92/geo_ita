@@ -8,7 +8,7 @@ requirements = ["pandas", "twine", "geopandas>=0.12.1", "geopy",
                 "matplotlib>=3.1.1", "numpy", "descartes",
                 "xlrd", "openpyxl", "unidecode", "pyproj", "rtree",
                 "bokeh>=3.0.1", "requests", "beautifulsoup4", "google", "scipy",
-                "google-api-python-client", "valdec", "pydantic"]
+                "google-api-python-client", "valdec", "pydantic", "osm2geojson"]
 
 setup(
     name="geo_ita",
