@@ -32,7 +32,7 @@ pip install geo_ita-0.0.01-py3-none-any.whl
 ### Data
 ***
 Here you can get all the data avaiable in this libraries.
-- **Anagrafica** (source [ISTAT](https://www.istat.it/storage/codici-unita-amministrative/Archivio-elenco-comuni-codici-e-denominazioni_Anno_2022.zip) - updated to 01-08-2022): 
+- **registry** (source [ISTAT](https://www.istat.it/storage/codici-unita-amministrative/Archivio-elenco-comuni-codici-e-denominazioni_Anno_2022.zip) - updated to 01-08-2022):
        <br>Contains the list of each *Comune* with the hierarchical structure of *Province* and *Regioni*.
 - **Superficie** (source API Istat - updated to 31-12-2021):
        <br>Contains the area of each *Comune* in Km2.
@@ -56,7 +56,7 @@ denominazione_comune  codice_comune denominazione_provincia  codice_provincia de
                AgliÃ¨           1001                  Torino                 1              Piemonte               1    TO         2621  POLYGON ((404703.558 5026682.655, 404733.559 5...  404137.448470  5.024327e+06         13.1464
              Airasca           1002                  Torino                 1              Piemonte               1    TO         3598  POLYGON ((380700.909 4977305.520, 380702.627 4...  380324.100684  4.975382e+06         15.7395 
 ```
-You can also get the list of *Comuni*, *Province* and *Regioni* with *get_list_comuni*, *get_list_province* and *get_list_regioni*.
+You can also get the list of *Comuni*, *Province* and *Regioni* with *get_comuni_list*, *get_province_list* and *get_regioni_list*.
 
 For High density Population use *get_high_resolution_population_density_df* (the first time it will download it from the source.
 ***
@@ -116,7 +116,7 @@ df = get_city_from_coordinates(df, latitude_columns="latitide", longitude_column
 ```
 - **AddGeographicalInfo**:
         <br>From a given columns with the information of *Comune*, *Provincia* or *Regione* (works both with Codice ISTAT, denominazione or sigla), add the hierarchical structure of *Province* and *Regioni* and the value of population and area.
-        <br>Warning: If you use the name of *Comune* it is not always possible to match the name present in the anagrafica ISTAT, this method try to clean the value and find possible localitÃ  used instead of the name of *comune*.
+        <br>Warning: If you use the name of *Comune* it is not always possible to match the name present in the registry ISTAT, this method try to clean the value and find possible localitÃ  used instead of the name of *comune*.
 ```python
 # Usage
 from geo_ita.enrich_dataframe import AddGeographicalInfo
@@ -129,13 +129,13 @@ df = pd.DataFrame(data=[["Milano", "Milano", "Milano", "MI", "Lombardia"],
 addinfo = AddGeographicalInfo(df)
 # Set al least one column with the info of comune, provincia or regione (the column can contains the name or the ISTAT code or sigla, the method will automatically detect and use  it)
 addinfo.set_comuni_tag("Citta")
-# Run first cleaning of columns and try to match it with ISTAT's anagrafica
+# Run first cleaning of columns and try to match it with ISTAT's registry
 addinfo.run_simple_match()
 # (Optional) The remaining values are searched on OpenStreetMap in order to find any frazione used instead of the name of comune (such as Ostia Lido is a Frazione of the municipality of Rome).
 addinfo.run_find_frazioni()
 # (Optional) The remaining values are searched on Google in order to find other frazioni used instead of the name of comune.
 addinfo.run_find_frazioni_from_google()
-# (Optional) The remaining values are searched for similarity with ISTAT's anagrafica. This can find some wrong match so you can look at the match and decide to accept or not this step.
+# (Optional) The remaining values are searched for similarity with ISTAT's registry. This can find some wrong match so you can look at the match and decide to accept or not this step.
 addinfo.run_similarity_match()
 # (Optional) You can show the similarity step result in order to accept or decline the step
 print(addinfo.get_similairty_result())

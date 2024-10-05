@@ -49,18 +49,18 @@ class TestData(unittest.TestCase):
         for col in numeric_columns:
             self.assertEqual((df[col] <= 0).sum(), 0)
 
-    def test_get_list_comuni(self):
-        result = get_list_comuni()
+    def test_get_comuni_list(self):
+        result = get_comuni_list()
         self.assertTrue(isinstance(result, list))
         self.assertGreater(len(result), 0)
 
-    def test_get_list_province(self):
-        result = get_list_province()
+    def test_get_province_list(self):
+        result = get_province_list()
         self.assertTrue(isinstance(result, list))
         self.assertGreater(len(result), 0)
 
-    def test_get_list_regioni(self):
-        result = get_list_regioni()
+    def test_get_regioni_list(self):
+        result = get_regioni_list()
         self.assertTrue(isinstance(result, list))
         self.assertGreater(len(result), 0)
 

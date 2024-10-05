@@ -20,8 +20,8 @@ CODE_DENOMINAZIONE = 2
 KEY_UNIQUE = "key_geo_ita"
 UNIQUE_TAG = "_geo_ita"
 
-anagrafica_comuni = {
-    "path": r"data_sources/Anagrafica/anagrafica_istat.pkl",
+registry_comuni = {
+    "path": r"data_sources/registry/registry_istat.pkl",
     "link": "https://www.istat.it/storage/codici-unita-amministrative/Elenco-comuni-italiani.csv",
     "column_rename": {"Denominazione in italiano": TAG_COMUNE,
                       "Denominazione (Italiana e straniera)": TAG_COMUNE + TAG_ITA_STRANIERA,

@@ -22,6 +22,36 @@ log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
 
 
+def get_comuni_list() -> list[str]:
+    """
+        Returns
+        The list of names of italian comuni.
+    """
+    df = get_df_comuni()
+    result = list(df[cfg.TAG_COMUNE].values)
+    return result
+
+
+def get_province_list() -> list[str]:
+    """
+        Returns
+        The list of names of italian province.
+    """
+    df = get_df_province()
+    result = list(df[cfg.TAG_PROVINCIA].unique())
+    return result
+
+
+def get_regioni_list() -> list[str]:
+    """
+        Returns
+        The list of names of italian regioni.
+    """
+    df = get_df_regioni()
+    result = list(df[cfg.TAG_REGIONE].unique())
+    return result
+
+
 def _get_list(df=None):
     if df is None:
         df = get_df_comuni()
@@ -42,36 +72,6 @@ def _get_list(df=None):
         result.append(list(df[cfg.TAG_REGIONE].values))
     else:
         result.append(None)
-    return result
-
-
-def get_list_comuni():
-    """
-        Returns
-        The list of names of italian comuni.
-    """
-    df = get_df_comuni()
-    result = list(df[cfg.TAG_COMUNE].values)
-    return result
-
-
-def get_list_province():
-    """
-        Returns
-        The list of names of italian province.
-    """
-    df = get_df_province()
-    result = list(df[cfg.TAG_PROVINCIA].unique())
-    return result
-
-
-def get_list_regioni():
-    """
-        Returns
-        The list of names of italian regioni.
-    """
-    df = get_df_regioni()
-    result = list(df[cfg.TAG_REGIONE].unique())
     return result
 
 
@@ -107,23 +107,26 @@ def __rename_col(df, rename_dict):
     df.columns = [rename_dict[x] if x in rename_dict else x for x in df.columns]
 
 
-def _get_anagrafica_df():
+def _get_registry_df() -> pd.DataFrame:
     """
     Returns
     A Dataframe containing the ISTAT registry of italian comuni with details of the corresponding provincia and regione.
     """
-    path = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"])
+    path = root_path / PureWindowsPath(cfg.registry_comuni["path"])
     df = pd.read_pickle(path)
 
-    __rename_col(df, cfg.anagrafica_comuni["column_rename"])
+    __rename_col(df, cfg.registry_comuni["column_rename"])
     df[cfg.TAG_CODICE_COMUNE] = df[cfg.TAG_CODICE_COMUNE].astype(int)
     df[cfg.TAG_CODICE_PROVINCIA] = df[cfg.TAG_CODICE_PROVINCIA].astype(int)
     df[cfg.TAG_CODICE_REGIONE] = df[cfg.TAG_CODICE_REGIONE].astype(int)
     df[cfg.TAG_REGIONE + cfg.TAG_ITA_STRANIERA] = df[cfg.TAG_REGIONE]
     df[cfg.TAG_REGIONE] = df[cfg.TAG_REGIONE].str.split("/").str[0]
-    df[cfg.TAG_SIGLA].fillna("NA", inplace=True)
     df[cfg.TAG_PROVINCIA + cfg.TAG_ITA_STRANIERA] = df[cfg.TAG_PROVINCIA]
     df[cfg.TAG_PROVINCIA] = df[cfg.TAG_PROVINCIA].str.split("/").str[0]
+    # Check if napoli sigla has been read as Null
+    pos = (df[cfg.TAG_COMUNE].str.lower() == "napoli") & (df[cfg.TAG_SIGLA].isna())
+    if pos.sum() > 0:
+        df.loc[pos, cfg.TAG_SIGLA] = "NA"
     return df
 
 
@@ -272,7 +275,7 @@ def _get_regioni_shape_df():
 def _get_dimensioni_df():
     """
     Returns
-    Restituisce un dataset contenente un'anagrafica ISTAT dei comuni italiani con il dettaglio delle province di
+    Restituisce un dataset contenente un'registry ISTAT dei comuni italiani con il dettaglio delle province di
     appartenenza e delle regioni.
     """
     path = root_path / PureWindowsPath(cfg.dimensioni_comuni["path"])
@@ -298,9 +301,9 @@ def get_df(level):
 
 
 def create_df_comuni():
-    anagrafica = _get_anagrafica_df()[cfg.anagrafica_comuni["column_rename"].values()]
+    registry = _get_registry_df()[cfg.registry_comuni["column_rename"].values()]
     popolazione = _get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
-    df = anagrafica.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
+    df = registry.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
     shape = _get_comuni_shape_df()[cfg.shape_comuni["column_rename"].values()]
     df = df.merge(shape, how="left", on=cfg.TAG_CODICE_COMUNE)
     dimensioni = _get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
@@ -309,7 +312,7 @@ def create_df_comuni():
     return
 
 
-def get_df_comuni():
+def get_df_comuni() -> pd.DataFrame:
     """
         Returns
         A dataframe with all the following details for each comune:
@@ -322,9 +325,9 @@ def get_df_comuni():
 
 
 def create_df_province():
-    anagrafica = _get_anagrafica_df()[list(cfg.anagrafica_comuni["column_rename"].values()) + [cfg.TAG_PROVINCIA + cfg.TAG_ITA_STRANIERA]]
+    registry = _get_registry_df()[list(cfg.registry_comuni["column_rename"].values()) + [cfg.TAG_PROVINCIA + cfg.TAG_ITA_STRANIERA]]
     popolazione = _get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
-    df = anagrafica.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
+    df = registry.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
     df["sigla"].fillna("NAN", inplace=True)
     dimensioni = _get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
     df = df.merge(dimensioni, how="left", on=cfg.TAG_CODICE_COMUNE)
@@ -337,7 +340,7 @@ def create_df_province():
     return
 
 
-def get_df_province():
+def get_df_province() -> pd.DataFrame:
     """
         Returns
         A dataframe with all the following details for each provincia:
@@ -350,9 +353,9 @@ def get_df_province():
 
 
 def create_df_regioni():
-    anagrafica = _get_anagrafica_df()[list(cfg.anagrafica_comuni["column_rename"].values()) + [cfg.TAG_REGIONE + cfg.TAG_ITA_STRANIERA]]
+    registry = _get_registry_df()[list(cfg.registry_comuni["column_rename"].values()) + [cfg.TAG_REGIONE + cfg.TAG_ITA_STRANIERA]]
     popolazione = _get_popolazione_df()[cfg.popolazione_comuni["column_rename"].values()]
-    df = anagrafica.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
+    df = registry.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
     df["sigla"].fillna("NAN", inplace=True)
     dimensioni = _get_dimensioni_df()[cfg.dimensioni_comuni["column_rename"].values()]
     df = df.merge(dimensioni, how="left", on=cfg.TAG_CODICE_COMUNE)
@@ -364,7 +367,7 @@ def create_df_regioni():
     return df
 
 
-def get_df_regioni():
+def get_df_regioni() -> pd.DataFrame:
     """
         Returns
         A dataframe with all the following details for each Regione:
@@ -443,11 +446,11 @@ def create_df():
     create_administrative_changes_df()
 
 
-def _update_anagrafica1():
-    link = cfg.anagrafica_comuni["link"]
+def update_registry():
+    link = cfg.registry_comuni["link"]
 
-    path1 = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"].replace("pkl", "csv"))
-    path2 = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"])
+    path1 = root_path / PureWindowsPath(cfg.registry_comuni["path"].replace("pkl", "csv"))
+    path2 = root_path / PureWindowsPath(cfg.registry_comuni["path"])
 
     log.info(f"Start downloading the list of comuni from link {link}.")
 
@@ -457,8 +460,8 @@ def _update_anagrafica1():
     os.remove(path1)
 
 
-def _update_anagrafica2(year):
-    path1 = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"].replace("pkl", "zip"))
+def _fetch_registry_for_year(year):
+    path1 = root_path / PureWindowsPath(cfg.registry_comuni["path"].replace("pkl", "zip"))
     first_year = 2012
     n_range = int((year - first_year) / 5)
     year0 = first_year + n_range * 5
@@ -474,7 +477,7 @@ def _update_anagrafica2(year):
             pass
     end = datetime.now()
     log.info(f"DowloadFile ended in {end - start}")
-    path2 = root_path / PureWindowsPath(cfg.anagrafica_comuni["path"].replace(".pkl", ""))
+    path2 = root_path / PureWindowsPath(cfg.registry_comuni["path"].replace(".pkl", ""))
     log.info("Start unzipping the file")
     start = datetime.now()
     with zipfile.ZipFile(path1, 'r') as zip_ref:
@@ -489,7 +492,7 @@ def _update_anagrafica2(year):
             path3 = os.path.join(root, path3)
             break
     df = pd.read_excel(path3, keep_default_na=False)
-    df.to_pickle(root_path / PureWindowsPath(cfg.anagrafica_comuni["path"]))
+    df.to_pickle(root_path / PureWindowsPath(cfg.registry_comuni["path"]))
     shutil.rmtree(path2)
 
 
@@ -641,10 +644,10 @@ def update_data_istat(year=None):
     if year is None:
         year = datetime.now().year
         force_year = False
-        _update_anagrafica1()
+        update_registry()
     else:
         force_year = True
-        _update_anagrafica2(year)
+        _fetch_registry_for_year(year)
     _update_shape_comuni(year, force_year=force_year)
     _update_dimension_info(year, force_year=force_year)
     _update_population_info(year, force_year=force_year)

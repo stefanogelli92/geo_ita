@@ -369,9 +369,9 @@ class AddGeographicalInfo:
             self.df[cfg.KEY_UNIQUE] = s
 
     def _try_custom_replace_denom(self):
-        list_den_anagrafica = self.list_anag
+        list_den_registry = self.list_anag
         list_den_not_found = self.get_not_matched_list()
-        dict_den_anag = {self._custom_replace_denom(a): a for a in list_den_anagrafica}
+        dict_den_anag = {self._custom_replace_denom(a): a for a in list_den_registry}
         dict_den_not_found = {a: self._custom_replace_denom(a) for a in list_den_not_found}
         dict_den_not_found = {k: dict_den_anag[v] for k, v in dict_den_not_found.items() if v in dict_den_anag.keys()}
 

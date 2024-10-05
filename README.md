@@ -1,16 +1,15 @@
 # Geo Ita
 
-geo_ita is a library for geographical analysis within Italy.
+geo_ita is a Python library for geographical analysis focused on Italy, providing tools to retrieve detailed geographic data and create customized visualizations such as choropleth maps and density estimations.
 
 ## Installation
 
-WARNING: Da rivedee!
-
  - Download whl file from [here](https://github.com/stefanogelli92/geo_ita/raw/main/dist/geo_ita-0.0.1-py3-none-any.whl) (63 Mb)
  - Open Terminal on folder where you put the whl file
+ - Run the following command:
 
 ```bash
-pip install geo_ita-0.0.01-py3-none-any.whl
+pip install geo_ita-0.0.1-py3-none-any.whl
 ```
 
 ## Documentation
@@ -20,20 +19,20 @@ pip install geo_ita-0.0.01-py3-none-any.whl
 
 ### Data
 ***
-Here you can get all the data avaiable in this libraries.
-- **Anagrafica** (source [ISTAT](https://www.istat.it/storage/codici-unita-amministrative/Archivio-elenco-comuni-codici-e-denominazioni_Anno_2022.zip) - updated to 01-08-2022): 
+geo_ita provides a variety of datasets sourced from official statistics and research. Below are the key datasets available:
+- **Registry** (source [ISTAT](https://www.istat.it/storage/codici-unita-amministrative/Archivio-elenco-comuni-codici-e-denominazioni_Anno_2022.zip) - updated to 01-08-2022): 
        <br>Contains the list of each *Comune* with the hierarchical structure of *Province* and *Regioni*.
-- **Superficie** (source API Istat - updated to 31-12-2021):
-       <br>Contains the area of each *Comune* in Km2.
-- **Popolazione** (source API Istat - updated to 31-12-2021): 
-       <br>Contains the population of each *Comune*.
-- **Shape** (source [ISTAT](https://www.istat.it/storage/cartografia/confini_amministrativi/non_generalizzati/Limiti01012022.zip) - updated to 01-01-2022): 
-       <br> Contains the shapes of each *Comune*, *Provincia* and *Regione*. The main use of the shapes is to plot the [Choropleth map](https://en.wikipedia.org/wiki/Choropleth_map#:~:text=A%20choropleth%20map%20(from%20Greek,each%20area%2C%20such%20as%20population)).
-- **High density Population** (source [Facebook](https://data.humdata.org/dataset/italy-high-resolution-population-density-maps-demographic-estimates) - updated to 04 -03-2020): 
-       <br> Contains a more detailed density of population estimated by Facebook. They use machine learning techniques to identify buildings from commercially available satellite images to distribute the value of population in a very high-definition map.
+- **Surface Area** (source API Istat - updated to 31-12-2021):
+       <br>Provides the area (in km²) of each *Comune*.
+- **Population** (source API Istat - updated to 31-12-2021): 
+       <br>Provides the population of each *Comune*.
+- **Shapefiles** (source [ISTAT](https://www.istat.it/storage/cartografia/confini_amministrativi/non_generalizzati/Limiti01012022.zip) - updated to 01-01-2022): 
+       <br> Contains shapefiles for each *Comune*, *Provincia* and *Regione*. These are primarily used for plotting [Choropleth map](https://en.wikipedia.org/wiki/Choropleth_map#:~:text=A%20choropleth%20map%20(from%20Greek,each%20area%2C%20such%20as%20population)).
+- **High-Resolution Population Density** (source [Facebook](https://data.humdata.org/dataset/italy-high-resolution-population-density-maps-demographic-estimates) - updated to 19-04-2022): 
+       <br> Provides a detailed population density estimate derived from Facebook's machine learning models, using satellite imagery to map population distribution at a high resolution.
               
 #### Usage
-You can import all the informations from ISTAT listed before with 3 functions: *get_df_comuni*, *get_df_province* and *get_df_regioni* with the 3 different level of aggregation.
+You can retrieve the data from the ISTAT sources with the following three functions: *get_df_comuni*, *get_df_province* and *get_df_regioni* with the 3 different level of aggregation.
 ```python
 from geo_ita.data import get_df_comuni
 
@@ -45,17 +44,20 @@ denominazione_comune  codice_comune denominazione_provincia  codice_provincia de
                Agliè           1001                  Torino                 1              Piemonte               1    TO         2621  POLYGON ((404703.558 5026682.655, 404733.559 5...  404137.448470  5.024327e+06         13.1464
              Airasca           1002                  Torino                 1              Piemonte               1    TO         3598  POLYGON ((380700.909 4977305.520, 380702.627 4...  380324.100684  4.975382e+06         15.7395 
 ```
-You can also get the list of *Comuni*, *Province* and *Regioni* with *get_list_comuni*, *get_list_province* and *get_list_regioni*.
+You can also get the list of *Comuni*, *Province* and *Regioni* with *get_comuni_list*, *get_province_list* and *get_regioni_list*.
 
 For High density Population use *get_high_resolution_population_density_df* (the first time it will download it from the source.
 ***
 ### Enrich Dataframe
 ***
-Here you can find some methods that add some geografical information to your dataset.
+The library includes utilities to enrich your DataFrame with geographic and demographic information, adding more value to your analysis.
 - **[Geocoding](https://en.wikipedia.org/wiki/Address_geocoding)**: 
-        <br>This method will return the coordinates of a place from the address. It will also add informations about *Comune*, *Provincia* or *Regione* in order to help the search and test the result.
-        <br>Warning: This process cannot always determinate the coordinates. This is mostly due to an address with some errors or abbreviation, or some address that are not in the OpenStreetMaps project (we use it because it is open and free).
-        <br>Warning: This process takes about 1 second per element.
+        <br>This method returns the geographic coordinates (latitude and longitude) of a location based on its address. Additionally, it enhances the geocoding process by providing information about the corresponding *Comune*, *Provincia*, or *Regione* to assist with accuracy and verification.
+        <br>**Note**: The geocoding process may not always successfully determine the coordinates. This is often due to issues such as:
+    - Errors or abbreviations in the provided address.
+    - Addresses not present in the OpenStreetMap database (used as it is open and free).
+
+    <br>**Performance Warning**: This process requires approximately 1 second per address, which may affect performance when processing large datasets.
 ```python
 # Usage
 from geo_ita.enrich_dataframe import get_coordinates_from_address
@@ -104,8 +106,8 @@ df = get_city_from_coordinates(df, latitude_columns="latitide", longitude_column
   40.846269  14.267525                 'Napoli'                   'Napoli'     'NA'              'Campania'
 ```
 - **AddGeographicalInfo**:
-        <br>From a given columns with the information of *Comune*, *Provincia* or *Regione* (works both with Codice ISTAT, denominazione or sigla), add the hierarchical structure of *Province* and *Regioni* and the value of population and area.
-        <br>Warning: If you use the name of *Comune* it is not always possible to match the name present in the anagrafica ISTAT, this method try to clean the value and find possible località used instead of the name of *comune*.
+        <br>This method allows you to enrich a dataset by adding the hierarchical structure of *Province* and *Regioni*, along with the population and area values, based on a given column containing information about the *Comune*, *Provincia*, or *Regione*. It works with various types of data, including the Codice ISTAT, official names (denominazione), or abbreviations (sigla).
+        <br>**Note**: When using the name of the *Comune*, it may not always be possible to directly match it with the official ISTAT registry. This method attempts to clean and standardize the input data, handling cases where local names or alternative place names are used instead of the official *Comune* name.
 ```python
 # Usage
 from geo_ita.enrich_dataframe import AddGeographicalInfo
@@ -118,13 +120,13 @@ df = pd.DataFrame(data=[["Milano", "Milano", "Milano", "MI", "Lombardia"],
 addinfo = AddGeographicalInfo(df)
 # Set al least one column with the info of comune, provincia or regione (the column can contains the name or the ISTAT code or sigla, the method will automatically detect and use  it)
 addinfo.set_comuni_tag("Citta")
-# Run first cleaning of columns and try to match it with ISTAT's anagrafica
+# Run first cleaning of columns and try to match it with ISTAT's registry
 addinfo.run_simple_match()
 # (Optional) The remaining values are searched on OpenStreetMap in order to find any frazione used instead of the name of comune (such as Ostia Lido is a Frazione of the municipality of Rome).
 addinfo.run_find_frazioni()
 # (Optional) The remaining values are searched on Google in order to find other frazioni used instead of the name of comune.
 addinfo.run_find_frazioni_from_google()
-# (Optional) The remaining values are searched for similarity with ISTAT's anagrafica. This can find some wrong match so you can look at the match and decide to accept or not this step.
+# (Optional) The remaining values are searched for similarity with ISTAT's registry. This can find some wrong match so you can look at the match and decide to accept or not this step.
 addinfo.run_similarity_match()
 # (Optional) You can show the similarity step result in order to accept or decline the step
 print(addinfo.get_similairty_result())
@@ -144,7 +146,7 @@ result = addinfo.get_result()
   porretta terme  Alto Reno Terme   Bologna  BO  Emilia romagna         6953            37062                37      Alto Reno Terme             NaN                  Bologna               8        Nord-est    BO         Emilia-Romagna
 ```
 - **Geographical DataQuality**:
-    <br>From a dataset and all possible geographical information (regione, provincia, comune, coordinate) this method check the dataquality and return a list of warning with the correction (when possible).
+    <br>This method assesses the quality of a dataset containing geographical information (such as Regione, Provincia, Comune, or coordinates) and returns a list of warnings regarding potential inconsistencies. When possible, the method also suggests corrections to improve the data quality.
 ```python
 # Usage
 from geo_ita.enrich_dataframe import GeoDataQuality
@@ -210,7 +212,7 @@ df = get_population_nearby(df, 300)
 ***
 ### Plot
 ***
-Here you can find some methods that show some useful plot from a dataframe with geographical information. Some plots have two versions: static and interactive (add _interactive on method).
+The library supports various types of geographic visualizations. Some plots have two versions: static and interactive (add _interactive on method).
 - **[Choropleth Map](https://en.wikipedia.org/wiki/Choropleth_map)**:
         <br>This method show a plot where regioni, province or comuni are colored based on a specific value (numerical or chategorial).
         <br> You can use one of them:
@@ -294,15 +296,6 @@ plot_kernel_density_estimation_interactive(df, value_tag="popolazione",
 ```
 ![plot](./Test/usage_kernel_density_variable.png?raw=true)
 ***
-## TODO
-1. Completare test Units
-2. Trovare nome più parlante per Enrich Dataset
-3. Semplificare utilizzo AddGeoInfo (forse non classe)
-4. Point Map inserire possibilità di plottare più dataset di punti (e forse anche non solo punti)
-5. Rivedere tutta la parte di Kernel Estimation
-6. Valutare calcolo distanza da costa
-7. Valutare distanza in linea d'aria da uscite autostrada + plot autostrade + uscite
-8. Da valutare calcolo distanza tra punti su strada (è corretto averlo in questa libreria?)
 
 ## License
-[MIT](https://choosealicense.com/licenses/mit/)
+This project is licensed under the [MIT License](https://choosealicense.com/licenses/mit/)
