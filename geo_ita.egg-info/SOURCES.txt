@@ -3,7 +3,7 @@ requirements.txt
 setup.py
 Test/compress_files.py
 Test/test_data.py
-Test/test_enrich_dataframe.py
+Test/test_data_enrichment.py
 Test/test_plot.html
 Test/test_plot.py
 Test/usage_choropleth_provinciale_interactive.png
@@ -14,7 +14,7 @@ Test/usage_kernel_density_variable.png
 Test/usage_point_map_comuni.png
 geo_ita/__init__.py
 geo_ita/data.py
-geo_ita/enrich_dataframe.py
+geo_ita/data_enrichment.py
 geo_ita/plot.py
 geo_ita.egg-info/PKG-INFO
 geo_ita.egg-info/SOURCES.txt
@@ -26,10 +26,10 @@ geo_ita/data_sources/df_province.pkl
 geo_ita/data_sources/df_regioni.pkl
 geo_ita/data_sources/df_variazioni_mapping.pkl
 geo_ita/src/_data.py
-geo_ita/src/_enrich_dataframe.py
+geo_ita/src/_data_enrichment.py
 geo_ita/src/_plot.py
 geo_ita/src/config.py
 geo_ita/src/definition.py
 test/test_data.py
-test/test_enrich_dataframe.py
+test/test_data_enrichment.py
 test/test_plot.py

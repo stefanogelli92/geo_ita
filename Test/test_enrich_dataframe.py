@@ -1,8 +1,8 @@
 from pandas._testing import assert_frame_equal, assert_series_equal
 
-from geo_ita.src._enrich_dataframe import __find_coordinates_system
+from geo_ita.src._data_enrichment import __find_coordinates_system
 
-from geo_ita.src._enrich_dataframe import *
+from geo_ita.src._data_enrichment import *
 from geo_ita.src._data import *
 from geo_ita.src.definition import *
 from pathlib import PureWindowsPath

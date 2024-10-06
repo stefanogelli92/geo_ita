@@ -31,7 +31,7 @@ import xyzservices.providers as xyz
 
 import geo_ita.src.config as cfg
 from geo_ita.src._data import get_df_comuni, get_df_province, get_df_regioni
-from geo_ita.src._enrich_dataframe import (
+from geo_ita.src._data_enrichment import (
     _clean_denom_text_value, _clean_denom_text, _get_tag_anag, _code_or_desc,
     AddGeographicalInfo, __create_geo_dataframe, __find_coord_columns, __find_coordinates_system
 )

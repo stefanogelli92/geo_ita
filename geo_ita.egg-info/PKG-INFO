@@ -69,7 +69,7 @@ Here you can find some methods that add some geografical information to your dat
         <br>Warning: This process takes about 1 second per element.
 ```python
 # Usage
-from geo_ita.enrich_dataframe import get_coordinates_from_address
+from geo_ita.data_enrichment import get_coordinates_from_address
 
 df = pd.DataFrame(data=[["Corso di Francia, Roma"],
                         ["Via Larga, Milano"],
@@ -90,7 +90,7 @@ df = get_coordinates_from_address(df, "address")
         <br> 2. **get_city_from_coordinates**: This method will return the comune, provincia ane regione from the coordinates.
 ```python
 # Usage
-from geo_ita.enrich_dataframe import get_address_from_coordinates, get_city_from_coordinates
+from geo_ita.data_enrichment import get_address_from_coordinates, get_city_from_coordinates
 
 df = pd.DataFrame(data=[[41.939965,  12.470965],
                         [45.460908,   9.191498],
@@ -119,7 +119,7 @@ df = get_city_from_coordinates(df, latitude_columns="latitide", longitude_column
         <br>Warning: If you use the name of *Comune* it is not always possible to match the name present in the registry ISTAT, this method try to clean the value and find possible localitÃ  used instead of the name of *comune*.
 ```python
 # Usage
-from geo_ita.enrich_dataframe import AddGeographicalInfo
+from geo_ita.data_enrichment import AddGeographicalInfo
 
 df = pd.DataFrame(data=[["Milano", "Milano", "Milano", "MI", "Lombardia"],
                         ["Florence", "Firenze", "Firenze", "FI", "Toscana"],
@@ -158,7 +158,7 @@ result = addinfo.get_result()
     <br>From a dataset and all possible geographical information (regione, provincia, comune, coordinate) this method check the dataquality and return a list of warning with the correction (when possible).
 ```python
 # Usage
-from geo_ita.enrich_dataframe import GeoDataQuality
+from geo_ita.data_enrichment import GeoDataQuality
 
 df = <you dataframe>
 
@@ -184,7 +184,7 @@ dq.plot_result()
         <br>There are several approaches to the problem based on what we expect from the groups created. In this method point can be in the same group when their distance is bigger than the entered value, but they have a point in common that has a smaller distance to both of them.
 ```python
 # Usage
-from geo_ita.enrich_dataframe import aggregate_point_by_distance
+from geo_ita.data_enrichment import aggregate_point_by_distance
 
 df = pd.DataFrame(data=[[42.000001, 12.000001],
                         [42.000002, 12.000002],
@@ -204,7 +204,7 @@ df = aggregate_point_by_distance(df, 1000)
         <br>From a given list of point and a radius this method add the estimated number of people who live in the nearby. this method use the High Resolution Population Density created by Facebook.
 ```python
 # Usage
-from geo_ita.enrich_dataframe import get_population_nearby
+from geo_ita.data_enrichment import get_population_nearby
 
 df = pd.DataFrame(data=[[42.2463245, 11.2457345],
                         [38.0232362, 12.3242362]], columns=["latitude", "longitude"])

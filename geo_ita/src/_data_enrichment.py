@@ -2148,7 +2148,7 @@ def check_locations_in_highway(df, lat_col, long_col, radius_max=50):
     return df
 
 
-def _get_nearests_hightway_exits(df, lat_col, long_col, highway_exits, n=1):
+def _get_nearests_highway_exits(df, lat_col, long_col, highway_exits, n=1):
     point_list = highway_exits["point"].to_list()
 
     def find_nearest_exit(point):
@@ -2163,10 +2163,10 @@ def _get_nearests_hightway_exits(df, lat_col, long_col, highway_exits, n=1):
 
 
 def _get_distance_to_exit_list(df):
-    def fing_distance_from_points(row):
+    def find_distance_from_points(row):
         return [distance(row["point"], a).m for a in row["nearest_exits"]]
 
-    df["distances_to_exits"] = df.apply(fing_distance_from_points, axis=1)
+    df["distances_to_exits"] = df.apply(find_distance_from_points, axis=1)
     return df
 
 
@@ -2174,7 +2174,7 @@ def get_distance_to_highway(df, lat_col, long_col):
     highway_exits = get_highway_exits()
     highway_exits = highway_exits[highway_exits["classificazione"] == "Autostrada"]
     highway_exits["point"] = [(x, y) for x, y in zip(highway_exits["geometry"].x, highway_exits["geometry"].y)]
-    df = _get_nearests_hightway_exits(df, lat_col, long_col, highway_exits, n=1)
+    df = _get_nearests_highway_exits(df, lat_col, long_col, highway_exits, n=1)
     df = _get_distance_to_exit_list(df)
     df["distance_from_highway"] = df["distances_to_exits"].str[0]
     del df["nearest_exits"], df["distances_to_exits"]

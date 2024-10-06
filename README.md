@@ -48,7 +48,7 @@ You can also get the list of *Comuni*, *Province* and *Regioni* with *get_comuni
 
 For High density Population use *get_high_resolution_population_density_df* (the first time it will download it from the source.
 ***
-### Enrich Dataframe
+### Data Enrichment
 ***
 The library includes utilities to enrich your DataFrame with geographic and demographic information, adding more value to your analysis.
 - **[Geocoding](https://en.wikipedia.org/wiki/Address_geocoding)**: 
@@ -58,9 +58,10 @@ The library includes utilities to enrich your DataFrame with geographic and demo
     - Addresses not present in the OpenStreetMap database (used as it is open and free).
 
     <br>**Performance Warning**: This process requires approximately 1 second per address, which may affect performance when processing large datasets.
+
 ```python
 # Usage
-from geo_ita.enrich_dataframe import get_coordinates_from_address
+from geo_ita.data_enrichment import get_coordinates_from_address
 
 df = pd.DataFrame(data=[["Corso di Francia, Roma"],
                         ["Via Larga, Milano"],
@@ -68,54 +69,61 @@ df = pd.DataFrame(data=[["Corso di Francia, Roma"],
 
 df = get_coordinates_from_address(df, "address")
 
-# Output
-
-                    address   latitude  longitude
-     Corso di Francia, Roma  41.939965  12.470965
-          Via Larga, Milano  45.460908   9.191498
-   Via NUova Marina, Napoli  40.846269  14.267525 
 ```
+##### Output
+| address | latitude | longitude |
+| --- | --- | --- |
+| Corso di Francia, Roma | 41.939965 | 12.470965 |
+| Via Larga, Milano | 45.460908 | 9.191498 |
+| Via NUova Marina, Napoli | 40.846269 | 14.267525  |
+
 - **[Reverse Geocoding](https://en.wikipedia.org/wiki/Reverse_geocoding)**: 
         <br>There are two version of reverse geocoding:
         <br> 1. **get_address_from_coordinates**: This method will return the address of a place from the coordinates. Warning: This process takes about 1 second per element.
         <br> 2. **get_city_from_coordinates**: This method will return the comune, provincia ane regione from the coordinates.
+
 ```python
 # Usage
-from geo_ita.enrich_dataframe import get_address_from_coordinates, get_city_from_coordinates
+from geo_ita.data_enrichment import get_address_from_coordinates, get_city_from_coordinates
 
-df = pd.DataFrame(data=[[41.939965,  12.470965],
-                        [45.460908,   9.191498],
-                        [40.846269,  14.267525]], columns=["latitude", "longitude"])
+df = pd.DataFrame(data=[[41.939965, 12.470965],
+                        [45.460908, 9.191498],
+                        [40.846269, 14.267525]], columns=["latitude", "longitude"])
 
 df = get_address_from_coordinates(df, latitude_columns="latitude", longitude_columns="longitude")
-
-# Output
-
-   latitude  longitude                     address      city
-  41.939965  12.470965    'corso di francia, roma'    'Roma'
-  45.460908   9.191498         'via larga, Milano'  'Milano'
-  40.846269  14.267525  'via nuova marina, Napoli'  'Napoli'
-
-df = get_city_from_coordinates(df, latitude_columns="latitide", longitude_columns="longitude")
-
-# Output
-
-   latitude  longitude    denominazione_comune    denominazione_provincia    sigla   denominazione_regione
-  41.939965  12.470965                   'Roma'                     'Roma'     'RM'                 'Lazio'
-  45.460908   9.191498                 'Milano'                   'Milano'     'MI'             'Lombardia'
-  40.846269  14.267525                 'Napoli'                   'Napoli'     'NA'              'Campania'
 ```
+###### Output
+
+| latitude  | longitude | address | city |
+|-----------| --- | --- |------| 
+| 41.939965 | 12.470965 |corso di francia, roma | Roma |
+| 45.460908 | 9.191498 | via larga, Milano | Milano |
+| 40.846269 | 14.267525 | via nuova marina, Napoli | Napoli |
+
+```python
+df = get_city_from_coordinates(df, latitude_columns="latitide", longitude_columns="longitude")
+```
+##### Output
+
+| latitude | longitude | denominazione_comune | denominazione_provincia | sigla | denominazione_regione |
+| --- | --- | --- | --- | --- | --- |
+| 41.939965 | 12.470965| Roma|Roma|RM|Lazio|
+|45.460908|9.191498|Milano| Milano|MI|Lombardia|
+|40.846269|14.267525|Napoli|Napoli|NA|Campania|
+
 - **AddGeographicalInfo**:
         <br>This method allows you to enrich a dataset by adding the hierarchical structure of *Province* and *Regioni*, along with the population and area values, based on a given column containing information about the *Comune*, *Provincia*, or *Regione*. It works with various types of data, including the Codice ISTAT, official names (denominazione), or abbreviations (sigla).
         <br>**Note**: When using the name of the *Comune*, it may not always be possible to directly match it with the official ISTAT registry. This method attempts to clean and standardize the input data, handling cases where local names or alternative place names are used instead of the official *Comune* name.
+
 ```python
 # Usage
-from geo_ita.enrich_dataframe import AddGeographicalInfo
+from geo_ita.data_enrichment import AddGeographicalInfo
 
 df = pd.DataFrame(data=[["Milano", "Milano", "Milano", "MI", "Lombardia"],
                         ["Florence", "Firenze", "Firenze", "FI", "Toscana"],
                         ["florence", "Firenze", "Firenze", "FI", "Toscana"],
-                        ["porretta terme", "Alto Reno Terme", "Bologna", "BO", "Emilia romagna"]], columns=["Citta", "comune", "provincia", "sl", "regione"])
+                        ["porretta terme", "Alto Reno Terme", "Bologna", "BO", "Emilia romagna"]],
+                  columns=["Citta", "comune", "provincia", "sl", "regione"])
 # Create the class and pass the dataframe
 addinfo = AddGeographicalInfo(df)
 # Set al least one column with the info of comune, provincia or regione (the column can contains the name or the ISTAT code or sigla, the method will automatically detect and use  it)
@@ -136,22 +144,23 @@ addinfo.accept_similarity_result()
 addinfo.use_manual_match({"Milanoa": "Milano"})
 # Get Result
 result = addinfo.get_result()
-
-# Output
-
-           Citta           comune provincia  sl         regione  popolazione    codice_comune  codice_provincia denominazione_comune  superficie_km2  denominazione_provincia  codice_regione area_geografica sigla  denominazione_regione
-          Milano           Milano    Milano  MI       Lombardia      1406242            15146                15               Milano        181.6727                   Milano               3      Nord-ovest    MI              Lombardia
-        Florence          Firenze   Firenze  FI         Toscana       366927            48017                48              Firenze        102.3187                  Firenze               9          Centro    FI                Toscana
-        florence          Firenze   Firenze  FI         Toscana       366927            48017                48              Firenze        102.3187                  Firenze               9          Centro    FI                Toscana
-  porretta terme  Alto Reno Terme   Bologna  BO  Emilia romagna         6953            37062                37      Alto Reno Terme             NaN                  Bologna               8        Nord-est    BO         Emilia-Romagna
 ```
+##### Output
+|Citta| comune          |provincia|sl|regione|popolazione|codice_comune|codice_provincia| denominazione_comune |superficie_km2|denominazione_provincia|codice_regione|area_geografica|sigla|denominazione_regione|
+|---|-----------------|---|---|---|---|---|---|----------------------|---|---|---|---|---|---|
+|Milano| Milano          |Milano|MI|Lombardia|1406242|15146|15| Milano               |181.6727|Milano|3|Nord - ovest|MI|Lombardia|
+|Florence| Firenze         |Firenze|FI|Toscana|366927|48017|48| Firenze              |102.3187|Firenze|9|Centro|FI|Toscana|
+|florence| Firenze         |Firenze|FI|Toscana|366927|48017|48| Firenze              |102.3187|Firenze|9|Centro|FI|Toscana|
+|porretta terme| Alto Reno Terme |Bologna|BO|Emilia romagna|6953|37062|37| Alto Reno Terme      |NaN|Bologna|8|Nord - est|BO|Emilia - Romagna|
+
 - **Geographical DataQuality**:
     <br>This method assesses the quality of a dataset containing geographical information (such as Regione, Provincia, Comune, or coordinates) and returns a list of warnings regarding potential inconsistencies. When possible, the method also suggests corrections to improve the data quality.
+
 ```python
 # Usage
-from geo_ita.enrich_dataframe import GeoDataQuality
+from geo_ita.data_enrichment import GeoDataQuality
 
-df = <you dataframe>
+df = < your dataframe >
 
 # Create the class and pass the dataframe
 dq = GeoDataQuality(df)
@@ -173,9 +182,10 @@ dq.plot_result()
 - **Aggregation points by distance**:
         <br>From a given list of point we create groups based on distances.
         <br>There are several approaches to the problem based on what we expect from the groups created. In this method point can be in the same group when their distance is bigger than the entered value, but they have a point in common that has a smaller distance to both of them.
+
 ```python
 # Usage
-from geo_ita.enrich_dataframe import aggregate_point_by_distance
+from geo_ita.data_enrichment import aggregate_point_by_distance
 
 df = pd.DataFrame(data=[[42.000001, 12.000001],
                         [42.000002, 12.000002],
@@ -183,31 +193,32 @@ df = pd.DataFrame(data=[[42.000001, 12.000001],
                         [42.001002, 12.001002]], columns=["latitude", "longitude"])
 
 df = aggregate_point_by_distance(df, 1000)
-
-# Output
-    latitude       longitude     aggregation_code
-  42.0000001      12.0000001                    0
-  42.0000002      12.0000002                    0
-  42.0010002      12.0010002                    1
-  42.0010002      12.0010002                    1
 ```
+#### Output
+|latitude|longitude|aggregation_code|
+|---|---|---|
+|42.0000001|12.0000001|0|
+|42.0000002|12.0000002|0|
+|42.0010002|12.0010002|1|
+|42.0010002|12.0010002|1|
+
 - **Population Neraby**:
         <br>From a given list of point and a radius this method add the estimated number of people who live in the nearby. this method use the High Resolution Population Density created by Facebook.
+
 ```python
 # Usage
-from geo_ita.enrich_dataframe import get_population_nearby
+from geo_ita.data_enrichment import get_population_nearby
 
 df = pd.DataFrame(data=[[42.2463245, 11.2457345],
                         [38.0232362, 12.3242362]], columns=["latitude", "longitude"])
 # The first time you use this method you have to download the dataset so this can take additional 2-3 min.
 df = get_population_nearby(df, 300)
-
-# Output
-    latitude       longitude     n_population
-  42.2463245      11.2457345              127  
-  38.0232362      12.3242362              402
 ```
-
+#### Output
+|latitude|longitude|n_population|
+|---|---|---|
+|42.2463245|11.2457345|127|
+|38.0232362|12.3242362|402|
 
 ***
 ### Plot
