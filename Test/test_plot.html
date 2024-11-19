@@ -1,0 +1,87 @@
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+  
+  <head>
+    
+      <meta charset="utf-8">
+      <title>Bokeh Plot</title>
+      
+      
+        
+          
+        
+        
+          
+        <script type="text/javascript" src="https://cdn.bokeh.org/bokeh/release/bokeh-2.3.1.min.js" integrity="sha384-YF85VygJKMVnHE+lLv2AM93Vbstr0yo2TbIu5v8se5Rq3UQAUmcuh4aaJwNlpKwa" crossorigin="anonymous"></script>
+        <script type="text/javascript" src="https://cdn.bokeh.org/bokeh/release/bokeh-widgets-2.3.1.min.js" integrity="sha384-KKuas3gevv3PvrlkyCMzffFeaMq5we/a2QsP5AUoS3mJ0jmaCL7jirFJN3GoE/lM" crossorigin="anonymous"></script>
+        <script type="text/javascript" src="https://cdn.bokeh.org/bokeh/release/bokeh-tables-2.3.1.min.js" integrity="sha384-MK/uFc3YT18pkvvXRl66tTHjP0/dxoSH2e/eiNMFIguKlun2+WVqaPTWmUy/zvh4" crossorigin="anonymous"></script>
+        <script type="text/javascript">
+            Bokeh.set_log_level("info");
+        </script>
+        
+      
+      
+    
+  </head>
+  
+  
+  <body>
+    
+      
+        
+          
+          
+            
+              <div class="bk-root" id="64edbde1-43f2-4fdc-a4bb-616cd48f353f" data-root-id="1074"></div>
+            
+          
+        
+      
+      
+        <script type="application/json" id="1275">
+          {"32f2bed6-b72b-4600-bae0-c0dc48fdfdeb":{"defs":[],"roots":{"references":[{"attributes":{},"id":"1008","type":"LinearScale"},{"attributes":{"editor":{"id":"1096"},"field":"superficie_km2","formatter":{"id":"1095"},"title":"superficie_km2"},"id":"1051","type":"TableColumn"},{"attributes":{},"id":"1089","type":"StringFormatter"},{"attributes":{},"id":"1084","type":"StringEditor"},{"attributes":{"source":{"id":"1044"}},"id":"1056","type":"CDSView"},{"attributes":{},"id":"1063","type":"AllLabels"},{"attributes":{"fill_alpha":{"value":0.1},"fill_color":{"value":"lime"},"line_alpha":{"value":0.1},"line_color":{"value":"#1f77b4"},"line_width":{"value":0.5},"size":{"value":7},"x":{"field":"x"},"y":{"field":"y"}},"id":"1054","type":"Circle"},{"attributes":{},"id":"1085","type":"StringFormatter"},{"attributes":{"editor":{"id":"1094"},"field":"popolazione","formatter":{"id":"1093"},"title":"popolazione"},"id":"1050","type":"TableColumn"},{"attributes":{},"id":"1087","type":"StringFormatter"},{"attributes":{"dimension":"lat"},"id":"1021","type":"MercatorTicker"},{"attributes":{"bottom_units":"screen","fill_alpha":0.5,"fill_color":"lightgrey","left_units":"screen","level":"overlay","line_alpha":1.0,"line_color":"black","line_dash":[4,4],"line_width":2,"right_units":"screen","syncable":false,"top_units":"screen"},"id":"1034","type":"BoxAnnotation"},{"attributes":{"axis":{"id":"1020"},"dimension":1,"ticker":null},"id":"1027","type":"Grid"},{"attributes":{"callback":null,"renderers":[{"id":"1055"}],"tooltips":[["denominazione_provincia","@denominazione_provincia"],["codice_provincia","@codice_provincia{0.[0] a}"],["sigla","@sigla"],["denominazione_regione","@denominazione_regione"],["area_geografica","@area_geografica"],["popolazione","@popolazione{0.[0] a}"],["superficie_km2","@superficie_km2{0.[0] a}"],["Coords","(@center_y{0,0.0000000}-@center_x{0,0.0000000})"]]},"id":"1057","type":"HoverTool"},{"attributes":{"dimension":"lat"},"id":"1023","type":"MercatorTickFormatter"},{"attributes":{"end":1377172.874065655,"start":1078318.5614041644},"id":"1004","type":"Range1d"},{"attributes":{},"id":"1093","type":"StringFormatter"},{"attributes":{"dimension":"lon"},"id":"1015","type":"MercatorTickFormatter"},{"attributes":{},"id":"1086","type":"StringEditor"},{"attributes":{},"id":"1094","type":"StringEditor"},{"attributes":{},"id":"1096","type":"StringEditor"},{"attributes":{},"id":"1095","type":"StringFormatter"},{"attributes":{"children":[{"id":"1003"},{"id":"1071"}]},"id":"1074","type":"Row"},{"attributes":{"data":{"area_geografica":["Centro","Centro","Centro","Centro","Centro","Centro","Centro","Centro","Centro"],"center_x":{"__ndarray__":"S/badKS2J0CB1bRov5QmQPKVZn97fSZAGerAjaffJEC4ndcbpwUkQBoc9u7JVSVAO88VRLWyJUDdM4Nsqi8mQIot7WkN6iZA","dtype":"float64","order":"little","shape":[9]},"center_y":{"__ndarray__":"+RKr/kXERUAtS0N2muhFQPyWC/zNZEVAf0hrNaQARkDxAQ3qoyBGQE8f5NM6wEVAwlBuMt77RUDZsJwSy/lFQOS86fltmEVA","dtype":"float64","order":"little","shape":[9]},"codice_provincia":[51,48,53,46,45,50,47,100,52],"denominazione_provincia":["Arezzo","Firenze","Grosseto","Lucca","Massa-Carrara","Pisa","Pistoia","Prato","Siena"],"denominazione_regione":["Toscana","Toscana","Toscana","Toscana","Toscana","Toscana","Toscana","Toscana","Toscana"],"index":[3,32,38,48,51,69,70,73,85],"index_right":[15,15,15,15,15,15,15,15,15],"popolazione":[339172,995517,219690,382543,191685,418122,291697,257073,265179],"sigla":["AR","FI","GR","LU","MS","PI","PT","PO","SI"],"superficie_km2":{"__ndarray__":"8x/Sb58wp0CSh4Va89GoQA8tsp0fl7FAnRGlvYHFmUA41sVttAqSQIhjXdzGGaJAXwfOGdGRh0BIUPwYc9t2QDx5WKhVbatA","dtype":"float64","order":"little","shape":[9]},"x":{"__ndarray__":"CcbTaswjNEFgOLVAly0zQaDcN+XUGTNBkSZVEV66MUH0WhfwNwExQaBwKO6yHjJBHuPvhJ1tMkF9H9HrvdcyQTt37kYKdjNB","dtype":"float64","order":"little","shape":[9]},"y":{"__ndarray__":"HWXmkRqTVEG4LijCw71UQdoSMhnyI1RBC/z+bRraVEGPQR9j9/9UQVvqgTJejlRB/RMU+XfUVEH/R5pRBdJUQaTX99fiX1RB","dtype":"float64","order":"little","shape":[9]}},"selected":{"id":"1068"},"selection_policy":{"id":"1067"}},"id":"1044","type":"ColumnDataSource"},{"attributes":{},"id":"1029","type":"WheelZoomTool"},{"attributes":{},"id":"1092","type":"StringEditor"},{"attributes":{"below":[{"id":"1012"}],"center":[{"id":"1019"},{"id":"1027"}],"height":800,"left":[{"id":"1020"}],"renderers":[{"id":"1042"},{"id":"1055"}],"title":{"id":"1059"},"toolbar":{"id":"1035"},"width":1500,"x_range":{"id":"1004"},"x_scale":{"id":"1008"},"y_range":{"id":"1006"},"y_scale":{"id":"1010"}},"id":"1003","subtype":"Figure","type":"Plot"},{"attributes":{"active_multi":null,"active_scroll":{"id":"1029"},"tools":[{"id":"1028"},{"id":"1029"},{"id":"1030"},{"id":"1031"},{"id":"1032"},{"id":"1033"},{"id":"1057"}]},"id":"1035","type":"Toolbar"},{"attributes":{},"id":"1031","type":"SaveTool"},{"attributes":{},"id":"1068","type":"Selection"},{"attributes":{"end":5538888.563138945,"start":5196649.743474101},"id":"1006","type":"Range1d"},{"attributes":{},"id":"1066","type":"AllLabels"},{"attributes":{},"id":"1028","type":"PanTool"},{"attributes":{},"id":"1083","type":"StringFormatter"},{"attributes":{},"id":"1032","type":"ResetTool"},{"attributes":{},"id":"1059","type":"Title"},{"attributes":{},"id":"1033","type":"HelpTool"},{"attributes":{"overlay":{"id":"1034"}},"id":"1030","type":"BoxZoomTool"},{"attributes":{"axis":{"id":"1012"},"ticker":null},"id":"1019","type":"Grid"},{"attributes":{"formatter":{"id":"1023"},"major_label_policy":{"id":"1063"},"ticker":{"id":"1021"}},"id":"1020","type":"MercatorAxis"},{"attributes":{"attribution":"&amp;copy; &lt;a href=\"https://www.openstreetmap.org/copyright\"&gt;OpenStreetMap&lt;/a&gt; contributors,&amp;copy; &lt;a href=\"https://cartodb.com/attributions\"&gt;CartoDB&lt;/a&gt;","url":"https://tiles.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"},"id":"1002","type":"WMTSTileSource"},{"attributes":{"source":{"id":"1044"}},"id":"1073","type":"CDSView"},{"attributes":{},"id":"1067","type":"UnionRenderers"},{"attributes":{"dimension":"lon"},"id":"1013","type":"MercatorTicker"},{"attributes":{"data_source":{"id":"1044"},"glyph":{"id":"1053"},"hover_glyph":null,"muted_glyph":null,"nonselection_glyph":{"id":"1054"},"view":{"id":"1056"}},"id":"1055","type":"GlyphRenderer"},{"attributes":{},"id":"1010","type":"LinearScale"},{"attributes":{"editor":{"id":"1090"},"field":"denominazione_regione","formatter":{"id":"1089"},"title":"denominazione_regione"},"id":"1048","type":"TableColumn"},{"attributes":{"formatter":{"id":"1015"},"major_label_policy":{"id":"1066"},"ticker":{"id":"1013"}},"id":"1012","type":"MercatorAxis"},{"attributes":{},"id":"1090","type":"StringEditor"},{"attributes":{},"id":"1091","type":"StringFormatter"},{"attributes":{"tile_source":{"id":"1002"}},"id":"1042","type":"TileRenderer"},{"attributes":{"editor":{"id":"1086"},"field":"codice_provincia","formatter":{"id":"1085"},"title":"codice_provincia"},"id":"1046","type":"TableColumn"},{"attributes":{"fill_color":{"value":"lime"},"line_color":{"value":"#1f77b4"},"line_width":{"value":0.5},"size":{"value":7},"x":{"field":"x"},"y":{"field":"y"}},"id":"1053","type":"Circle"},{"attributes":{"editor":{"id":"1084"},"field":"denominazione_provincia","formatter":{"id":"1083"},"title":"denominazione_provincia"},"id":"1045","type":"TableColumn"},{"attributes":{"editor":{"id":"1092"},"field":"area_geografica","formatter":{"id":"1091"},"title":"area_geografica"},"id":"1049","type":"TableColumn"},{"attributes":{"columns":[{"id":"1045"},{"id":"1046"},{"id":"1047"},{"id":"1048"},{"id":"1049"},{"id":"1050"},{"id":"1051"}],"source":{"id":"1044"},"view":{"id":"1073"}},"id":"1071","type":"DataTable"},{"attributes":{"editor":{"id":"1088"},"field":"sigla","formatter":{"id":"1087"},"title":"sigla"},"id":"1047","type":"TableColumn"},{"attributes":{},"id":"1088","type":"StringEditor"}],"root_ids":["1074"]},"title":"Bokeh Application","version":"2.3.1"}}
+        </script>
+        <script type="text/javascript">
+          (function() {
+            var fn = function() {
+              Bokeh.safely(function() {
+                (function(root) {
+                  function embed_document(root) {
+                    
+                  var docs_json = document.getElementById('1275').textContent;
+                  var render_items = [{"docid":"32f2bed6-b72b-4600-bae0-c0dc48fdfdeb","root_ids":["1074"],"roots":{"1074":"64edbde1-43f2-4fdc-a4bb-616cd48f353f"}}];
+                  root.Bokeh.embed.embed_items(docs_json, render_items);
+                
+                  }
+                  if (root.Bokeh !== undefined) {
+                    embed_document(root);
+                  } else {
+                    var attempts = 0;
+                    var timer = setInterval(function(root) {
+                      if (root.Bokeh !== undefined) {
+                        clearInterval(timer);
+                        embed_document(root);
+                      } else {
+                        attempts++;
+                        if (attempts > 100) {
+                          clearInterval(timer);
+                          console.log("Bokeh: ERROR: Unable to run BokehJS code because BokehJS library is missing");
+                        }
+                      }
+                    }, 10, root)
+                  }
+                })(window);
+              });
+            };
+            if (document.readyState != "loading") fn();
+            else document.addEventListener("DOMContentLoaded", fn);
+          })();
+        </script>
+    
+  </body>
+  
+</html>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="PYTHON_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <excludeFolder url="file://$MODULE_DIR$/build/bdist.win-amd64" />
+      <excludeFolder url="file://$MODULE_DIR$/geo_ita/data_sources" />
+      <excludeFolder url="file://$MODULE_DIR$/geo_ita/data_sources/Anagrafica" />
+      <excludeFolder url="file://$MODULE_DIR$/geo_ita/data_sources/Comuni/Popolazione" />
+      <excludeFolder url="file://$MODULE_DIR$/geo_ita/data_sources/Comuni/Shape" />
+      <excludeFolder url="file://$MODULE_DIR$/geo_ita/data_sources/HighResolutionPopulationDensity" />
+      <excludeFolder url="file://$MODULE_DIR$/geo_ita/data_sources/Province" />
+      <excludeFolder url="file://$MODULE_DIR$/geo_ita/data_sources/Regioni" />
+      <excludeFolder url="file://$MODULE_DIR$/geo_ita/data_sources/Test" />
+      <excludeFolder url="file://$MODULE_DIR$/geo_ita/data_sources/Variazioni" />
+    </content>
+    <orderEntry type="jdk" jdkName="geo_ita" jdkType="Python SDK" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+  <component name="PyDocumentationSettings">
+    <option name="format" value="PLAIN" />
+    <option name="myDocStringFormat" value="Plain" />
+  </component>
+</module>
