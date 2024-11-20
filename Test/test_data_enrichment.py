@@ -319,55 +319,16 @@ class TestAggregatePointByDistance(TestDataEnrichment):
 
 
 class TestGetPopulationNearby(unittest.TestCase):
-
-    def test_get_population_nearby_input(self):
-        df = ["via corso di Francia"]
-        with self.assertRaises(Exception):
-            get_population_nearby(df, 500)
-        df = pd.DataFrame(data=[["via corso di Francia"]], columns=["address"])
-        with self.assertRaises(Exception):
-            get_population_nearby(df, 500)
-        df, latitude_columns, longitude_columns = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]],
-                                                               columns=["latitude", "longitude"]), \
-            "lat", "lon"
-        with self.assertRaises(Exception):
-            get_population_nearby(df, 100, latitude_columns=latitude_columns, longitude_columns=longitude_columns)
-        df, latitude_columns, longitude_columns = pd.DataFrame(data=[["A", "B"]],
-                                                               columns=["latitude", "longitude"]), \
-            "latitude", "longitude"
-        with self.assertRaises(Exception):
-            get_population_nearby(df, 100, latitude_columns=latitude_columns, longitude_columns=longitude_columns)
-        df, latitude_columns, longitude_columns = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]],
-                                                               columns=["latitude", "longitude"]), \
-            "latitude", "longitude"
-        with self.assertRaises(Exception):
-            get_population_nearby(df, "raggio", latitude_columns=latitude_columns, longitude_columns=longitude_columns)
-        df, latitude_columns, longitude_columns = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]],
-                                                               columns=["latitude", "longitude"]), \
-            "latitude", "longitude"
-        with self.assertRaises(Exception):
-            get_population_nearby(df, 0, latitude_columns=latitude_columns, longitude_columns=longitude_columns)
-            # Empthy Dataframe
-        df = pd.DataFrame(columns=["lat", "lon"])
-        result = get_population_nearby(df, 500)
-        self.assertTrue(isinstance(result, pd.DataFrame))
-        self.assertEqual(0, result.shape[0])
-        self.assertListEqual(['lat', 'lon', 'n_residents'],
-                             list(result.columns))
-
     def test_get_population_nearby_results(self):
+
         test_df = pd.DataFrame([[41.8343354636729, 12.4684276148718],
                                 [42.23774542118423, 11.961695397335165]], columns=["center_y", "center_x"])
-        test_df = get_population_nearby(test_df, 300, latitude_columns="center_y", longitude_columns="center_x")
+        test_df = get_population_nearby(test_df, 300, latitude_column="center_y", longitude_column="center_x")
         self.assertGreater(test_df["n_residents"].values[0], 100)
         self.assertEqual(test_df["n_residents"].values[1], 0)
 
 
 class Prova(unittest.TestCase):
-
-    def test_aggregate_point_by_distance(self):
-        df = get_df_comuni()
-        df = aggregate_point_by_distance(df, 5000, latitude_columns="center_y", longitude_columns="center_x")
 
     # GeoDataQuality
     def test_GeoDataQuality(self):

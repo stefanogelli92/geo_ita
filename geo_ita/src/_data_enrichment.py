@@ -36,7 +36,7 @@ import geo_ita.src.config as cfg
 from geo_ita.src._data import (
     get_df, get_df_comuni, get_administrative_changes_df, _clean_denom_text,
     get_double_languages_denomination,
-    _get_shape_italia, get_high_resolution_population_density_df, get_highway_shapes, get_highway_exits
+    _get_shape_italia, get_high_resolution_population_density_df
 )
 
 log = logging.getLogger(__name__)
@@ -2197,131 +2197,93 @@ class GeoDataQuality:
 
 
 @validate
-def get_population_nearby(df: pd.DataFrame, radius: Union[int, float],
-                          latitude_columns: str = None, longitude_columns: str = None) -> pd.DataFrame:
-    min_radius = 50
-    if radius < min_radius:
-        raise Exception(f"Unable to find population with radius of less than {min_radius}, increase the radius.")
+def get_population_nearby(
+    df: pd.DataFrame,
+    radius: Union[int, float],
+    latitude_column: str = None,
+    longitude_column: str = None
+) -> pd.DataFrame:
+    """
+    Calculate the total population within a specified radius for each point in the dataset.
+
+    Parameters:
+    - df (pd.DataFrame): Input DataFrame containing points with latitude and longitude.
+    - radius (Union[int, float]): Radius (in meters) to search for population data.
+    - latitude_column (str): Name of the latitude column in the input DataFrame.
+    - longitude_column (str): Name of the longitude column in the input DataFrame.
+
+    Returns:
+    - pd.DataFrame: DataFrame with an additional column 'n_residents' representing the population.
+    """
+    MIN_RADIUS = 50
+    if radius < MIN_RADIUS:
+        raise ValueError(f"Radius must be at least {MIN_RADIUS} meters.")
+
+    # Load high-resolution population dataset
     population_df = get_high_resolution_population_density_df()
-    df = df.rename_axis('key_mapping').reset_index()
-    radius_df = __create_geo_dataframe(df, lat_tag=latitude_columns, long_tag=longitude_columns)[
+
+    # Assign unique identifiers for input DataFrame
+    df = df.rename_axis("key_mapping").reset_index()
+
+    # Convert input DataFrame to GeoDataFrame
+    points_gdf = __create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column)[
         ["key_mapping", "geometry"]]
-    radius_df = radius_df.to_crs({'init': 'epsg:4326'})
-    radius_df["geometry"] = radius_df["geometry"].centroid
-    long_tag = "Lon"
-    lat_tag = "Lat"
-    x_dist, y_dist = _distance_to_range_ccord(radius)
-    dist = (x_dist + y_dist) / 2
-    min_x, max_x = radius_df["geometry"].x.min() - x_dist, radius_df["geometry"].x.max() + x_dist
-    min_y, max_y = radius_df["geometry"].y.min() - y_dist, radius_df["geometry"].y.max() + y_dist
-    population_df = population_df[population_df[lat_tag].between(min_y, max_y) &
-                                  population_df[long_tag].between(min_x, max_x)]
-    log.info("Start Filtering population df")
-    start = datetime.now()
-    population_df["filter"] = False
-    for index, row in radius_df.iterrows():
-        pos = (population_df[lat_tag].between(row["geometry"].y - y_dist, row["geometry"].y + y_dist) &
-               population_df[long_tag].between(row["geometry"].x - x_dist, row["geometry"].x + x_dist))
-        population_df.loc[pos, "filter"] = True
-    population_df = population_df[population_df["filter"]]
-    end = datetime.now()
-    log.info("Filtering population df ended in {}".format(end - start))
-    log.info("Start Creating GeoDataframe")
+    points_gdf = points_gdf.to_crs(epsg=4326)  # Convert to df_population metric projections
+
+    # Filter population data before transformations (step 1 one big box)
+    lat_margin = (2 * radius / 110540)
+    lon_margin = (2 * radius / 111320)
+    min_x = points_gdf["geometry"].x.min() - lon_margin
+    max_x = points_gdf["geometry"].x.max() + lon_margin
+    min_y = points_gdf["geometry"].y.min() - lat_margin
+    max_y = points_gdf["geometry"].y.max() + lat_margin
+
+    population_df = population_df[
+        (population_df["Lon"] >= min_x) &
+        (population_df["Lon"] <= max_x) &
+        (population_df["Lat"] >= min_y) &
+        (population_df["Lat"] <= max_y)
+        ]
+
+    # Filter population data before transformations (step 2 small boxes)
+    if points_gdf.shape[0] < 10000:
+        population_df["filter"] = False
+        for index, row in points_gdf.iterrows():
+            pos = (population_df["Lat"].between(row["geometry"].y - lat_margin, row["geometry"].y + lat_margin) &
+                   population_df["Lon"].between(row["geometry"].x - lon_margin, row["geometry"].x + lon_margin))
+            population_df.loc[pos, "filter"] = True
+        population_df = population_df[population_df["filter"]]
+        population_df.drop(columns=["filter"], inplace=True)
+
+    points_gdf = points_gdf.to_crs(epsg=3857)  # Convert to metric projection for accurate distance calculations
+
+    # Convert population dataset to GeoDataFrame
+    log.debug("Start Creating GeoDataframe")
     start = datetime.now()
     population_df = gpd.GeoDataFrame(
-        population_df.drop([long_tag, lat_tag], axis=1),
-        crs={'init': 'epsg:4326'},
-        geometry=gpd.points_from_xy(population_df[long_tag], population_df[lat_tag]))
+        population_df.drop(["Lon", "Lat"], axis=1),
+        crs="EPSG:4326",
+        geometry=gpd.points_from_xy(population_df["Lon"], population_df["Lat"])
+    ).to_crs(epsg=3857)
     end = datetime.now()
-    log.info("Creating GeoDataframe ended in {}".format(end - start))
+    log.debug(f"Creating GeoDataframe ended in {end - start}.")
+
+    # Create buffer around each point
+    points_gdf["geometry"] = points_gdf["geometry"].buffer(radius, cap_style=1)
+
+    # Perform spatial join to aggregate population within the radius
     log.info("Start Merging input data with population df")
-    start = datetime.now()
-    if radius_df.shape[0] > 0:
-        radius_df["geometry"] = radius_df.apply(lambda x: x['geometry'].buffer(dist, cap_style=1), axis=1)
-    mapping = gpd.sjoin(population_df, radius_df, op='within').groupby("key_mapping")["Population"].sum()
+    population_df = gpd.sjoin(population_df, points_gdf, op="within", how="inner")
+    population_df = (
+        population_df.groupby("key_mapping")["Population"].sum()
+    )
     end = datetime.now()
-    log.info("Merging input data with population df ended in {}".format(end - start))
-    df["n_residents"] = df["key_mapping"].map(mapping)
-    df["n_residents"].fillna(0, inplace=True)
-    df = df.drop(["key_mapping"], axis=1)
+    log.info(f"Merging input data with population df ended in {end - start}")
+
+    # Map population data back to the original DataFrame
+    df["n_residents"] = df["key_mapping"].map(population_df).fillna(0).astype(int)
+
+    # Drop temporary columns
+    df.drop(columns=["key_mapping"], inplace=True)
+
     return df
-
-
-def check_locations_in_highway(df, lat_col, long_col, radius_max=50):
-    highway = get_highway_shapes()
-    x_dist, y_dist = _distance_to_range_ccord(radius_max)
-    dist = (x_dist + y_dist) / 2
-    point_df = df[[lat_col, long_col]].drop_duplicates().copy()
-    point_df = gpd.GeoDataFrame(
-        point_df, geometry=gpd.points_from_xy(point_df[long_col], point_df[lat_col]))
-    point_df["geometry"] = point_df.apply(lambda x: x['geometry'].buffer(dist, cap_style=1), axis=1)
-    point_df = gpd.tools.sjoin(point_df, highway[highway["classificazione"] == "Autostrada"], op='intersects',
-                               how="left")
-    point_df["in_highway"] = point_df["id"].notnull()
-    point_df = point_df[[lat_col, long_col, "in_highway"]]
-    df = df.merge(point_df, on=[lat_col, long_col], how="left")
-    return df
-
-
-def _get_nearests_highway_exits(df, lat_col, long_col, highway_exits, n=1):
-    point_list = highway_exits["point"].to_list()
-
-    def find_nearest_exit(point):
-        tree = spatial.KDTree(point_list)
-        _, nearest_index = tree.query([point], k=n)
-        nearest_index = list(nearest_index)
-        return [point_list[a] for a in nearest_index]
-
-    df["point"] = [(x, y) for x, y in zip(df[long_col], df[lat_col])]
-    df["nearest_exits"] = df["point"].apply(find_nearest_exit)
-    return df
-
-
-def _get_distance_to_exit_list(df):
-    def find_distance_from_points(row):
-        return [distance(row["point"], a).m for a in row["nearest_exits"]]
-
-    df["distances_to_exits"] = df.apply(find_distance_from_points, axis=1)
-    return df
-
-
-def get_distance_to_highway(df, lat_col, long_col):
-    highway_exits = get_highway_exits()
-    highway_exits = highway_exits[highway_exits["classificazione"] == "Autostrada"]
-    highway_exits["point"] = [(x, y) for x, y in zip(highway_exits["geometry"].x, highway_exits["geometry"].y)]
-    df = _get_nearests_highway_exits(df, lat_col, long_col, highway_exits, n=1)
-    df = _get_distance_to_exit_list(df)
-    df["distance_from_highway"] = df["distances_to_exits"].str[0]
-    del df["nearest_exits"], df["distances_to_exits"]
-    return df
-
-# class KDEDensity:
-#
-#     def __init__(self, df_density, lat_tag, long_tag, value_tag=None):
-#         self.df_density = df_density
-#         self.lat_tag = lat_tag
-#         self.long_tag = long_tag
-#         self.value_tag = value_tag
-#         self.kde = None
-#         self.run_kde()
-#
-#     def run_kde(self):
-#         Xtrain = np.vstack([self.df_density[self.lat_tag],
-#                             self.df_density[self.long_tag]]).T
-#         #Xtrain *= np.pi / 180.
-#
-#         self.kde = KernelDensity(bandwidth=0.05, metric='haversine',
-#                             kernel='gaussian', algorithm='ball_tree')
-#
-#         if self.value_tag is not None:
-#             Ytrain = self.df_density[self.value_tag].values.T
-#             Ytrain[Ytrain <= 0] = 0.0001
-#             self.kde.fit(Xtrain, sample_weight=Ytrain)
-#         else:
-#             self.kde.fit(Xtrain)
-#
-#     def evaluate_in_point(self, lat, long):
-#         xy = np.vstack([[lat], [long]]).T
-#         #xy *= np.pi / 180.
-#         Z = np.exp(self.kde.score_samples(xy))
-#         return Z[0]
