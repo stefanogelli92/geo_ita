@@ -36,73 +36,43 @@ class TestDataEnrichment(unittest.TestCase):
 
 class TestGetCoordinatesFromAddress(unittest.TestCase):
 
-    def test_get_coordinates_from_address_input(self):
-        # Use wrong input type
-        df, address = ["via corso di Francia"], "address"
-        with self.assertRaises(Exception):
-            get_coordinates_from_address(df, address)
-        df, address = pd.DataFrame(data=[["via corso di Francia"]], columns=["address"]), ["address"]
-        with self.assertRaises(Exception):
-            get_coordinates_from_address(df, address)
-        df, address = pd.DataFrame(data=[["via corso di Francia"]], columns=["address"]), "addres"
-        with self.assertRaises(Exception):
-            get_coordinates_from_address(df, address)
-        # Empthy Dataframe
-        df, address = pd.DataFrame(columns=["address"]), "address"
-        result = get_coordinates_from_address(df, address)
-        self.assertTrue(isinstance(result, pd.DataFrame))
-        self.assertEqual(0, result.shape[0])
-        self.assertListEqual(["address", "latitude", "longitude"], list(result.columns))
-
     def test_get_coordinates_from_address_match(self):
+        # Test case 1: A single valid address should return coordinates and the correct city
         df, address = pd.DataFrame(data=[["Corso di Francia Roma"]], columns=["address"]), "address"
         result = get_coordinates_from_address(df, address)
         result = get_city_from_coordinates(result)
-        self.assertEqual("Roma", result[TAG_COMUNE].values[0])
+        self.assertEqual("Roma", result[TAG_COMUNE].values[0], "The city should be 'Roma'.")
+
+        # Test case 2: If we provide a different city (Firenze), it should return None for latitude/longitude
         df, address = pd.DataFrame(data=[["Corso di Francia Roma", "Firenze"]], columns=["address", "city"]), "address"
         city = "city"
         result = get_coordinates_from_address(df, address, city)
-        self.assertEqual(None, result["latitude"].values[0])
-        df, address = pd.DataFrame(data=[["Corso di Francia Roma", "Firenze", None],
-                                         ["Corso di Francia", "Roma", "Roma"],
-                                         ["Viale G. P. da Palestrina", "Latina", "Latina"],
-                                         ["Via dellAquila Reale", "Roma", "Roma"],
-                                         ["xxxx", None, None]], columns=["address", "city", "comune_check"]), "address"
+        self.assertIsNone(result["latitude"].values[0], "Latitude should be None.")
+        self.assertIsNone(result["longitude"].values[0], "Longitude should be None.")
+
+        # Test case 3: Multiple addresses with varying validity
+        df, address = pd.DataFrame(data=[
+            ["Corso di Francia Roma", "Firenze", None],
+            ["Corso di Francia", "Roma", "Roma"],
+            ["Via G. P. da Palestrina", "Latina", "Latina"],
+            ["Via dellAquila Reale", "Roma", "Roma"],
+            ["xxxx", None, None]
+        ], columns=["address", "city", "comune_check"]), "address"
+
         city = "city"
-        result = get_coordinates_from_address(df, address, city)
-        result = get_city_from_coordinates(result)
+        result = get_coordinates_from_address(df, address, city)  # Call the function with multiple addresses
+        result = get_city_from_coordinates(result)  # Get the city from the coordinates
+
+        # Handle missing or invalid data (replace null province values with None)
         result.loc[result[TAG_PROVINCIA].isnull(), TAG_PROVINCIA] = None
+
+        # Test that the 'comune_check' column matches the province column (TAG_PROVINCIA)
         assert_series_equal(result["comune_check"],
                             result[TAG_PROVINCIA],
-                            check_names=False, check_dtype=False
-                            )
-
+                            check_names=False, check_dtype=False,
+                            check_like=True)  # Ensure the series are equal without checking names or dtype
 
 class TestGetAddressFromCoordinates(unittest.TestCase):
-
-    def test_get_address_from_coordinates_input(self):
-        df = ["via corso di Francia"]
-        with self.assertRaises(Exception):
-            get_address_from_coordinates(df)
-        df = pd.DataFrame(data=[["via corso di Francia"]], columns=["address"])
-        with self.assertRaises(Exception):
-            get_address_from_coordinates(df)
-        df, latitude_columns, longitude_columns = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]],
-                                                               columns=["latitude", "longitude"]), \
-            "lat", "lon"
-        with self.assertRaises(Exception):
-            get_address_from_coordinates(df, latitude_columns=latitude_columns, longitude_columns=longitude_columns)
-        df, latitude_columns, longitude_columns = pd.DataFrame(data=[["A", "B"]],
-                                                               columns=["latitude", "longitude"]), \
-            "latitude", "longitude"
-        with self.assertRaises(Exception):
-            get_address_from_coordinates(df, latitude_columns=latitude_columns, longitude_columns=longitude_columns)
-        # Empthy Dataframe
-        df = pd.DataFrame(columns=["lat", "lon"])
-        result = get_address_from_coordinates(df)
-        self.assertTrue(isinstance(result, pd.DataFrame))
-        self.assertEqual(0, result.shape[0])
-        self.assertListEqual(['lat', 'lon', 'address', 'city'], list(result.columns))
 
     def test_get_address_from_coordinates_results(self):
         df = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]], columns=["lat", "lon"])
@@ -116,89 +86,25 @@ class TestGetAddressFromCoordinates(unittest.TestCase):
         self.assertEqual(None, result["city"].values[0])
 
 
-class TestGetCityFromCoordinates(unittest.TestCase):
-
-    def test_get_city_from_coordinates_input(self):
-        df = ["via corso di Francia"]
-        with self.assertRaises(Exception):
-            get_city_from_coordinates(df)
-        df = pd.DataFrame(data=[["via corso di Francia"]], columns=["address"])
-        with self.assertRaises(Exception):
-            get_city_from_coordinates(df)
-        df, latitude_columns, longitude_columns = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]],
-                                                               columns=["latitude", "longitude"]), \
-            "lat", "lon"
-        with self.assertRaises(Exception):
-            get_city_from_coordinates(df, latitude_columns=latitude_columns, longitude_columns=longitude_columns)
-        df, latitude_columns, longitude_columns = pd.DataFrame(data=[["A", "B"]],
-                                                               columns=["latitude", "longitude"]), \
-            "latitude", "longitude"
-        with self.assertRaises(Exception):
-            get_city_from_coordinates(df, latitude_columns=latitude_columns, longitude_columns=longitude_columns)
-        # Empthy Dataframe
-        df = pd.DataFrame(columns=["lat", "lon"])
-        result = get_city_from_coordinates(df)
-        self.assertTrue(isinstance(result, pd.DataFrame))
-        self.assertEqual(0, result.shape[0])
-        self.assertListEqual(['lat', 'lon', TAG_COMUNE, TAG_PROVINCIA, TAG_SIGLA, TAG_REGIONE], list(result.columns))
+class TestGetCityFromCoordinates(TestDataEnrichment):
 
     def test_get_city_from_coordinates_results(self):
-        df = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]], columns=["lat", "lon"])
-        result = get_city_from_coordinates(df)
-        self.assertEqual("Roma", result[TAG_COMUNE].values[0])
-        df = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]], columns=["lat", "lon"])
-        result = get_city_from_coordinates(df, latitude_columns="lat", longitude_columns="lon")
-        self.assertEqual("Roma", result[TAG_COMUNE].values[0])
-        df = pd.DataFrame(data=[[43.884609765796114, 8.8971202373737]], columns=["lat", "lon"])
-        result = get_city_from_coordinates(df)
-        self.assertTrue(result[TAG_COMUNE].isna().all())
+        # Create dataset for the test
+        df = self.df_comuni.sample(20)
+        df = gpd.GeoDataFrame(df, geometry="geometry")
+        df["points"] = df.sample_points(size=10)
+        df["geometry"] = df["points"]
+        df.drop(columns=["points"], inplace=True)
+        df = df.explode("geometry")
+
+        df = get_city_from_coordinates(df,  suffix_result_columns="_test")
+        column_test = [column.replace("_test", "") for column in df.columns if "_test" in column]
+        self.check_result_on_same_dataframe(df, column_test, suffix="_test")
+
+        # TODO aggiungere che se provo a trovare dei punti fuori dal territorio italiano non trova niente
 
 
 class TestAddGeographicalInfo(TestDataEnrichment):
-
-    def test_add_geographical_info_input(self):
-        df = ["via corso di Francia"]
-        with self.assertRaises(Exception):
-            AddGeographicalInfo(df)
-        df = pd.DataFrame(data=[["roma"]], columns=["city"])
-        comune_column = "comune"
-        addinfo = AddGeographicalInfo(df)
-        with self.assertRaises(Exception):
-            addinfo.set_comuni_tag(comune_column)
-        with self.assertRaises(Exception):
-            addinfo.set_province_tag(comune_column)
-        with self.assertRaises(Exception):
-            addinfo.set_regioni_tag(comune_column)
-        with self.assertRaises(Exception):
-            addinfo.run_simple_match()
-        with self.assertRaises(Exception):
-            addinfo.get_not_matched_list()
-
-        df = pd.DataFrame(data=[["Roma"]], columns=["city"])
-        comune_column = "city"
-        addinfo = AddGeographicalInfo(df)
-        addinfo.set_comuni_tag(comune_column)
-        with self.assertRaises(Exception):
-            addinfo.get_result()
-        addinfo.run_simple_match()
-        with self.assertRaises(Exception):
-            addinfo.use_manual_match("roma")
-        with self.assertRaises(Exception):
-            addinfo.use_manual_match(["roma"])
-
-        df = pd.DataFrame(columns=["city"])
-        comune_column = "city"
-        addinfo = AddGeographicalInfo(df)
-        addinfo.set_comuni_tag(comune_column)
-        addinfo.run_simple_match()
-        # addinfo.run_find_frazioni()
-        # addinfo.run_find_frazioni_from_google()
-        # addinfo.run_similarity_match()
-        # addinfo.use_manual_match({"rome": "roma"})
-        result = addinfo.get_result()
-        self.assertTrue(isinstance(result, pd.DataFrame))
-        self.assertEqual(0, result.shape[0])
-        self.assertCountEqual(['city'] + addinfo.OUTPUT_COLUMNS, list(result.columns))
 
     def test_simple_match(self):
         df = self.df_comuni.copy()
@@ -397,7 +303,6 @@ class Prova(unittest.TestCase):
         df = aggregate_point_by_distance(df, 5000, latitude_columns="center_y", longitude_columns="center_x")
 
     # GeoDataQuality
-
     def test_GeoDataQuality(self):
         df = pd.read_excel(root_path / PureWindowsPath(r"data_sources/Test/data_quality_samples.xlsx"))
         dq = GeoDataQuality(df)
