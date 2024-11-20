@@ -1277,92 +1277,74 @@ def get_address_from_coordinates(
     return result_df
 
 
-def _distance_to_range_ccord(d):
-    a = (14, 6)
-    max_value = 1
-    min_value = 0
-    x_dist = 1
-    while True:
-        b = (a[0] + x_dist, a[1])
-        dist = distance(a, b).m
-        if dist == d:
-            break
-        elif dist > d:
-            d1 = round((x_dist + min_value) / 2, 7)
-            max_value = x_dist
-            if d1 == x_dist:
-                break
-            else:
-                x_dist = d1
-        else:
-            d1 = round((x_dist + max_value) / 2, 7)
-            min_value = x_dist
-            if d1 == x_dist:
-                break
-            else:
-                x_dist = d1
-
-    max_value = 1
-    min_value = 0
-    y_dist = 1
-    while True:
-        b = (a[0], a[1] + y_dist)
-        dist = distance(a, b).m
-        if dist == d:
-            break
-        elif dist > d:
-            d1 = round((y_dist + min_value) / 2, 7)
-            max_value = y_dist
-            if d1 == y_dist:
-                break
-            else:
-                y_dist = d1
-        else:
-            d1 = round((y_dist + max_value) / 2, 7)
-            min_value = y_dist
-            if d1 == y_dist:
-                break
-            else:
-                y_dist = d1
-    return x_dist, y_dist
-
-
 @validate
-def aggregate_point_by_distance(df0: pd.DataFrame,
-                                distance_in_meters: Union[int, float],
-                                latitude_columns: str = None, longitude_columns: str = None,
-                                agg_column_name: str = "aggregation_code") -> pd.DataFrame:
-    if latitude_columns is not None:
-        test_column_in_dataframe(df0, latitude_columns)
-    if longitude_columns is not None:
-        test_column_in_dataframe(df0, longitude_columns)
-    df0["key_mapping"] = range(df0.shape[0])
-    df = __create_geo_dataframe(df0, latitude_columns, longitude_columns)
-    df = df.to_crs({'init': 'epsg:4326'})
-    df = df[["key_mapping", "geometry"]]
-    df["geometry"] = df["geometry"].centroid
-    radius_df = df.copy()
-    # TODO Da rivedere (approssimazione distanza)
-    x_dist, y_dist = _distance_to_range_ccord(distance_in_meters)
-    dist = (x_dist + y_dist) / 2
-    radius_df["geometry"] = radius_df.apply(lambda x: x['geometry'].buffer(dist, cap_style=1), axis=1)
-    radius_df = gpd.sjoin(df, radius_df, op='within', how="left")
-    radius_df = radius_df[["key_mapping_left", "key_mapping_right"]]
-    n_points = df.shape[0]
-    n_cc, df[agg_column_name] = connected_components(
-        csr_matrix((np.ones(radius_df.shape[0]),
-                    (radius_df["key_mapping_left"].values, radius_df["key_mapping_right"].values)),
-                   shape=(n_points, n_points)),
-        directed=False)
+def aggregate_point_by_distance(
+        df: pd.DataFrame,
+        distance_in_meters: Union[int, float],
+        latitude_column: str = None,
+        longitude_column: str = None,
+        agg_column_name: str = "aggregation_code"
+) -> pd.DataFrame:
+    """
+    Aggregates points into clusters based on a specified distance.
 
-    df = df.set_index("key_mapping")[agg_column_name]
-    df0[agg_column_name] = df0["key_mapping"].map(df)
-    df0.drop(["key_mapping"], axis=1, inplace=True)
-    log.info("The {} points have been aggregated in {} group. The largest has {} points.".format(df0.shape[0], n_cc,
-                                                                                                 df0[
-                                                                                                     agg_column_name].value_counts().values[
-                                                                                                     0]))
-    return df0
+    Args:
+        df (pd.DataFrame): Input DataFrame containing latitude and longitude columns.
+        distance_in_meters (Union[int, float]): The maximum distance between points to consider them in the same cluster.
+        latitude_column (str): Column name for latitude. Optional if inferred.
+        longitude_column (str): Column name for longitude. Optional if inferred.
+        agg_column_name (str): Column name for the aggregation cluster ID.
+
+    Returns:
+        pd.DataFrame: DataFrame with an additional column indicating the aggregation cluster.
+    """
+    # Validate and prepare coordinate columns
+    if latitude_column is not None:
+        test_column_in_dataframe(df, latitude_column)
+    if longitude_column is not None:
+        test_column_in_dataframe(df, longitude_column)
+
+    df["key_mapping"] = range(df.shape[0])  # Unique identifier for each point
+
+    # Create a GeoDataFrame
+    gdf = __create_geo_dataframe(df, latitude_column, longitude_column)
+    gdf = gdf.to_crs(epsg=3857)  # Project to a CRS with units in meters
+
+    # Compute centroids (in case geometries are not points)
+    gdf["geometry"] = gdf["geometry"].centroid
+
+    # Create a buffer around each point
+    buffer_gdf = gdf.copy()
+    buffer_gdf["geometry"] = buffer_gdf["geometry"].buffer(distance_in_meters, cap_style=1)
+
+    # Perform a spatial join to find points within the buffer
+    joined_gdf = gpd.sjoin(gdf, buffer_gdf, op='within', how="left")
+    joined_gdf = joined_gdf[["key_mapping_left", "key_mapping_right"]]
+
+    # Create a sparse adjacency matrix for connected components
+    n_points = gdf.shape[0]
+    adjacency_matrix = csr_matrix(
+        (np.ones(joined_gdf.shape[0]),
+         (joined_gdf["key_mapping_left"].values, joined_gdf["key_mapping_right"].values)),
+        shape=(n_points, n_points)
+    )
+
+    # Find connected components
+    n_clusters, cluster_labels = connected_components(csgraph=adjacency_matrix, directed=False)
+
+    # Map cluster labels back to the original DataFrame
+    gdf[agg_column_name] = cluster_labels
+    df[agg_column_name] = df["key_mapping"].map(gdf.set_index("key_mapping")[agg_column_name])
+
+    # Clean up and drop temporary columns
+    df.drop(columns=["key_mapping"], inplace=True)
+
+    # Logging cluster information
+    largest_cluster_size = df[agg_column_name].value_counts().max()
+    log.info(f"Aggregated {df.shape[0]} points into {n_clusters} clusters. "
+             f"The largest cluster contains {largest_cluster_size} points.")
+
+    return df
 
 
 class GeoDataQuality:

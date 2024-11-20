@@ -1,4 +1,6 @@
 from pandas.testing import assert_frame_equal, assert_series_equal
+from geopy import Point
+from geopy.distance import distance
 
 from geo_ita.src._data_enrichment import *
 from geo_ita.src._data import *
@@ -251,6 +253,69 @@ class TestAddGeographicalInfo(TestDataEnrichment):
         result = result.where(pd.notnull(result), None)
         column_test = [column.replace("_test", "") for column in result.columns if "_test" in column]
         self.check_result_on_same_dataframe(result, column_test, suffix="_test")
+
+
+class TestAggregatePointByDistance(TestDataEnrichment):
+
+    def test_aggregate_point_by_distance(self):
+        radius_in_meters = 500
+
+        df = get_df_regioni()
+        df = df[["center_x", "center_y", cfg.TAG_REGIONE]]
+        df = gpd.GeoDataFrame(
+            df, geometry=gpd.points_from_xy(df["center_x"], df["center_y"]))
+        df.crs = {'init': "epsg:32632"}
+        df = df.to_crs(epsg=4326)
+        df["group"] = "original"
+        df["center_x"] = df["geometry"].centroid.x
+        df["center_y"] = df["geometry"].centroid.y
+        df = pd.DataFrame(df)
+        df.drop(columns=["geometry"], inplace=True)
+
+        data = [df]
+
+        # Add nearby points
+        df_near = df.copy()
+        df_near["group"] = "nearby"
+        df_near["x"] = df_near["center_x"] + (np.random.uniform(0.0004, 0.0007, df_near.shape[0]) * radius_in_meters / 111)
+        df_near["y"] = df_near["center_y"] + (np.random.uniform(0.0004, 0.0007, df_near.shape[0]) * radius_in_meters / 111)
+        # Check distance
+        df_near["distance"] = df_near.apply(lambda row: distance(
+            Point(row['center_x'], row['center_y']),
+            Point(row['x'], row['y'])
+        ).m, axis=1)
+        df_near = df_near[df_near["distance"] < radius_in_meters]
+        df_near["center_x"] = df_near["x"]
+        df_near["center_y"] = df_near["y"]
+        df_near.drop(columns=["x", "y", "distance"], inplace=True)
+        df_near = pd.concat([df_near, df])
+
+        df_near = aggregate_point_by_distance(df_near, distance_in_meters=radius_in_meters, latitude_column="center_x",
+                                              longitude_column="center_y")
+        # Check result
+        check = df_near.groupby(cfg.TAG_REGIONE)["aggregation_code"].nunique()
+        self.assertTrue((check == 1).all())
+
+        # Add far points
+        df_far = df.copy()
+        df_far["group"] = "far"
+        df_far["x"] = df_far["center_x"] + (np.random.uniform(0.0008, 0.0009, df_far.shape[0]) * radius_in_meters / 111)
+        df_far["y"] = df_far["center_y"] + (np.random.uniform(0.0008, 0.0009, df_far.shape[0]) * radius_in_meters / 111)
+        # Check distance
+        df_far["distance"] = df_far.apply(lambda row: distance(
+            Point(row['center_x'], row['center_y']),
+            Point(row['x'], row['y'])
+        ).m, axis=1)
+        df_far = df_far[df_far["distance"] > radius_in_meters]
+        df_far["center_x"] = df_far["x"]
+        df_far["center_y"] = df_far["y"]
+        df_far.drop(columns=["x", "y", "distance"], inplace=True)
+        df_far = pd.concat([df_far, df])
+
+        df_far = aggregate_point_by_distance(df_far, distance_in_meters=radius_in_meters, latitude_column="center_x",
+                                             longitude_column="center_y")
+        check = df_far.groupby(cfg.TAG_REGIONE)["aggregation_code"].nunique()
+        self.assertTrue((check == 2).all())
 
 
 class TestGetPopulationNearby(unittest.TestCase):
