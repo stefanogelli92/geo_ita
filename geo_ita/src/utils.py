@@ -1,7 +1,11 @@
+import re
 from enum import Enum
 from typing import List, Union
 
 import numpy as np
+import pandas as pd
+import unidecode
+
 import geo_ita.src.config as cfg
 
 
@@ -62,3 +66,52 @@ def infer_geographical_category(list_values: List[Union[str, int, float]]) -> Co
     # Default to denominations if no other condition is met
     return CodeLevel.DENOMINATION
 
+
+def get_tag_registry(code, level):
+    if level == GeoLevel.COMUNE:
+        if code == CodeLevel.CODE:
+            result = cfg.TAG_CODICE_COMUNE
+        else:
+            result = cfg.TAG_COMUNE
+    elif level == GeoLevel.PROVINCIA:
+        if code == CodeLevel.CODE:
+            result = cfg.TAG_CODICE_PROVINCIA
+        elif code == CodeLevel.SIGLA:
+            result = cfg.TAG_SIGLA
+        else:
+            result = cfg.TAG_PROVINCIA
+    elif level == GeoLevel.REGIONE:
+        if code == CodeLevel.CODE:
+            result = cfg.TAG_CODICE_REGIONE
+        else:
+            result = cfg.TAG_REGIONE
+    else:
+        raise Exception("Level UNKNOWN")
+    return result
+
+
+def clean_htmltext(text: str) -> str:
+    text = text.lower()
+    text = re.sub('[^A-Za-z0-9.]+', ' ', text)
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip()
+    text = re.sub(' +', ' ', text)
+    return text
+
+
+def test_column_in_dataframe(df: pd.DataFrame, column):
+    if column not in df.columns:
+        raise Exception(f"Column {column} not found in DataFrame.")
+
+
+def clean_denomination_text_value(value):
+    value = value.lower()  # All strig in lowercase
+    value = re.sub(r'[^\w\s]', ' ', value)  # Remove non alphabetic characters
+    value = value.strip()
+    value = re.sub(r'\s+', ' ', value)
+    value = cfg.comuni_exceptions.get(value, value)
+    value = unidecode.unidecode(value)
+    value = cfg.comuni_exceptions.get(value, value)
+    for k, v in cfg.clear_denomination.items():
+        value = value.replace(k, v)
+    return value

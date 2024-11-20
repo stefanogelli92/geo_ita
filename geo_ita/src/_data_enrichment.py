@@ -3,14 +3,11 @@ import os
 import logging
 import ssl
 from datetime import datetime
-from typing import Dict, Union, List, Optional
-import unidecode
+from typing import Dict, Optional
 import requests
 
 from valdec.decorators import validate
 from bs4 import BeautifulSoup
-import re
-import numpy as np
 import pandas as pd
 from scipy import spatial
 from scipy.sparse.csgraph import connected_components
@@ -22,7 +19,6 @@ from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
 from googlesearch import search
 from googleapiclient.discovery import build
-# from sklearn.neighbors import KernelDensity
 
 from bokeh.models import (
     ColumnDataSource, DataTable, TableColumn, HTMLTemplateFormatter, CategoricalColorMapper,
@@ -66,22 +62,6 @@ def google_query(query, api_key, cse_id, **kwargs):
     return query_results['items']
 
 
-@validate
-def _clean_htmltext(text: str) -> str:
-    text = text.lower()
-    text = re.sub('[^A-Za-z0-9.]+', ' ', text)
-    text = re.sub(r'\s+', ' ', text)
-    text = text.strip()
-    text = re.sub(' +', ' ', text)
-    return text
-
-
-@validate
-def _test_column_in_dataframe(df: pd.DataFrame, column):
-    if column not in df.columns:
-        raise Exception(f"Column {column} not found in DataFrame.")
-
-
 class AddGeographicalInfo:
     MATCH_COLUMN = "geo_ita_match_column"
     SUFFIX_DEFAULT = "_geo_ita_suffix_default"
@@ -101,7 +81,7 @@ class AddGeographicalInfo:
 
     @validate
     def set_comuni_tag(self, column_name: str):
-        _test_column_in_dataframe(self.original_df, column_name)
+        test_column_in_dataframe(self.original_df, column_name)
         code_level = infer_geographical_category(list(self.original_df[column_name].unique()))
         if code_level == CodeLevel.SIGLA:
             raise Exception(f"Found values in {column_name} similar to Province Sigla. "
@@ -110,13 +90,13 @@ class AddGeographicalInfo:
 
     @validate
     def set_province_tag(self, column_name: str):
-        _test_column_in_dataframe(self.original_df, column_name)
+        test_column_in_dataframe(self.original_df, column_name)
         code_level = infer_geographical_category(list(self.original_df[column_name].unique()))
         self.detail_level[GeoLevel.PROVINCIA] = (column_name, code_level)
 
     @validate
     def set_regioni_tag(self, column_name: str):
-        _test_column_in_dataframe(self.original_df, column_name)
+        test_column_in_dataframe(self.original_df, column_name)
         code_level = infer_geographical_category(list(self.original_df[column_name].unique()))
         if code_level == CodeLevel.SIGLA:
             raise Exception(f"Found values in {column_name} similar to Province Sigla. "
@@ -145,7 +125,7 @@ class AddGeographicalInfo:
         # Get ISTAT data
         self.istat_registry = get_df(geo_level)
 
-        geo_tag_anag = _get_tag_anag(geo_code, geo_level)
+        geo_tag_anag = get_tag_registry(geo_code, geo_level)
         self.istat_registry[self.MATCH_COLUMN] = self.istat_registry[geo_tag_anag]
 
         if geo_code == CodeLevel.SIGLA:
@@ -261,11 +241,11 @@ class AddGeographicalInfo:
         if GeoLevel.PROVINCIA in self.detail_level:
             geo_code = self.detail_level[GeoLevel.PROVINCIA][1]
             detail_column = self.detail_level[GeoLevel.PROVINCIA][0]
-            registry_column_detail = _get_tag_anag(geo_code, GeoLevel.PROVINCIA)
+            registry_column_detail = get_tag_registry(geo_code, GeoLevel.PROVINCIA)
         elif GeoLevel.REGIONE in self.detail_level:
             geo_code = self.detail_level[GeoLevel.REGIONE][1]
             detail_column = self.detail_level[GeoLevel.REGIONE][0]
-            registry_column_detail = _get_tag_anag(geo_code, GeoLevel.REGIONE)
+            registry_column_detail = get_tag_registry(geo_code, GeoLevel.REGIONE)
         else:
             log.warning(
                 "You can distinguish them only by using another geographic information (ex.: provincia or regione). "
@@ -390,7 +370,7 @@ class AddGeographicalInfo:
             comune = comune.replace("Roma Capitale", "Roma")
             comune = self._check_if_text_is_comune(comune)
         if comune is not None:
-            comune = _clean_denom_text_value(comune)
+            comune = clean_denomination_text_value(comune)
         return comune
 
     def _check_matched_comune(self, row, value, match_dict):
@@ -506,14 +486,15 @@ class AddGeographicalInfo:
             'script',
         ]
         sentences = " ".join([tag.string for tag in soup.find_all(text=True) if tag.parent.name not in blacklist])
-        sentences = _clean_htmltext(sentences)
+        sentences = clean_htmltext(sentences)
         sentences = re.split(r'[\r\n\.]', sentences)
         matches = []
         for text in sentences:
             results = re.findall(cfg.regex_find_frazioni.format(denomination), text)
             for result in results:
                 _match = result[8].split("provincia")[0]
-                _match = [_clean_denom_text_value(comune) for comune in self.istat_registry[cfg.TAG_COMUNE].unique() if
+                _match = [clean_denomination_text_value(comune) for comune in
+                          self.istat_registry[cfg.TAG_COMUNE].unique() if
                           re.match(f"\\b{comune.lower()}\\b", _match)]
                 matches.extend(_match)
         matches = list(set(matches))
@@ -639,9 +620,9 @@ class AddGeographicalInfo:
                                           threshold=threshold)
             self.similarity_result = {v[0]: (k, v[1]) for k, v in match_dict.items()}
         else:
-            match_dict = self._find_match(self.get_not_matched_list(), self.istat_registry[self.MATCH_COLUMN],
-                                          threshold=threshold)
-            self.similarity_result = {v[0]: (k, v[1]) for k, v in match_dict.items()}
+            self.similarity_result = self._find_match(self.get_not_matched_list(),
+                                                      self.istat_registry[self.MATCH_COLUMN],
+                                                      threshold=threshold)
         n = len(self.similarity_result)
         if n > 1:
             log.info(f"Match {n} name by similarity:\n{self.similarity_result}")
@@ -672,7 +653,7 @@ class AddGeographicalInfo:
         _ = self._check_non_match(self.istat_registry[self.MATCH_COLUMN])
 
     @staticmethod
-    def _find_match(not_match1, not_match2, threshold, unique=False) -> Dict[str, str]:
+    def _find_match(not_match1, not_match2, threshold, unique=False) -> Dict:
         """
         Parameters
         ----------
@@ -694,42 +675,6 @@ class AddGeographicalInfo:
                     if unique:
                         not_match2.remove(best_match)
         return match_dict
-
-
-def _get_tag_anag(code, level):
-    if level == GeoLevel.COMUNE:
-        if code == CodeLevel.CODE:
-            result = cfg.TAG_CODICE_COMUNE
-        else:
-            result = cfg.TAG_COMUNE
-    elif level == GeoLevel.PROVINCIA:
-        if code == CodeLevel.CODE:
-            result = cfg.TAG_CODICE_PROVINCIA
-        elif code == CodeLevel.SIGLA:
-            result = cfg.TAG_SIGLA
-        else:
-            result = cfg.TAG_PROVINCIA
-    elif level == GeoLevel.REGIONE:
-        if code == CodeLevel.CODE:
-            result = cfg.TAG_CODICE_REGIONE
-        else:
-            result = cfg.TAG_REGIONE
-    else:
-        raise Exception("Level UNKNOWN")
-    return result
-
-
-def _clean_denom_text_value(value):
-    value = value.lower()  # All strig in lowercase
-    value = re.sub(r'[^\w\s]', ' ', value)  # Remove non alphabetic characters
-    value = value.strip()
-    value = re.sub(r'\s+', ' ', value)
-    value = cfg.comuni_exceptions.get(value, value)
-    value = unidecode.unidecode(value)
-    value = cfg.comuni_exceptions.get(value, value)
-    for k, v in cfg.clear_denomination.items():
-        value = value.replace(k, v)
-    return value
 
 
 def __find_coord_columns(df):
@@ -897,10 +842,10 @@ def get_geo_info_from_provincia(provincia: str, regione: str = None) -> Dict[str
 
 @validate
 def get_city_from_coordinates(
-    df: pd.DataFrame,
-    latitude_column: Optional[str] = None,
-    longitude_column: Optional[str] = None,
-    suffix_result_columns: str = "",
+        df: pd.DataFrame,
+        latitude_column: Optional[str] = None,
+        longitude_column: Optional[str] = None,
+        suffix_result_columns: str = "",
 ) -> pd.DataFrame:
     """
     Map geographic information (city, province, region) to a dataframe based on coordinates.
@@ -915,9 +860,9 @@ def get_city_from_coordinates(
     """
     # Validate the presence of latitude and longitude columns
     if latitude_column:
-        _test_column_in_dataframe(df, latitude_column)
+        test_column_in_dataframe(df, latitude_column)
     if longitude_column:
-        _test_column_in_dataframe(df, longitude_column)
+        test_column_in_dataframe(df, longitude_column)
 
     # Add a unique key to map results back to the original dataframe
     df["key_mapping"] = range(len(df))
@@ -992,7 +937,8 @@ def _fetch_urls(address, n_url_read):
     urls = []
     try:
         # Attempt to search via Google
-        urls = list(search(address, tld='com', num=n_url_read, lang="it", country="Italy", stop=n_url_read, pause=2.5, verify_ssl=False))
+        urls = list(search(address, tld='com', num=n_url_read, lang="it", country="Italy", stop=n_url_read, pause=2.5,
+                           verify_ssl=False))
     except Exception as e:
         log.error(f'Failed to search on Google (attempt 1): {str(e)}')
         try:
@@ -1019,7 +965,7 @@ def _scrape_url_for_address(url, pattern):
         res = requests.get(url, verify=False)
         soup = BeautifulSoup(res.content, 'html.parser')
         text = ' '.join(soup.stripped_strings)
-        text = _clean_htmltext(text)  # Clean up the extracted text
+        text = clean_htmltext(text)  # Clean up the extracted text
 
         # Search for the pattern in the page's text
         match = re.search(pattern, text)
@@ -1203,10 +1149,10 @@ def get_coordinates_from_address(
         pd.DataFrame: Original DataFrame enriched with coordinates.
     """
     # Validate input columns
-    _test_column_in_dataframe(df, address_tag)
+    test_column_in_dataframe(df, address_tag)
     for tag in [comuni_tag, province_tag, regioni_tag]:
         if tag:
-            _test_column_in_dataframe(df, tag)
+            test_column_in_dataframe(df, tag)
 
     # Prepare a unique subset of data for processing
     relevant_columns = [col for col in [address_tag, comuni_tag, province_tag, regioni_tag] if col]
@@ -1348,9 +1294,9 @@ def aggregate_point_by_distance(df0: pd.DataFrame,
                                 latitude_columns: str = None, longitude_columns: str = None,
                                 agg_column_name: str = "aggregation_code") -> pd.DataFrame:
     if latitude_columns is not None:
-        _test_column_in_dataframe(df0, latitude_columns)
+        test_column_in_dataframe(df0, latitude_columns)
     if longitude_columns is not None:
-        _test_column_in_dataframe(df0, longitude_columns)
+        test_column_in_dataframe(df0, longitude_columns)
     df0["key_mapping"] = range(df0.shape[0])
     df = __create_geo_dataframe(df0, latitude_columns, longitude_columns)
     df = df.to_crs({'init': 'epsg:4326'})
@@ -1404,42 +1350,42 @@ class GeoDataQuality:
 
     @validate
     def set_keys(self, col_name: str):
-        _test_column_in_dataframe(self.original_df, col_name)
+        test_column_in_dataframe(self.original_df, col_name)
         if not self.original_df[col_name].is_unique:
             raise Exception(r"Insert a column with unique values.")
         self.keys = col_name
 
     @validate
     def set_nazione_tag(self, col_name: str):
-        _test_column_in_dataframe(self.original_df, col_name)
+        test_column_in_dataframe(self.original_df, col_name)
         self.nazione_tag = col_name
 
     @validate
     def set_regioni_tag(self, col_name: str):
-        _test_column_in_dataframe(self.original_df, col_name)
+        test_column_in_dataframe(self.original_df, col_name)
         self.regioni_tag = col_name
         self.regioni_code = infer_geographical_category(list(self.original_df[col_name].unique()))
-        self.regioni_result_tag = _get_tag_anag(self.regioni_code, cfg.LEVEL_REGIONE)
+        self.regioni_result_tag = get_tag_registry(self.regioni_code, cfg.LEVEL_REGIONE)
 
     @validate
     def set_comuni_tag(self, col_name: str, use_for_check_nation: bool = False):
         self.use_for_check_nation = use_for_check_nation
-        _test_column_in_dataframe(self.original_df, col_name)
+        test_column_in_dataframe(self.original_df, col_name)
         self.comuni_tag = col_name
         self.comuni_code = infer_geographical_category(list(self.original_df[col_name].unique()))
-        self.comuni_result_tag = _get_tag_anag(self.comuni_code, cfg.LEVEL_COMUNE)
+        self.comuni_result_tag = get_tag_registry(self.comuni_code, cfg.LEVEL_COMUNE)
 
     @validate
     def set_province_tag(self, col_name: str):
-        _test_column_in_dataframe(self.original_df, col_name)
+        test_column_in_dataframe(self.original_df, col_name)
         self.province_tag = col_name
         self.province_code = infer_geographical_category(list(self.original_df[col_name].unique()))
-        self.province_result_tag = _get_tag_anag(self.province_code, cfg.LEVEL_PROVINCIA)
+        self.province_result_tag = get_tag_registry(self.province_code, cfg.LEVEL_PROVINCIA)
 
     @validate
     def set_latitude_longitude_tag(self, lat_col: str, long_col: str):
-        _test_column_in_dataframe(self.original_df, lat_col)
-        _test_column_in_dataframe(self.original_df, long_col)
+        test_column_in_dataframe(self.original_df, lat_col)
+        test_column_in_dataframe(self.original_df, long_col)
         self.latitude_tag = lat_col
         self.longitude_tag = long_col
 

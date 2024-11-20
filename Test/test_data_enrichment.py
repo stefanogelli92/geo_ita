@@ -7,10 +7,6 @@ from pathlib import PureWindowsPath
 from geo_ita.src.config import *
 import logging
 
-log = logging.getLogger("_data_enrichment")
-log.addHandler(logging.NullHandler())
-log.setLevel(logging.DEBUG)
-
 import unittest
 
 
@@ -18,6 +14,11 @@ class TestDataEnrichment(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # Setting logging
+        logger = logging.getLogger("_data_enrichment")
+        logger.addHandler(logging.NullHandler())
+        logger.setLevel(logging.DEBUG)
+
         # Load dataset just 1 time
         cls.df_comuni = get_df_comuni()
 
