@@ -3,7 +3,7 @@ import os
 import logging
 import ssl
 from datetime import datetime
-from typing import Dict, Union, List
+from typing import Dict, Union, List, Optional
 import unidecode
 import requests
 
@@ -294,7 +294,8 @@ class AddGeographicalInfo:
 
         pos = df[denomination_column].isin(comuni_homonym_df[cfg.TAG_COMUNE].unique())
         df[denomination_column] = df[denomination_column].where(~pos,
-                                                                df[denomination_column] + " " + df[details_columns].astype(
+                                                                df[denomination_column] + " " + df[
+                                                                    details_columns].astype(
                                                                     str).str.lower())
         df[denomination_column] = df[denomination_column].replace(comuni_homonym_df.set_index("key")["new_name"])
         return df
@@ -364,7 +365,7 @@ class AddGeographicalInfo:
         return value
 
     @staticmethod
-    def _check_if_comune_is_comune(value):
+    def _check_if_text_is_comune(value):
         info = get_geo_info_from_comune(comune=value, flag_find_frazioni=False)
         if info is None:
             return None
@@ -378,16 +379,16 @@ class AddGeographicalInfo:
         if not match:
             return None
         comune = match.group("comune1")
-        comune = self._check_if_comune_is_comune(comune)
+        comune = self._check_if_text_is_comune(comune)
         if comune is None:
             comune = match.group("comune2")
             if comune is not None:
                 comune = comune[:-2]
-                comune = self._check_if_comune_is_comune(comune)
+                comune = self._check_if_text_is_comune(comune)
         if comune is None:
             comune = match.group("provincia")
             comune = comune.replace("Roma Capitale", "Roma")
-            comune = self._check_if_comune_is_comune(comune)
+            comune = self._check_if_text_is_comune(comune)
         if comune is not None:
             comune = _clean_denom_text_value(comune)
         return comune
@@ -406,7 +407,7 @@ class AddGeographicalInfo:
         if cfg.TAG_CODICE_PROVINCIA in row:
             if row[cfg.TAG_CODICE_PROVINCIA] != info_new_value[cfg.TAG_CODICE_PROVINCIA]:
                 log.debug(f"Value {value} is a comune, but the provincia not matched: "
-                              f"{info_new_value[cfg.TAG_CODICE_PROVINCIA]} != {row[cfg.TAG_CODICE_PROVINCIA]}.")
+                          f"{info_new_value[cfg.TAG_CODICE_PROVINCIA]} != {row[cfg.TAG_CODICE_PROVINCIA]}.")
                 return match_dict
             else:
                 provincia_column = self.detail_level[GeoLevel.PROVINCIA][0]
@@ -415,7 +416,7 @@ class AddGeographicalInfo:
         if cfg.TAG_CODICE_REGIONE in row:
             if row[cfg.TAG_CODICE_REGIONE] != info_new_value[cfg.TAG_CODICE_REGIONE]:
                 log.debug(f"Value {value} is a comune, but the regione not matched: "
-                              f"{info_new_value[cfg.TAG_CODICE_REGIONE]} != {row[cfg.TAG_CODICE_REGIONE]}.")
+                          f"{info_new_value[cfg.TAG_CODICE_REGIONE]} != {row[cfg.TAG_CODICE_REGIONE]}.")
                 return match_dict
             elif cfg.TAG_CODICE_PROVINCIA not in row:
                 regione_column = self.detail_level[GeoLevel.REGIONE][0]
@@ -484,7 +485,7 @@ class AddGeographicalInfo:
         except Exception as e:
             log.error('Failed to search on google tentative 1: ' + str(e))
             try:
-                results = google_query(query, cfg.google_search_api_key, cfg.google_search_cse_id, num=n_url_read )
+                results = google_query(query, cfg.google_search_api_key, cfg.google_search_cse_id, num=n_url_read)
                 return [result['link'] for result in results]
             except Exception as e:
                 log.error('Failed to search on google tentative 2: ' + str(e))
@@ -512,7 +513,8 @@ class AddGeographicalInfo:
             results = re.findall(cfg.regex_find_frazioni.format(denomination), text)
             for result in results:
                 _match = result[8].split("provincia")[0]
-                _match = [_clean_denom_text_value(comune) for comune in self.istat_registry[cfg.TAG_COMUNE].unique() if re.match(f"\\b{comune.lower()}\\b", _match)]
+                _match = [_clean_denom_text_value(comune) for comune in self.istat_registry[cfg.TAG_COMUNE].unique() if
+                          re.match(f"\\b{comune.lower()}\\b", _match)]
                 matches.extend(_match)
         matches = list(set(matches))
         return matches
@@ -554,16 +556,17 @@ class AddGeographicalInfo:
                 for comune in match_comuni:
                     match_dict = self._check_matched_comune(row, comune, match_dict)
         if len(match_dict) > 0:
-            log.info(f"Match {len(match_dict)} name that corresponds to a possible frazione of a comune from Web:\n{match_dict}")
+            log.info(
+                f"Match {len(match_dict)} name that corresponds to a possible frazione of a comune from Web:\n{match_dict}")
             _ = self._check_non_match(self.istat_registry[self.MATCH_COLUMN].unique())
 
     @validate
     def get_result(
-        self,
-        add_missing: bool = False,
-        drop_not_match: bool = False,
-        suffix_result_columns: str = "",
-        handle_duplicate_column: str = "error"
+            self,
+            add_missing: bool = False,
+            drop_not_match: bool = False,
+            suffix_result_columns: str = "",
+            handle_duplicate_column: str = "error"
     ) -> pd.DataFrame:
         if self.not_match is None:
             raise Exception("Run simple match before get the result.")
@@ -598,7 +601,8 @@ class AddGeographicalInfo:
                 columns={col: col + "geo_ita_rename_handler" for col in column_duplicates},
                 inplace=True
             )
-        elif (len(column_duplicates) > 0) & (isinstance(handle_duplicate_column, str)) & (handle_duplicate_column != ""):
+        elif (len(column_duplicates) > 0) & (isinstance(handle_duplicate_column, str)) & (
+                handle_duplicate_column != ""):
             self.istat_registry.rename(
                 columns={col: col + handle_duplicate_column for col in column_duplicates},
                 inplace=True
@@ -631,10 +635,13 @@ class AddGeographicalInfo:
         if unique_flag:
             input_den = self.df[self.MATCH_COLUMN].values()
             registry_not_matched = [a for a in self.istat_registry[self.MATCH_COLUMN] if a not in input_den]
-            match_dict = self._find_match(registry_not_matched, self.get_not_matched_list(), unique=True, threshold=threshold)
+            match_dict = self._find_match(registry_not_matched, self.get_not_matched_list(), unique=True,
+                                          threshold=threshold)
             self.similarity_result = {v[0]: (k, v[1]) for k, v in match_dict.items()}
         else:
-            self.similarity_result = self._find_match(self.get_not_matched_list(), self.istat_registry[self.MATCH_COLUMN], threshold=threshold)
+            match_dict = self._find_match(self.get_not_matched_list(), self.istat_registry[self.MATCH_COLUMN],
+                                          threshold=threshold)
+            self.similarity_result = {v[0]: (k, v[1]) for k, v in match_dict.items()}
         n = len(self.similarity_result)
         if n > 1:
             log.info(f"Match {n} name by similarity:\n{self.similarity_result}")
@@ -753,7 +760,7 @@ def __find_coord_columns(df):
 def __create_geo_dataframe(df0, lat_tag=None, long_tag=None):
     if isinstance(df0, gpd.GeoDataFrame):
         df = df0.copy()
-        if df.crs['init'] is None:
+        if df.crs is None:
             coord_system = __find_coordinates_system(df, geometry="geometry")
             df.crs = {'init': coord_system}
     elif isinstance(df0, pd.DataFrame):
@@ -775,7 +782,6 @@ def __create_geo_dataframe(df0, lat_tag=None, long_tag=None):
             log.info("Found geometry columns")
         else:
             raise Exception("The DataFrame must have a geometry attribute or lat-long.")
-
     else:
         raise Exception("You need to pass a Pandas DataFrame of GeoDataFrame.")
     return df
@@ -825,7 +831,8 @@ def __find_coordinates_system(df, lat=None, lon=None, geometry=None):
 
 
 # @validate
-def get_geo_info_from_comune(comune: str, provincia: str = None, regione: str = None, flag_find_frazioni: bool = True) -> Dict[str, str]:
+def get_geo_info_from_comune(comune: str, provincia: str = None, regione: str = None,
+                             flag_find_frazioni: bool = True) -> Dict[str, str]:
     df = pd.DataFrame(data=[[comune, provincia, regione]], columns=["comune", "provincia", "regione"])
     addInfo = AddGeographicalInfo(df)
     addInfo.set_comuni_tag("comune")
@@ -854,7 +861,6 @@ def get_geo_info_from_regione(regione: str) -> Dict[str, str]:
     addInfo = AddGeographicalInfo(df)
     addInfo.set_regioni_tag("regione")
     addInfo.run_simple_match()
-    addInfo.run_find_frazioni()
     df = addInfo.get_result()
     if pd.isna(df[cfg.TAG_REGIONE].values[0]):
         raise Exception(f"Unable to find the region {regione}")
@@ -875,7 +881,6 @@ def get_geo_info_from_provincia(provincia: str, regione: str = None) -> Dict[str
     if regione:
         addInfo.set_regioni_tag("regione")
     addInfo.run_simple_match()
-    addInfo.run_find_frazioni()
     df = addInfo.get_result()
     if df[cfg.TAG_PROVINCIA].values[0] is None:
         raise Exception(f"Unable to find the city {provincia}")
@@ -891,40 +896,78 @@ def get_geo_info_from_provincia(provincia: str, regione: str = None) -> Dict[str
 
 
 @validate
-def get_city_from_coordinates(df0: pd.DataFrame,
-                              latitude_columns: str = None, longitude_columns: str = None) -> pd.DataFrame:
-    if latitude_columns is not None:
-        _test_column_in_dataframe(df0, latitude_columns)
-    if longitude_columns is not None:
-        _test_column_in_dataframe(df0, longitude_columns)
-    df0["key_mapping"] = range(df0.shape[0])
-    df = df0.copy()
+def get_city_from_coordinates(
+    df: pd.DataFrame,
+    latitude_column: Optional[str] = None,
+    longitude_column: Optional[str] = None,
+    suffix_result_columns: str = "",
+) -> pd.DataFrame:
+    """
+    Map geographic information (city, province, region) to a dataframe based on coordinates.
+
+    Args:
+        df (pd.DataFrame): Input dataframe containing coordinate columns.
+        latitude_column (str, optional): Name of the column containing latitude values.
+        longitude_column (str, optional): Name of the column containing longitude values.
+        suffix_result_columns (str): the suffix of result columns.
+    Returns:
+        pd.DataFrame: Input dataframe enriched with geographic information.
+    """
+    # Validate the presence of latitude and longitude columns
+    if latitude_column:
+        _test_column_in_dataframe(df, latitude_column)
+    if longitude_column:
+        _test_column_in_dataframe(df, longitude_column)
+
+    # Add a unique key to map results back to the original dataframe
+    df["key_mapping"] = range(len(df))
+
+    # Load official geographic data
     df_comuni = get_df_comuni()
     df_comuni = gpd.GeoDataFrame(df_comuni)
-    df_comuni.crs = {'init': 'epsg:32632'}
-    df_comuni = df_comuni.to_crs({'init': 'epsg:4326'})
+    df_comuni.crs = "epsg:32632"  # Original CRS (UTM)
+    df_comuni = df_comuni.to_crs("epsg:4326")  # Convert to WGS84
 
-    df = __create_geo_dataframe(df, lat_tag=latitude_columns, long_tag=longitude_columns)
-    df = df[df["geometry"].notnull()]
-    df = df[["key_mapping", "geometry"]].drop_duplicates()
-    df["geometry"] = df["geometry"].centroid
-    df = df.to_crs({'init': 'epsg:4326'})
+    # Create a GeoDataFrame from the input dataframe coordinates
+    geo_df = __create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column)
+    geo_df = geo_df[geo_df["geometry"].notnull()]  # Drop rows with missing geometries
+    geo_df = geo_df[["key_mapping", "geometry"]].drop_duplicates()  # Remove duplicate geometries
 
-    n_tot = df.shape[0]
-    map_city = gpd.sjoin(df, df_comuni, op='within', how="left")
+    # Ensure points are in the correct projection
+    geo_df["geometry"] = geo_df["geometry"].centroid
+    geo_df = geo_df.to_crs("epsg:4326")
 
-    missing = list(map_city[map_city[cfg.TAG_COMUNE].isna()]["geometry"].unique())
-    if len(missing) == 0:
-        log.info("Found the correct city for each point")
+    # Perform spatial join with city boundaries
+    map_city = gpd.sjoin(geo_df, df_comuni, op="within", how="left")
+
+    # Log missing points
+    missing_points = map_city[map_city[cfg.TAG_COMUNE].isna()]["geometry"].unique()
+    if missing_points:
+        log.warning(f"Unable to find the city for {len(missing_points)} points: "
+                    f"{[(pt.x, pt.y) for pt in missing_points]}")
     else:
-        log.warning("Unable to find the city for {} points: {}".format(len(missing), [(x.x, x.y) for x in missing]))
+        log.info("Found the correct city for each point.")
+
+    # Select relevant columns for the final mapping
     map_city = map_city[["key_mapping", cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_SIGLA, cfg.TAG_REGIONE]]
-    index_name = df0.index.name
-    if index_name is None:
-        index_name = "index"
-    result = df0.reset_index().merge(map_city, on=["key_mapping"], how="left").drop(["key_mapping"], axis=1).set_index(
-        index_name)
-    df0.drop(["key_mapping"], axis=1, inplace=True)
+
+    # Add suffix if suffix_result_columns != ""
+    rename_columns = {
+        col: col + suffix_result_columns
+        for col in map_city.columns
+        if col != "key_mapping"
+    }
+    map_city.rename(columns=rename_columns, inplace=True)
+
+    # Merge the results back to the original dataframe
+    result = (
+        df.merge(map_city, on="key_mapping", how="left")
+        .drop(columns=["key_mapping"])
+    )
+
+    # Clean up temporary columns from the original dataframe
+    df.drop(columns=["key_mapping"], inplace=True, errors="ignore")
+
     return result
 
 
@@ -935,80 +978,165 @@ def __test_city_in_address(df, city_tag, address_tag):
                     axis=1)
 
 
+def _fetch_urls(address, n_url_read):
+    """
+    Fetch URLs for an address from Google search.
+
+    Args:
+        address (str): The address to search for.
+        n_url_read (int): The number of URLs to retrieve.
+
+    Returns:
+        list: A list of URLs where the address was found.
+    """
+    urls = []
+    try:
+        # Attempt to search via Google
+        urls = list(search(address, tld='com', num=n_url_read, lang="it", country="Italy", stop=n_url_read, pause=2.5, verify_ssl=False))
+    except Exception as e:
+        log.error(f'Failed to search on Google (attempt 1): {str(e)}')
+        try:
+            # Fallback to Google Search API if the first attempt fails
+            my_results = google_query(address, cfg.google_search_api_key, cfg.google_search_cse_id, num=n_url_read)
+            urls.extend(result['link'] for result in my_results)
+        except Exception as e:
+            log.error(f'Failed to search on Google (attempt 2): {str(e)}')
+    return urls
+
+
+def _scrape_url_for_address(url, pattern):
+    """
+    Scrape a URL for the pattern corresponding to an address.
+
+    Args:
+        url (str): The URL to scrape.
+        pattern (str): The regex pattern to search for.
+
+    Returns:
+        str or None: The matching address if found, otherwise None.
+    """
+    try:
+        res = requests.get(url, verify=False)
+        soup = BeautifulSoup(res.content, 'html.parser')
+        text = ' '.join(soup.stripped_strings)
+        text = _clean_htmltext(text)  # Clean up the extracted text
+
+        # Search for the pattern in the page's text
+        match = re.search(pattern, text)
+        return match.group() if match else None
+    except requests.RequestException as e:
+        log.error(f"Failed to fetch or scrape URL {url}: {str(e)}")
+    except Exception as e:
+        log.error(f"An error occurred while processing URL {url}: {str(e)}")
+    return None
+
+
 def _try_replace_abbreviation_on_google(df, n_url_read, geocode):
-    log.info("Try to find abbreviated name")
+    """
+        Attempt to find and correct abbreviated street names using Google search.
+
+        Args:
+            df (DataFrame): The dataframe containing the addresses to process.
+            n_url_read (int): The number of URLs to read for each address.
+            geocode (function): A geocoding function to retrieve coordinates.
+
+        Returns:
+            DataFrame: The updated dataframe with the resolved addresses.
+        """
+    log.info("Trying to find abbreviated names")
+
+    # Collect addresses that haven't been geocoded yet
     not_found = list(df.loc[df["location"].isna(), "address_search"].unique())
+
+    # Process each address that hasn't been found
     for address in not_found:
         address_without_city = address.split(",")[0]
+        # Regex to extract the street name and abbreviation
         m = re.search(r"^([^.]+) (([a-z]+\. ?)+) ?([^.]+)$", address_without_city)
         if m:
             prefix = m.group(1)
-            if prefix in cfg.list_road_prefix:
-                prefix = "(" + "|".join(cfg.list_road_prefix) + ")"
             suffix = m.group(4)
-            abbreviations = m.group(2)
-            abbreviations = "[a-z]+ ?".join(abbreviations.replace(" ", "").split("."))
+            abbreviations = m.group(2).replace(" ", "")  # Remove spaces in abbreviation
+
+            # Build a regex for abbreviations to match similar patterns
+            abbreviations_pattern = "[a-z]+ ?".join(abbreviations.split("."))
+            pattern = f"{prefix} ?{abbreviations_pattern} ?{suffix}"
+
+            # Initialize match list and URLs
             match = []
-            urls = []
-            try:
-                urls = list(
-                    search(address, tld='com', num=n_url_read, lang="it", country="Italy", stop=n_url_read, pause=2.5,
-                           verify_ssl=False))
-            except Exception as e:
-                log.error('Failed to search on google tentative 1: ' + str(e))
-                try:
-                    my_results = google_query(address,
-                                              cfg.google_search_api_key,
-                                              cfg.google_search_cse_id,
-                                              num=n_url_read
-                                              )
-                    for result in my_results:
-                        urls.append(result['link'])
-                except Exception as e:
-                    log.error('Failed to search on google tentative 2: ' + str(e))
-            if len(urls) > 0:
+            urls = _fetch_urls(address, n_url_read)
+
+            # If URLs were found, attempt to find the address in the web content
+            if urls:
                 for url in urls:
-                    res = requests.get(url, verify=False)
-                    html_page = res.content
-                    soup = BeautifulSoup(html_page, 'html.parser')
-                    text = soup.find_all(text=True)
-                    output = ' '.join(text)
-                    output = _clean_htmltext(output)
-                    pattern = f"{prefix} ?{abbreviations} ?{suffix}"
-                    r1 = re.search(pattern, output)
-                    if r1 is not None:
-                        match.append(r1.group())
-            match = list(set(match))
+                    found_match = _scrape_url_for_address(url, pattern)
+                    if found_match:
+                        match.append(found_match)
+
+            match = list(set(match))  # Remove duplicates
+
+            # If a unique match was found, update the address and geocode
             if len(match) == 1:
                 pos_match = df["address_search"] == address
                 df.loc[pos_match, "address_search"] = match[0]
-                if "," in address:
-                    s = match[0] + "," + ", ".join(address.split(",")[1:])
-                else:
-                    s = match[0]
-                location = geocode(s)
-                if location is not None:
+
+                # Rebuild the address for geocoding and fetch coordinates
+                full_address = f"{match[0]}, {', '.join(address.split(',')[1:])}" if "," in address else match[0]
+                location = geocode(full_address)
+
+                if location:
                     df.loc[pos_match, "latitude"] = location.latitude
                     df.loc[pos_match, "longitude"] = location.longitude
                     df.loc[pos_match, "address_test"] = location.address.lower()
+
     return df
 
 
 def _try_wrong_replace_of_apostrophe(df, address_tag, geocode):
-    log.info("Try to find wrong replace of apostrophe")
+    """
+        Attempt to correct addresses where apostrophes might have been wrongly replaced.
+
+        This function searches for common address prefixes that may have had their apostrophes
+        incorrectly removed (e.g., 'del' -> 'del', 'dell' -> 'dell', etc.) and restores them.
+
+        Args:
+            df (DataFrame): The DataFrame containing addresses to process.
+            address_tag (str): The name of the column containing address strings.
+            geocode (function): A geocoding function to retrieve coordinates.
+
+        Returns:
+            DataFrame: The updated DataFrame with corrected addresses and coordinates.
+        """
+    log.info("Attempting to find and fix incorrect apostrophe replacements in addresses.")
+
+    # Define the regex pattern for identifying address prefixes that may be missing an apostrophe.
     regex = r"\b(del|dell|d|nell|sull|sant|Sant)([A-Z][^\s]+)"
-    pos_replace = (df["location"].isna() &
-                   df[address_tag].str.contains(regex))
-    not_found = list(df.loc[pos_replace, address_tag].unique())
-    for address in not_found:
+
+    # Find rows where the address contains a prefix that may need apostrophe correction
+    pos_replace = (df["location"].isna() & df[address_tag].str.contains(regex))
+    addresses_to_fix = df.loc[pos_replace, address_tag].unique()
+
+    # Iterate over addresses that need fixing
+    for address in addresses_to_fix:
+        # Apply the regex to restore the apostrophe
         new_name = re.sub(regex, r"\1'\2", address)
+
+        # Find the positions of the current address in the DataFrame
         pos_match = df[address_tag] == address
+
+        # Update the address to the corrected version
         df.loc[pos_match, "address_search"] = new_name
+
+        # Try to geocode the corrected address
         location = geocode(new_name)
-        if location is not None:
+        if location:
+            # Update latitude, longitude, and address_test if location is found
             df.loc[pos_match, "latitude"] = location.latitude
             df.loc[pos_match, "longitude"] = location.longitude
             df.loc[pos_match, "address_test"] = location.address.lower()
+            log.info(f"Geocoded address: {new_name} -> {location.latitude}, {location.longitude}")
+        else:
+            log.warning(f"Could not geocode address: {new_name}")
     return df
 
 
@@ -1052,46 +1180,73 @@ def _test_address_with_comune_provincia_regione(df, comuni_tag, province_tag, re
 
 
 @validate
-def get_coordinates_from_address(df0: pd.DataFrame, address_tag: str,
-                                 comuni_tag: str = None, province_tag: str = None, regioni_tag: str = None,
-                                 n_url_read: int = 1) -> pd.DataFrame:
-    # TODO add successive tentative (maps api)
-    _test_column_in_dataframe(df0, address_tag)
-    if comuni_tag is not None:
-        _test_column_in_dataframe(df0, comuni_tag)
-    if province_tag is not None:
-        _test_column_in_dataframe(df0, province_tag)
-    if regioni_tag is not None:
-        _test_column_in_dataframe(df0, regioni_tag)
+def get_coordinates_from_address(
+        df: pd.DataFrame,
+        address_tag: str,
+        comuni_tag: Optional[str] = None,
+        province_tag: Optional[str] = None,
+        regioni_tag: Optional[str] = None,
+        n_url_read: int = 1
+) -> pd.DataFrame:
+    """
+    Finds coordinates for addresses in a DataFrame using OpenStreetMap data.
 
-    col_list = [address_tag, comuni_tag, province_tag, regioni_tag]
-    col_list = [x for x in col_list if x is not None]
-    df = df0[col_list].drop_duplicates()
+    Args:
+        df (pd.DataFrame): Input DataFrame with address information.
+        address_tag (str): Column containing the address.
+        comuni_tag (str, optional): Column with municipality names.
+        province_tag (str, optional): Column with province names.
+        regioni_tag (str, optional): Column with region names.
+        n_url_read (int): Number of retries for external API requests.
 
-    df["address_search"] = df[address_tag].str.lower()
+    Returns:
+        pd.DataFrame: Original DataFrame enriched with coordinates.
+    """
+    # Validate input columns
+    _test_column_in_dataframe(df, address_tag)
+    for tag in [comuni_tag, province_tag, regioni_tag]:
+        if tag:
+            _test_column_in_dataframe(df, tag)
+
+    # Prepare a unique subset of data for processing
+    relevant_columns = [col for col in [address_tag, comuni_tag, province_tag, regioni_tag] if col]
+    unique_addresses = df[relevant_columns].drop_duplicates()
+    unique_addresses["address_search"] = unique_addresses[address_tag].str.lower()
+
+    # Enrich the address with municipality if not already included
     if comuni_tag:
-        t = __test_city_in_address(df, comuni_tag, "address_search")
-        t = t | df[comuni_tag].isna()
-        df["address_search"] = np.where(t, df["address_search"],
-                                        df["address_search"] + ", " + df[comuni_tag].str.lower())
+        condition = __test_city_in_address(unique_addresses, comuni_tag, "address_search") | unique_addresses[
+            comuni_tag].isna()
+        unique_addresses["address_search"] = np.where(
+            condition,
+            unique_addresses["address_search"],
+            unique_addresses["address_search"] + ", " + unique_addresses[comuni_tag].str.lower()
+        )
 
+    # Initialize geolocator and geocode function
     geolocator = Nominatim(timeout=10, user_agent=cfg.USER_AGENT)
     geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
-    df = _find_location_with_openstreetmap(df, geocode)
 
-    not_found_pos = df["location"].isna()
+    # Attempt to find locations using OpenStreetMap
+    unique_addresses = _find_location_with_openstreetmap(unique_addresses, geocode)
 
-    if not_found_pos.sum() > 0:
-        df = _try_replace_abbreviation_on_google(df, n_url_read, geocode)
-        df = _try_wrong_replace_of_apostrophe(df, address_tag, geocode)
+    # Handle cases where locations were not found
+    if unique_addresses["location"].isna().sum() > 0:
+        unique_addresses = _try_replace_abbreviation_on_google(unique_addresses, n_url_read, geocode)
+        unique_addresses = _try_wrong_replace_of_apostrophe(unique_addresses, address_tag, geocode)
 
-    df = _test_address_with_comune_provincia_regione(df, comuni_tag, province_tag, regioni_tag)
+    # Validate addresses against municipality, province, and region
+    unique_addresses = _test_address_with_comune_provincia_regione(
+        unique_addresses, comuni_tag, province_tag, regioni_tag
+    )
 
-    # drop columns
-    df.drop(["address_search", "location", "address_test", "test"], axis=1, inplace=True)
-    # Join df0
-    df = df0.merge(df, how="left", on=col_list)
-    return df
+    # Clean up intermediate columns
+    unique_addresses.drop(columns=["address_search", "location", "address_test", "test"], errors="ignore",
+                          inplace=True)
+
+    # Merge results back into the original DataFrame
+    result_df = df.merge(unique_addresses, how="left", on=relevant_columns)
+    return result_df
 
 
 @validate
