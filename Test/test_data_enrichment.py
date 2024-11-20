@@ -73,6 +73,7 @@ class TestGetCoordinatesFromAddress(unittest.TestCase):
                             check_names=False, check_dtype=False,
                             check_like=True)  # Ensure the series are equal without checking names or dtype
 
+
 class TestGetAddressFromCoordinates(unittest.TestCase):
 
     def test_get_address_from_coordinates_results(self):
@@ -80,7 +81,7 @@ class TestGetAddressFromCoordinates(unittest.TestCase):
         result = get_address_from_coordinates(df)
         self.assertEqual("Roma", result["city"].values[0])
         df = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]], columns=["lat", "lon"])
-        result = get_address_from_coordinates(df, latitude_columns="lat", longitude_columns="lon")
+        result = get_address_from_coordinates(df, latitude_col="lat", longitude_col="lon")
         self.assertEqual("Roma", result["city"].values[0])
         df = pd.DataFrame(data=[[43.884609765796114, 8.8971202373737]], columns=["lat", "lon"])
         result = get_address_from_coordinates(df)

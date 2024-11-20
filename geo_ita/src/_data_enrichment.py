@@ -1196,46 +1196,85 @@ def get_coordinates_from_address(
 
 
 @validate
-def get_address_from_coordinates(df0: pd.DataFrame,
-                                 latitude_columns: str = None, longitude_columns: str = None) -> pd.DataFrame:
-    if latitude_columns is None or longitude_columns is None:
-        flag_coord_found, latitude_columns, longitude_columns = __find_coord_columns(df0)
+def get_address_from_coordinates(
+        df: pd.DataFrame,
+        latitude_col: Optional[str] = None,
+        longitude_col: Optional[str] = None
+) -> pd.DataFrame:
+    """
+    Retrieve addresses from latitude and longitude coordinates.
+
+    Args:
+        df (pd.DataFrame): Input DataFrame containing coordinates.
+        latitude_col (str): Column name for latitude. Automatically detected if not provided.
+        longitude_col (str): Column name for longitude. Automatically detected if not provided.
+
+    Returns:
+        pd.DataFrame: DataFrame with addresses and cities extracted from coordinates.
+    """
+    # Check or infer coordinate column names
+    if latitude_col is None or longitude_col is None:
+        flag_coord_found, latitude_col, longitude_col = __find_coord_columns(df)
         if not flag_coord_found:
-            raise Exception(
-                "Unable to find the latitude and longitude columns. Please specify them in latitude_columns and longitude_columns")
+            raise ValueError(
+                "Latitude and longitude columns could not be found. "
+                "Please specify them using 'latitude_col' and 'longitude_col'."
+            )
+    # Ensure latitude and longitude columns contain float values
     try:
-        df0[latitude_columns] = df0[latitude_columns].astype(float)
-        df0[latitude_columns] = df0[latitude_columns].astype(float)
-    except:
-        raise Exception("Use columns with float type for coordinates.")
-    if (latitude_columns is not None and latitude_columns not in df0.columns) or \
-            (longitude_columns is not None and longitude_columns not in df0.columns):
+        df[latitude_col] = df[latitude_col].astype(float)
+        df[longitude_col] = df[longitude_col].astype(float)
+    except ValueError:
+        raise ValueError("Latitude and longitude columns must contain float values.")
+
+    # Check that specified columns exist in the DataFrame
+    if (latitude_col is not None and latitude_col not in df.columns) or \
+            (longitude_col is not None and longitude_col not in df.columns):
         raise Exception(
             "Use latitude_columns and longitude_column to specify the columns where to find the coordinates.")
-    df = df0[[latitude_columns, longitude_columns]].drop_duplicates()
-    df['geom'] = df[latitude_columns].map(str) + ', ' + df[longitude_columns].map(str)
-    n = df.shape[0]
-    log.info(f"Needed at least {n} seconds")
-    geolocator = Nominatim(timeout=10, user_agent=cfg.USER_AGENT)
-    reverse = RateLimiter(geolocator.reverse, min_delay_seconds=1)
-    start = datetime.now()
-    df["location"] = (df["geom"]).apply(reverse)
-    log.info("Finding address from coordinates ended in {} seconds".format(datetime.now() - start))
 
+    # Prepare unique coordinate pairs
+    coordinates_df = df[[latitude_col, longitude_col]].drop_duplicates()
+    coordinates_df["coordinates"] = (
+            coordinates_df[latitude_col].map(str) + ", " + coordinates_df[longitude_col].map(str)
+    )
+
+    # Estimate the time required
+    num_coordinates = coordinates_df.shape[0]
+    log.info(f"Processing {num_coordinates} coordinate pairs. Estimated time: at least {num_coordinates} seconds.")
+
+    # Initialize geolocator with a rate limiter
+    geolocator = Nominatim(timeout=10, user_agent=cfg.USER_AGENT)
+    reverse_geocode = RateLimiter(geolocator.reverse, min_delay_seconds=1)
+
+    # Perform reverse geocoding
+    start_time = datetime.now()
+    coordinates_df["location"] = coordinates_df["coordinates"].apply(reverse_geocode)
+    log.info(f"Reverse geocoding completed in {datetime.now() - start_time} seconds.")
+
+    # Define address and city column names, avoiding collisions
     address_col = "address"
-    if address_col in df0.columns:
-        address_col = "address_geo_ita"
     city_col = "city"
-    if city_col in df0.columns:
-        city_col = "city_geo_ita"
-    # TODO Ripulire address estraendo solo informazioni utili e uniformi
-    df[address_col] = df["location"].apply(lambda loc: loc.address if loc else None).str.lower()
-    df[city_col] = df["location"].apply(
-        lambda loc: loc.raw["address"]["city"] if (loc and "city" in loc.raw["address"]) else None)
-    df = df.drop(["geom", "location"], axis=1)
-    ## Join df0
-    df = df0.merge(df, how="left", on=[latitude_columns, longitude_columns])
-    return df
+    if address_col in df.columns:
+        address_col = "address_geo"
+    if city_col in df.columns:
+        city_col = "city_geo"
+
+    # Extract and clean address and city information
+    coordinates_df[address_col] = coordinates_df["location"].apply(
+        lambda loc: loc.address.lower() if loc else None
+    )
+    coordinates_df[city_col] = coordinates_df["location"].apply(
+        lambda loc: loc.raw["address"].get("city") if loc and "address" in loc.raw and "city" in loc.raw[
+            "address"] else None
+    )
+
+    # Drop temporary columns
+    coordinates_df.drop(columns=["coordinates", "location"], inplace=True)
+
+    # Merge back with the original DataFrame
+    result_df = df.merge(coordinates_df, how="left", on=[latitude_col, longitude_col])
+    return result_df
 
 
 def _distance_to_range_ccord(d):
