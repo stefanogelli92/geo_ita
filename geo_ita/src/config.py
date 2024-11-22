@@ -1,11 +1,13 @@
 USER_AGENT = "geo_ita"
 
+TAG_COORDINATES = "coordinates"
 TAG_COMUNE = "denominazione_comune"
 TAG_CODICE_COMUNE = "codice_comune"
 TAG_PROVINCIA = "denominazione_provincia"
 TAG_CODICE_PROVINCIA = "codice_provincia"
 TAG_SIGLA = "sigla"
 TAG_REGIONE = "denominazione_regione"
+TAG_COUNTRY = "nazione"
 TAG_CODICE_REGIONE = "codice_regione"
 TAG_POPOLAZIONE = "popolazione"
 TAG_SUPERFICIE = "superficie_km2"

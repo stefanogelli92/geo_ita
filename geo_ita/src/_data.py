@@ -1,21 +1,14 @@
 import os
 import shutil
 from datetime import datetime
-from pathlib import Path
 import logging
-import requests
-
-import numpy as np
-import pandas as pd
 import geopandas as gpd
 import pandasdmx as sdmx
-from osm2geojson import json2geojson
 import urllib.request
 import zipfile
 
 from valdec.decorators import validate
 from geo_ita.src.definition import *
-import geo_ita.src.config as cfg
 from geo_ita.src.utils import *
 
 # Initialize logger
@@ -47,29 +40,6 @@ def get_regioni_list() -> list[str]:
     """
     df = get_df_regioni()
     return list(df[cfg.TAG_REGIONE].unique())
-
-
-def _get_list(df=None):
-    if df is None:
-        df = get_df_comuni()
-    result = []
-    if cfg.TAG_COMUNE in df.columns:
-        result.append(list(df[cfg.TAG_COMUNE].values))
-    else:
-        result.append(None)
-    if cfg.TAG_PROVINCIA in df.columns:
-        result.append(list(df[cfg.TAG_PROVINCIA].values))
-    else:
-        result.append(None)
-    if cfg.TAG_SIGLA in df.columns:
-        result.append(list(df[cfg.TAG_SIGLA].values))
-    else:
-        result.append(None)
-    if cfg.TAG_REGIONE in df.columns:
-        result.append(list(df[cfg.TAG_REGIONE].values))
-    else:
-        result.append(None)
-    return result
 
 
 def __get_last_file_from_folder(path, date_format="%d_%m_%Y"):
@@ -156,19 +126,29 @@ def _get_registry_df() -> pd.DataFrame:
     return df
 
 
-def _clean_denom_text(series):
-    series = series.fillna("")
-    series = series.astype(str)
+def _clean_denomination_text(series):
+    """
+    Clean and standardize text in a pandas Series.
+
+    Parameters:
+    - series (pd.Series): The Series to be cleaned.
+
+    Returns:
+    - pd.Series: The cleaned Series.
+    """
+    series = series.fillna("").astype(str)
     series = series.where(series != "", None)
-    series = series.str.lower()  # All strig in lowercase
-    series = series.str.replace(r'[^\w\s]', ' ', regex=True)  # Remove non alphabetic characters
+    series = series.str.lower()
+    series = series.str.replace(r'[^\w\s]', ' ', regex=True)
     series = series.str.strip()
     series = series.str.replace(r'\s+', ' ', regex=True)
     series = series.replace(cfg.comuni_exceptions)
-    series = series.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')  # Remove accent
+    series = series.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
     series = series.replace(cfg.comuni_exceptions)
-    for k, v in cfg.clear_denomination.items():
-        series = series.str.replace(k, v)
+
+    for old, new in cfg.clear_denomination.items():
+        series = series.str.replace(old, new)
+
     return series
 
 
@@ -201,8 +181,8 @@ def _get_double_language_mapping(df0, tag_ita, tag_foreign):
     df = df.drop_duplicates()
 
     # Clean text for both columns
-    df[tag_foreign] = _clean_denom_text(df[tag_foreign])
-    df[tag_ita] = _clean_denom_text(df[tag_ita])
+    df[tag_foreign] = _clean_denomination_text(df[tag_foreign])
+    df[tag_ita] = _clean_denomination_text(df[tag_ita])
 
     return df.set_index(tag_foreign)[tag_ita].to_dict()
 
@@ -312,7 +292,7 @@ def get_df(level):
         raise Exception("Unknown level")
 
 
-def _calulate_area_from_shape(df):
+def _calculate_area_from_shape(df):
     df = gpd.GeoDataFrame(
         df, geometry="geometry"
     )
@@ -327,7 +307,7 @@ def create_df_comuni():
     df = registry.merge(popolazione, how="left", on=cfg.TAG_CODICE_COMUNE)
     shape = _get_comuni_shape_df()[cfg.shape_comuni["column_rename"].values()]
     df = df.merge(shape, how="left", on=cfg.TAG_CODICE_COMUNE)
-    df = _calulate_area_from_shape(df)
+    df = _calculate_area_from_shape(df)
     df.to_pickle(root_path / Path(cfg.df_comuni["path"]))
     return
 
@@ -357,7 +337,7 @@ def create_df_province():
     df = df.replace({'NAN': None})
     shape = _get_province_shape_df()[cfg.shape_province["column_rename"].values()]
     df = df.merge(shape, how="left", on=cfg.TAG_CODICE_PROVINCIA)
-    df = _calulate_area_from_shape(df)
+    df = _calculate_area_from_shape(df)
     df.to_pickle(root_path / Path(cfg.df_province["path"]))
     return
 
@@ -385,7 +365,7 @@ def create_df_regioni():
         [cfg.TAG_POPOLAZIONE]].sum().reset_index()
     shape = _get_regioni_shape_df()[cfg.shape_regioni["column_rename"].values()]
     df = df.merge(shape, how="left", on=cfg.TAG_CODICE_REGIONE)
-    df = _calulate_area_from_shape(df)
+    df = _calculate_area_from_shape(df)
     df.to_pickle(root_path / Path(cfg.df_regioni["path"]))
     return df
 
@@ -514,26 +494,30 @@ def create_df():
 
 def _fetch_registry_for_year(year: int):
     """
-    Downloads and extracts the ISTAT registry of Italian comuni for the specified year.
+    Downloads and processes the ISTAT registry of Italian comuni for the specified year.
 
     Parameters:
     - year (int): The target year for the ISTAT registry.
 
-    Steps:
-    - Determines the download URL based on the year and fetches the data.
-    - Unzips the downloaded file and loads the Excel data into a DataFrame.
-    - Saves the processed DataFrame as a pickle file for later use.
+    Returns:
+    None: Saves the processed DataFrame as a pickle file.
     """
 
     link = cfg.registry_comuni["link"]
     path = root_path / Path(cfg.registry_comuni["path"]).with_suffix(".xls")
+
+    # Download the registry file
     _download_file(link, path)
 
-    # Load Excel file into DataFrame and save as pickle
+    # Load the Excel file into a DataFrame
     df = pd.read_excel(path, keep_default_na=False)
-    log.info(f"ISTAT update registry.")
+
+    # Remove the downloaded Excel file
     os.remove(path.with_suffix(".xls"))
+
+    # Save the DataFrame as a pickle file
     pickle_path = path.with_suffix(".pkl")
+    df.to_pickle(pickle_path)
 
     logging.info(f"Restore previous the registry of the year {year}")
     variation_link = "https://www.anagrafenazionale.interno.it/wp-content/uploads/ANPR_archivio_comuni.csv"
@@ -574,12 +558,28 @@ def _fetch_registry_for_year(year: int):
 
 
 def _clean_denomination(series):
+    """
+        Clean and standardize the denomination text in a pandas Series.
+
+        Parameters:
+        - series (pd.Series): The Series to be cleaned.
+
+        Returns:
+        - pd.Series: The cleaned Series.
+        """
     series = series.str.title()
-    for el in ["di", "della", "sopra", "dei", "da", "sul", "presso", "delle", "del", "degli", "con", "li", "bel",
-               "valle", "val", "nel", "a", "in", "e"]:
-        series = series.str.replace(f' {el.capitalize()} ', f' {el} ', regex=False)
-    for el in ["d'", "de'", "dell'", "sull'", "all'"]:
-        series = series.str.replace(f' {el.capitalize()}', f'  {el}', regex=False)
+
+    # Replace specific words with their lowercase equivalents
+    words_to_replace = ["di", "della", "sopra", "dei", "da", "sul", "presso", "delle", "del", "degli", "con", "li",
+                        "bel", "valle", "val", "nel", "a", "in", "e"]
+    for word in words_to_replace:
+        series = series.str.replace(f' {word.capitalize()} ', f' {word} ', regex=False)
+
+    # Replace specific prefixes with their lowercase equivalents
+    prefixes_to_replace = ["d'", "de'", "dell'", "sull'", "all'"]
+    for prefix in prefixes_to_replace:
+        series = series.str.replace(f' {prefix.capitalize()}', f'  {prefix}', regex=False)
+
     return series
 
 
@@ -689,157 +689,3 @@ def update_data_istat(year=None):
     _update_population_info(year)
     _update_administrative_changes(year)
     create_df()
-
-
-def _download_highway_shape():
-    tags = ["motorway", "motorway_link", "trunk"]
-    df = []
-    for tag in tags:
-        query = """
-            [out:json];
-            area["name"="Italia"]->.boundaryarea;
-            (
-            nwr(area.boundaryarea)["highway"="{}"];
-            );
-            out geom;
-            """.format(tag)
-        _df = requests.get(cfg.overpass_url, params={'data': query}, verify=False)
-        _df = json2geojson(_df.json())
-        _df = gpd.GeoDataFrame.from_features(_df['features'])
-        _df["type"] = tag
-        df.append(_df)
-    df = pd.concat(df)
-    df.crs = {'init': "epsg:4326"}
-    return df
-
-
-def _process_dataset_highway_shape(df):
-    df["type_shape"] = df["geometry"].apply(lambda x: x.geom_type)
-    df = df[df["type_shape"] == "LineString"]
-
-    df["name"] = df["tags"].apply(lambda x: x.get('name:it'))
-    df["name2"] = df["tags"].apply(lambda x: x.get('name'))
-    df["ref"] = df["tags"].apply(lambda x: x.get('ref'))
-    df["ref2"] = df["tags"].apply(lambda x: x.get('int_ref'))
-    df["ref3"] = df["tags"].apply(lambda x: x.get('nat_ref'))
-    df["ref4"] = df["tags"].apply(lambda x: x.get('official_ref'))
-    df["toll"] = df["tags"].apply(lambda x: x.get('toll'))
-    df["name2"] = df["tags"].apply(lambda x: x.get('name'))
-    df["name"] = np.where(df["name"].notnull(), df["name"], df["name2"])
-    df["id"] = df["ref"].str.replace(" ", "")
-    df["id"] = df["id"].str.replace("dir", "")
-    df["id"] = df["id"].str.replace("var", "")
-    df["id"] = np.where(df["id"].notnull(), df["id"], df["ref2"])
-    df["id"] = np.where(df["id"].notnull(), df["id"], df["ref3"])
-    df["id"] = np.where(df["id"].notnull(), df["id"], df["ref4"])
-
-    repalce_dict = {
-        "A": "RA13",
-        "A1-R6": "A1",
-        "R6": "A1",
-        "A29/A": "A29racc",
-        "A29racc/bis": "A29",
-        "A3ì2": "A2",
-        "A57;D25;MF;R11;R37": "A57",
-        "A9;A2": "A9/A2",
-        "E 80": "A10",
-        "GRA": "A90",
-        "E 45": "RA-",
-        "S70": "RA13"
-    }
-    df["id"] = df["id"].replace(repalce_dict)
-    drop_id_list = ["A1-R5", "A21racc"]
-    df = df[~df["id"].isin(drop_id_list)]
-    pos = df["name"] == "Diramazione A21"
-    df.loc[pos, "id"] = "A21"
-    df["classificazione"] = "Superstrada"
-    pos = df["id"].astype(str).str.startswith("A") | df["id"].astype(str).str.startswith("RA")
-    df.loc[pos, "classificazione"] = "Autostrada"
-    pos = df["type"] == "motorway_link"
-    df.loc[pos, "classificazione"] = "Congiunzione autostradale"
-    df = df[["id", "classificazione", "name", "geometry"]]
-    return df
-
-
-def _update_highway_shapes():
-    df = _download_highway_shape()
-    df = _process_dataset_highway_shape(df)
-    df.to_pickle(root_path / Path(cfg.highway_shape_file_path))
-
-
-def get_highway_shapes():
-    file_path = root_path / Path(cfg.highway_shape_file_path)
-    if os.path.exists(file_path):
-        update_highway()
-    df = pd.read_pickle(file_path)
-    df.crs = {'init': "epsg:4326"}
-    return df
-
-
-def _download_highway_exits():
-    query = f"""
-        [out:json];
-        area["name"="Italia"]->.boundaryarea;
-        (
-        nwr(area.boundaryarea)["highway"="motorway_junction"];
-        );
-        out geom;
-        """
-    r = requests.get(cfg.overpass_url, params={'data': query}, verify=False)
-    df = json2geojson(r.json())
-    df = gpd.GeoDataFrame.from_features(df['features'])
-    df.crs = {'init': "epsg:4326"}
-    return df
-
-
-def _process_dataset_highway_exits(df, highway):
-    df["name"] = df["tags"].apply(lambda x: x.get('name'))
-    df["name"].fillna("", inplace=True)
-    drop_list = ["area di servizio", "ads", "parcheggio", "polizia"]
-    df["exit"] = ~(df["name"].str.contains('[0-9]', regex=True))
-    for drop in drop_list:
-        df["exit"] = df["exit"] & ~(df["name"].str.lower().str.contains(drop))
-    df["exit"] = df["exit"] & ~(df["name"].str.lower().str.contains(r"\bvia\b", regex=True))
-    df = gpd.sjoin(df[["id", "name", "geometry", "exit"]],
-                   highway[highway["classificazione"].isin(["Autostrada", "Congiunzione autostradale"])][
-                       ["id", "geometry"]],
-                   op='intersects', how="left",
-                   lsuffix="", rsuffix="highway")
-    df = df.rename(columns={'id_': 'id'})
-    df["highway"] = df["index_highway"].notnull()
-    df = df.drop(["index_highway", "id_highway"], axis=1).drop_duplicates()
-    df = gpd.sjoin(df, highway[highway["classificazione"] == "Superstrada"][["id", "geometry"]],
-                   op='intersects', how="left",
-                   lsuffix="", rsuffix="trunk")
-    df = df.rename(columns={'id_': 'id'})
-    df["trunk"] = df["index_trunk"].notnull()
-    df = df.drop(["index_trunk", "id_trunk"], axis=1).drop_duplicates()
-    df["classificazione"] = None
-    df.loc[df["trunk"], "classificazione"] = "Superstrada"
-    df.loc[df["highway"], "classificazione"] = "Autostrada"
-    df = df[df["exit"] & (df["classificazione"].notnull())][["id", "name", "geometry", "exit", "classificazione"]]
-    df.crs = {'init': "epsg:4326"}
-    return df
-
-
-def _update_highway_exits():
-    df = _download_highway_exits()
-    highway_shapes = get_highway_shapes()
-
-    df = _process_dataset_highway_exits(df, highway_shapes)
-
-    df.to_pickle(root_path / Path(cfg.highway_exit_file_path))
-
-
-def get_highway_exits():
-    file_path = root_path / Path(cfg.highway_exit_file_path)
-    if os.path.exists(file_path):
-        update_highway()
-    df = pd.read_pickle(file_path)
-    df.crs = {'init': "epsg:4326"}
-    return df
-
-
-def update_highway():
-    _update_highway_shapes()
-    _update_highway_exits()

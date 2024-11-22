@@ -1,4 +1,6 @@
 from pandas.testing import assert_frame_equal, assert_series_equal
+from geopy import Point
+from geopy.distance import distance
 
 from geo_ita.src._data_enrichment import *
 from geo_ita.src._data import *
@@ -7,10 +9,6 @@ from pathlib import PureWindowsPath
 from geo_ita.src.config import *
 import logging
 
-log = logging.getLogger("_data_enrichment")
-log.addHandler(logging.NullHandler())
-log.setLevel(logging.DEBUG)
-
 import unittest
 
 
@@ -18,6 +16,11 @@ class TestDataEnrichment(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # Setting logging
+        logger = logging.getLogger("_data_enrichment")
+        logger.addHandler(logging.NullHandler())
+        logger.setLevel(logging.DEBUG)
+
         # Load dataset just 1 time
         cls.df_comuni = get_df_comuni()
 
@@ -72,6 +75,7 @@ class TestGetCoordinatesFromAddress(unittest.TestCase):
                             check_names=False, check_dtype=False,
                             check_like=True)  # Ensure the series are equal without checking names or dtype
 
+
 class TestGetAddressFromCoordinates(unittest.TestCase):
 
     def test_get_address_from_coordinates_results(self):
@@ -79,7 +83,7 @@ class TestGetAddressFromCoordinates(unittest.TestCase):
         result = get_address_from_coordinates(df)
         self.assertEqual("Roma", result["city"].values[0])
         df = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]], columns=["lat", "lon"])
-        result = get_address_from_coordinates(df, latitude_columns="lat", longitude_columns="lon")
+        result = get_address_from_coordinates(df, latitude_col="lat", longitude_col="lon")
         self.assertEqual("Roma", result["city"].values[0])
         df = pd.DataFrame(data=[[43.884609765796114, 8.8971202373737]], columns=["lat", "lon"])
         result = get_address_from_coordinates(df)
@@ -102,6 +106,7 @@ class TestGetCityFromCoordinates(TestDataEnrichment):
         self.check_result_on_same_dataframe(df, column_test, suffix="_test")
 
         # TODO aggiungere che se provo a trovare dei punti fuori dal territorio italiano non trova niente
+        # TODO aggiungere che se ho campo latitudine o longitudine vuoto non vado in errore ma ignoro
 
 
 class TestAddGeographicalInfo(TestDataEnrichment):
@@ -199,6 +204,7 @@ class TestAddGeographicalInfo(TestDataEnrichment):
             ["Polesio", "Ascoli Piceno", "Ascoli Piceno", "AP", "Marche"],
             ["Carnaiola", "Fabro", "Terni", "TR", "Umbria"],
             ["xxx", None, None, None, None],
+            ["nan", None, None, None, None],
             ["Barcellona", None, None, None, None],
         ],
             columns=["Citta", cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_SIGLA, cfg.TAG_REGIONE]
@@ -218,6 +224,7 @@ class TestAddGeographicalInfo(TestDataEnrichment):
             ["Polesio", "Ascoli Piceno", "Ascoli Piceno", "AP", "Marche"],
             ["Carnaiola", "Fabro", "Terni", "TR", "Umbria"],
             ["xxx", None, None, None, None],
+            ["nan", None, None, None, None],
             ["Barcellona", None, None, None, None],
         ],
             columns=["Citta", cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_SIGLA, cfg.TAG_REGIONE]
@@ -251,67 +258,92 @@ class TestAddGeographicalInfo(TestDataEnrichment):
         self.check_result_on_same_dataframe(result, column_test, suffix="_test")
 
 
-class TestGetPopulationNearby(unittest.TestCase):
+class TestAggregatePointByDistance(TestDataEnrichment):
 
-    def test_get_population_nearby_input(self):
-        df = ["via corso di Francia"]
-        with self.assertRaises(Exception):
-            get_population_nearby(df, 500)
-        df = pd.DataFrame(data=[["via corso di Francia"]], columns=["address"])
-        with self.assertRaises(Exception):
-            get_population_nearby(df, 500)
-        df, latitude_columns, longitude_columns = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]],
-                                                               columns=["latitude", "longitude"]), \
-            "lat", "lon"
-        with self.assertRaises(Exception):
-            get_population_nearby(df, 100, latitude_columns=latitude_columns, longitude_columns=longitude_columns)
-        df, latitude_columns, longitude_columns = pd.DataFrame(data=[["A", "B"]],
-                                                               columns=["latitude", "longitude"]), \
-            "latitude", "longitude"
-        with self.assertRaises(Exception):
-            get_population_nearby(df, 100, latitude_columns=latitude_columns, longitude_columns=longitude_columns)
-        df, latitude_columns, longitude_columns = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]],
-                                                               columns=["latitude", "longitude"]), \
-            "latitude", "longitude"
-        with self.assertRaises(Exception):
-            get_population_nearby(df, "raggio", latitude_columns=latitude_columns, longitude_columns=longitude_columns)
-        df, latitude_columns, longitude_columns = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]],
-                                                               columns=["latitude", "longitude"]), \
-            "latitude", "longitude"
-        with self.assertRaises(Exception):
-            get_population_nearby(df, 0, latitude_columns=latitude_columns, longitude_columns=longitude_columns)
-            # Empthy Dataframe
-        df = pd.DataFrame(columns=["lat", "lon"])
-        result = get_population_nearby(df, 500)
-        self.assertTrue(isinstance(result, pd.DataFrame))
-        self.assertEqual(0, result.shape[0])
-        self.assertListEqual(['lat', 'lon', 'n_residents'],
-                             list(result.columns))
+    def test_aggregate_point_by_distance(self):
+        radius_in_meters = 500
 
+        df = get_df_regioni()
+        df = df[["center_x", "center_y", cfg.TAG_REGIONE]]
+        df = gpd.GeoDataFrame(
+            df, geometry=gpd.points_from_xy(df["center_x"], df["center_y"]))
+        df.crs = {'init': "epsg:32632"}
+        df = df.to_crs(epsg=4326)
+        df["group"] = "original"
+        df["center_x"] = df["geometry"].centroid.x
+        df["center_y"] = df["geometry"].centroid.y
+        df = pd.DataFrame(df)
+        df.drop(columns=["geometry"], inplace=True)
+
+        data = [df]
+
+        # Add nearby points
+        df_near = df.copy()
+        df_near["group"] = "nearby"
+        df_near["x"] = df_near["center_x"] + (np.random.uniform(0.0004, 0.0007, df_near.shape[0]) * radius_in_meters / 111)
+        df_near["y"] = df_near["center_y"] + (np.random.uniform(0.0004, 0.0007, df_near.shape[0]) * radius_in_meters / 111)
+        # Check distance
+        df_near["distance"] = df_near.apply(lambda row: distance(
+            Point(row['center_x'], row['center_y']),
+            Point(row['x'], row['y'])
+        ).m, axis=1)
+        df_near = df_near[df_near["distance"] < radius_in_meters]
+        df_near["center_x"] = df_near["x"]
+        df_near["center_y"] = df_near["y"]
+        df_near.drop(columns=["x", "y", "distance"], inplace=True)
+        df_near = pd.concat([df_near, df])
+
+        df_near = aggregate_point_by_distance(df_near, distance_in_meters=radius_in_meters, latitude_column="center_x",
+                                              longitude_column="center_y")
+        # Check result
+        check = df_near.groupby(cfg.TAG_REGIONE)["aggregation_code"].nunique()
+        self.assertTrue((check == 1).all())
+
+        # Add far points
+        df_far = df.copy()
+        df_far["group"] = "far"
+        df_far["x"] = df_far["center_x"] + (np.random.uniform(0.0008, 0.0009, df_far.shape[0]) * radius_in_meters / 111)
+        df_far["y"] = df_far["center_y"] + (np.random.uniform(0.0008, 0.0009, df_far.shape[0]) * radius_in_meters / 111)
+        # Check distance
+        df_far["distance"] = df_far.apply(lambda row: distance(
+            Point(row['center_x'], row['center_y']),
+            Point(row['x'], row['y'])
+        ).m, axis=1)
+        df_far = df_far[df_far["distance"] > radius_in_meters]
+        df_far["center_x"] = df_far["x"]
+        df_far["center_y"] = df_far["y"]
+        df_far.drop(columns=["x", "y", "distance"], inplace=True)
+        df_far = pd.concat([df_far, df])
+
+        df_far = aggregate_point_by_distance(df_far, distance_in_meters=radius_in_meters, latitude_column="center_x",
+                                             longitude_column="center_y")
+        check = df_far.groupby(cfg.TAG_REGIONE)["aggregation_code"].nunique()
+        self.assertTrue((check == 2).all())
+
+
+class TestGetPopulationNearby(TestDataEnrichment):
     def test_get_population_nearby_results(self):
+
         test_df = pd.DataFrame([[41.8343354636729, 12.4684276148718],
                                 [42.23774542118423, 11.961695397335165]], columns=["center_y", "center_x"])
-        test_df = get_population_nearby(test_df, 300, latitude_columns="center_y", longitude_columns="center_x")
+        test_df = get_population_nearby(test_df, 300, latitude_column="center_y", longitude_column="center_x")
         self.assertGreater(test_df["n_residents"].values[0], 100)
         self.assertEqual(test_df["n_residents"].values[1], 0)
 
 
-class Prova(unittest.TestCase):
-
-    def test_aggregate_point_by_distance(self):
-        df = get_df_comuni()
-        df = aggregate_point_by_distance(df, 5000, latitude_columns="center_y", longitude_columns="center_x")
+class TestGeoDataQuality(TestDataEnrichment):
 
     # GeoDataQuality
     def test_GeoDataQuality(self):
         df = pd.read_excel(root_path / PureWindowsPath(r"data_sources/Test/data_quality_samples.xlsx"))
         dq = GeoDataQuality(df)
-        dq.set_nazione_tag("nazione")
+        dq.set_country_tag("nazione")
         dq.set_regioni_tag("regione")
         dq.set_province_tag("provincia")
-        dq.set_comuni_tag("comune", use_for_check_nation=True)
+        dq.set_comuni_tag("comune")
         dq.set_latitude_longitude_tag("latitudine", "longitudine")
-        result = dq.start_check(show_only_warning=False, sensitive=True)
+        dq.start_check()
+        result = dq.get_results()
         # dq.plot_result()
         col_test = ["nazione", "regione", "provincia", "comune",
                     "nazione_check", "nazione_suggestion", "regione_check", "regione_suggestion",

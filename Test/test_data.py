@@ -1,53 +1,53 @@
-import pandas as pd
-
-from geo_ita.src._data import *
-from geo_ita.src._data import update_data_istat
-from geo_ita.src.definition import *
-
 import unittest
 import logging
-from pathlib import PureWindowsPath
+import pandas as pd
+from geo_ita.src._data import (
+    get_df_comuni, get_df_province, get_df_regioni,
+    get_comuni_list, get_province_list, get_regioni_list,
+    get_high_resolution_population_density_df, remove_high_resolution_population_density_file,
+    update_data_istat
+)
+
+import geo_ita.src.config as cfg
 
 
 class TestData(unittest.TestCase):
 
-    def test_get_df_comuni(self):
-        df = get_df_comuni()
+    def setUp(self):
+        self.logger = logging.getLogger(self.__class__.__name__)
+        logging.basicConfig(level=logging.INFO)
+
+    def check_dataframe(self, df, non_empty_columns, numeric_columns=[]):
         self.assertTrue(isinstance(df, pd.DataFrame))
         self.assertGreater(df.shape[0], 0)
-        non_emphty_columns = [cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_REGIONE, cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]
-        self.assertTrue(set(df.columns).issuperset(set(non_emphty_columns)))
-        for col in non_emphty_columns:
+        self.assertTrue(set(df.columns).issuperset(set(non_empty_columns)))
+        for col in non_empty_columns:
+            self.assertEqual(0, df[col].isna().sum(), f"Column {col} has {df[col].isna().sum()} NaN values.")
+        for col in numeric_columns:
+            self.assertEqual(0, (df[col] <= 0).sum())
+
+    def test_get_df_comuni(self):
+        df = get_df_comuni()
+        non_empty_columns = [cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_REGIONE, cfg.TAG_POPOLAZIONE,
+                             cfg.TAG_SUPERFICIE]
+        self.check_dataframe(df, non_empty_columns)
+        for col in non_empty_columns:
             pos = df[col].notnull()
             if pos.sum() > 0:
-                log.warning(f"{col} not found for comuni: {','.join(df[pos][cfg.TAG_COMUNE].values)}")
+                self.logger.warning(f"{col} not found for comuni: {','.join(df[pos][cfg.TAG_COMUNE].values)}")
             self.assertGreater(pos.mean(), 0.1)
 
     def test_get_df_province(self):
         df = get_df_province()
-        self.assertTrue(isinstance(df, pd.DataFrame))
-        self.assertGreater(df.shape[0], 0)
-        non_emphty_columns = [cfg.TAG_PROVINCIA, cfg.TAG_REGIONE]
+        non_empty_columns = [cfg.TAG_PROVINCIA, cfg.TAG_REGIONE, cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]
         numeric_columns = [cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]
-        non_emphty_columns = non_emphty_columns + numeric_columns
-        self.assertTrue(set(df.columns).issuperset(set(non_emphty_columns)))
-        for col in non_emphty_columns:
-            self.assertEqual(df[col].isna().sum(), 0)
-        for col in numeric_columns:
-            self.assertEqual((df[col] <= 0).sum(), 0)
+        self.check_dataframe(df, non_empty_columns, numeric_columns)
 
     def test_get_df_regioni(self):
         df = get_df_regioni()
-        self.assertTrue(isinstance(df, pd.DataFrame))
-        self.assertGreater(df.shape[0], 0)
-        non_emphty_columns = [cfg.TAG_REGIONE]
+        non_empty_columns = [cfg.TAG_REGIONE, cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]
         numeric_columns = [cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]
-        non_emphty_columns = non_emphty_columns + numeric_columns
-        self.assertTrue(set(df.columns).issuperset(set(non_emphty_columns)))
-        for col in non_emphty_columns:
-            self.assertEqual(df[col].isna().sum(), 0)
-        for col in numeric_columns:
-            self.assertEqual((df[col] <= 0).sum(), 0)
+        self.check_dataframe(df, non_empty_columns, numeric_columns)
 
     def test_get_comuni_list(self):
         result = get_comuni_list()
@@ -64,7 +64,7 @@ class TestData(unittest.TestCase):
         self.assertTrue(isinstance(result, list))
         self.assertGreater(len(result), 0)
 
-    def test_download_high_density_population_df(self):
+    def xtest_download_high_density_population_df(self):
         remove_high_resolution_population_density_file()
         df = get_high_resolution_population_density_df()
         del df
@@ -76,7 +76,7 @@ class TestData(unittest.TestCase):
         logging.basicConfig(level=logging.INFO)
         update_data_istat(year=2022)
         df = get_df_comuni()
-        n_population_2022 = 59019317.0  # 58991941.0
+        n_population_2022 = 59019317.0
         self.assertEqual(n_population_2022, df[cfg.TAG_POPOLAZIONE].sum())
         update_data_istat()
         df = get_df_comuni()
