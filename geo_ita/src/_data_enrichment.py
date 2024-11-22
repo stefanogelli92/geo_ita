@@ -80,53 +80,43 @@ class AddGeographicalInfo:
 
     @validate
     def set_comuni_tag(self, column_name: str):
-        test_column_in_dataframe(self.original_df, column_name)
-        code_level = infer_geographical_category(list(self.original_df[column_name].unique()))
-        if code_level == CodeLevel.SIGLA:
-            raise Exception(f"Found values in {column_name} similar to Province Sigla. "
-                            f"Check the column name passed and the values on columns.")
-        self.detail_level[GeoLevel.COMUNE] = (column_name, code_level)
+        self._set_tag(column_name, GeoLevel.COMUNE)
 
     @validate
     def set_province_tag(self, column_name: str):
-        test_column_in_dataframe(self.original_df, column_name)
-        code_level = infer_geographical_category(list(self.original_df[column_name].unique()))
-        self.detail_level[GeoLevel.PROVINCIA] = (column_name, code_level)
+        self._set_tag(column_name, GeoLevel.PROVINCIA)
 
     @validate
     def set_regioni_tag(self, column_name: str):
+        self._set_tag(column_name, GeoLevel.REGIONE)
+
+    def _set_tag(self, column_name: str, geo_level: GeoLevel):
         test_column_in_dataframe(self.original_df, column_name)
         code_level = infer_geographical_category(list(self.original_df[column_name].unique()))
-        if code_level == CodeLevel.SIGLA:
-            raise Exception(f"Found values in {column_name} similar to Province Sigla. "
-                            f"Check the column name passed and the values on columns.")
-        self.detail_level[GeoLevel.REGIONE] = (column_name, code_level)
+        if code_level == CodeLevel.SIGLA and geo_level != GeoLevel.PROVINCIA:
+            raise ValueError(f"The column cannot be of type SIGLA for {geo_level.name.lower()}.")
+        self.detail_level[geo_level] = (column_name, code_level)
 
     def run_simple_match(self):
-        if len(self.detail_level) == 0:
-            raise Exception("You need to set al least one between comuni_tag, province_tag or regioni_tag.")
+        if not self.detail_level:
+            raise ValueError("No detail level set for matching.")
 
-        # Sort detail_level
+        self._prepare_dataframe_for_matching()
+        self._match_with_istat_registry()
+
+    def _prepare_dataframe_for_matching(self):
         self.detail_level = dict(sorted(self.detail_level.items()))
-        geo_level = list(self.detail_level.keys())[0]
-        geo_code = list(self.detail_level.values())[0][1]
-
-        # Create all combination of geographical data
         geo_columns = [name for name, _ in self.detail_level.values()]
         self.df = self.original_df[geo_columns].copy().drop_duplicates()
-
-        # Create match column
         self.df[self.MATCH_COLUMN] = self.df[geo_columns[0]]
-
-        # The main geographical level need to be not null
         self.df = self.df[self.df[self.MATCH_COLUMN].notnull()]
 
-        # Get ISTAT data
+    def _match_with_istat_registry(self):
+        geo_level = list(self.detail_level.keys())[0]
+        geo_code = list(self.detail_level.values())[0][1]
         self.istat_registry = get_df(geo_level)
-
-        geo_tag_anag = get_tag_registry(geo_code, geo_level)
-        self.istat_registry[self.MATCH_COLUMN] = self.istat_registry[geo_tag_anag]
-
+        geo_registry_tag = get_tag_registry(geo_code, geo_level)
+        self.istat_registry[self.MATCH_COLUMN] = self.istat_registry[geo_registry_tag]
         if geo_code == CodeLevel.SIGLA:
             self._run_sigla_match()
         elif geo_code == CodeLevel.CODE:
@@ -140,8 +130,7 @@ class AddGeographicalInfo:
 
     def _run_sigla_match(self):
         # Sigla Cleaning
-        self.df[self.MATCH_COLUMN] = self.df[self.MATCH_COLUMN].str.lower()
-        self.df[self.MATCH_COLUMN] = self.df[self.MATCH_COLUMN].str.strip()
+        self.df[self.MATCH_COLUMN] = self.df[self.MATCH_COLUMN].str.lower().str.strip()
         self.istat_registry[self.MATCH_COLUMN] = self.istat_registry[self.MATCH_COLUMN].str.lower()
 
         istat_values = list(self.istat_registry[self.MATCH_COLUMN].unique())
