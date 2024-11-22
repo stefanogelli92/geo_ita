@@ -10,9 +10,11 @@ import geo_ita.src.config as cfg
 
 
 class GeoLevel(Enum):
+    COORDINATES = "coordinates"
     COMUNE = "comune"
     PROVINCIA = "provincia"
     REGIONE = "regione"
+    COUNTRY = "country"
 
     # Define less than to allow sorting
     def __lt__(self, other):
@@ -20,6 +22,15 @@ class GeoLevel(Enum):
             return NotImplemented
         # Compare based on their order in the Enum
         return list(GeoLevel).index(self) < list(GeoLevel).index(other)
+
+    # The sum will concatenate the name of the value
+    def __str__(self):
+        return self.value
+
+    def __radd__(self, other):
+        if isinstance(other, str):
+            return other + str(self)
+        return NotImplemented
 
 
 simplify_values = {GeoLevel.REGIONE: 500,
@@ -31,6 +42,7 @@ class CodeLevel(Enum):
     CODE = "code"
     SIGLA = "sigla"
     DENOMINATION = "denomination"
+    COORDINATES = "coordinates"
 
 
 def infer_geographical_category(list_values: List[Union[str, int, float]]) -> CodeLevel:
@@ -85,6 +97,16 @@ def get_tag_registry(code, level):
             result = cfg.TAG_CODICE_REGIONE
         else:
             result = cfg.TAG_REGIONE
+    elif level == GeoLevel.COUNTRY:
+        if code == CodeLevel.DENOMINATION:
+            result = cfg.TAG_COUNTRY
+        else:
+            raise Exception("Only denomination for country.")
+    elif level == GeoLevel.COORDINATES:
+        if code == CodeLevel.DENOMINATION:
+            result = cfg.TAG_COORDINATES
+        else:
+            raise Exception("Only denomination for country.")
     else:
         raise Exception("Level UNKNOWN")
     return result

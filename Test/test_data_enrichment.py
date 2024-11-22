@@ -106,6 +106,7 @@ class TestGetCityFromCoordinates(TestDataEnrichment):
         self.check_result_on_same_dataframe(df, column_test, suffix="_test")
 
         # TODO aggiungere che se provo a trovare dei punti fuori dal territorio italiano non trova niente
+        # TODO aggiungere che se ho campo latitudine o longitudine vuoto non vado in errore ma ignoro
 
 
 class TestAddGeographicalInfo(TestDataEnrichment):
@@ -203,6 +204,7 @@ class TestAddGeographicalInfo(TestDataEnrichment):
             ["Polesio", "Ascoli Piceno", "Ascoli Piceno", "AP", "Marche"],
             ["Carnaiola", "Fabro", "Terni", "TR", "Umbria"],
             ["xxx", None, None, None, None],
+            ["nan", None, None, None, None],
             ["Barcellona", None, None, None, None],
         ],
             columns=["Citta", cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_SIGLA, cfg.TAG_REGIONE]
@@ -222,6 +224,7 @@ class TestAddGeographicalInfo(TestDataEnrichment):
             ["Polesio", "Ascoli Piceno", "Ascoli Piceno", "AP", "Marche"],
             ["Carnaiola", "Fabro", "Terni", "TR", "Umbria"],
             ["xxx", None, None, None, None],
+            ["nan", None, None, None, None],
             ["Barcellona", None, None, None, None],
         ],
             columns=["Citta", cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_SIGLA, cfg.TAG_REGIONE]
@@ -318,7 +321,7 @@ class TestAggregatePointByDistance(TestDataEnrichment):
         self.assertTrue((check == 2).all())
 
 
-class TestGetPopulationNearby(unittest.TestCase):
+class TestGetPopulationNearby(TestDataEnrichment):
     def test_get_population_nearby_results(self):
 
         test_df = pd.DataFrame([[41.8343354636729, 12.4684276148718],
@@ -328,18 +331,19 @@ class TestGetPopulationNearby(unittest.TestCase):
         self.assertEqual(test_df["n_residents"].values[1], 0)
 
 
-class Prova(unittest.TestCase):
+class TestGeoDataQuality(TestDataEnrichment):
 
     # GeoDataQuality
     def test_GeoDataQuality(self):
         df = pd.read_excel(root_path / PureWindowsPath(r"data_sources/Test/data_quality_samples.xlsx"))
         dq = GeoDataQuality(df)
-        dq.set_nazione_tag("nazione")
+        dq.set_country_tag("nazione")
         dq.set_regioni_tag("regione")
         dq.set_province_tag("provincia")
-        dq.set_comuni_tag("comune", use_for_check_nation=True)
+        dq.set_comuni_tag("comune")
         dq.set_latitude_longitude_tag("latitudine", "longitudine")
-        result = dq.start_check(show_only_warning=False, sensitive=True)
+        dq.start_check()
+        result = dq.get_results()
         # dq.plot_result()
         col_test = ["nazione", "regione", "provincia", "comune",
                     "nazione_check", "nazione_suggestion", "regione_check", "regione_suggestion",

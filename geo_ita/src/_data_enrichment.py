@@ -5,15 +5,14 @@ import ssl
 from datetime import datetime
 from typing import Dict, Optional
 import requests
+from shapely import Point
 
 from valdec.decorators import validate
 from bs4 import BeautifulSoup
 import pandas as pd
-from scipy import spatial
 from scipy.sparse.csgraph import connected_components
 from scipy.sparse import csr_matrix
 import geopandas as gpd
-from geopy.distance import distance
 import geopy.geocoders
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
@@ -34,7 +33,7 @@ from geo_ita.src.definition import *
 from geo_ita.src.utils import *
 import geo_ita.src.config as cfg
 from geo_ita.src._data import (
-    get_df, get_df_comuni, get_administrative_changes_df, _clean_denom_text,
+    get_df, get_df_comuni, get_administrative_changes_df, _clean_denomination_text,
     get_double_languages_denomination,
     _get_shape_italia, get_high_resolution_population_density_df
 )
@@ -176,8 +175,8 @@ class AddGeographicalInfo:
 
         geo_level = list(self.detail_level.keys())[0]
 
-        self.df[self.MATCH_COLUMN] = _clean_denom_text(self.df[self.MATCH_COLUMN])
-        self.istat_registry[self.MATCH_COLUMN] = _clean_denom_text(self.istat_registry[self.MATCH_COLUMN])
+        self.df[self.MATCH_COLUMN] = _clean_denomination_text(self.df[self.MATCH_COLUMN])
+        self.istat_registry[self.MATCH_COLUMN] = _clean_denomination_text(self.istat_registry[self.MATCH_COLUMN])
 
         if geo_level == GeoLevel.COMUNE:
             self._test_if_df_contains_homonym_comuni()
@@ -210,15 +209,19 @@ class AddGeographicalInfo:
         return result
 
     def _add_provincia_regione_denomination_to_not_matched(self):
+        if cfg.TAG_REGIONE + self.SUFFIX_DEFAULT in self.not_match:
+            return
         if GeoLevel.PROVINCIA in self.detail_level:
             detail_column = self.detail_level[GeoLevel.PROVINCIA][0]
             addinfo = AddGeographicalInfo(self.not_match)
+            addinfo.MATCH_COLUMN = addinfo.MATCH_COLUMN + "_provincia"
             addinfo.set_province_tag(detail_column)
             addinfo.run_simple_match()
             self.not_match = addinfo.get_result(suffix_result_columns=self.SUFFIX_DEFAULT)
         elif GeoLevel.REGIONE in self.detail_level:
             detail_column = self.detail_level[GeoLevel.REGIONE][0]
             addinfo = AddGeographicalInfo(self.not_match)
+            addinfo.MATCH_COLUMN = addinfo.MATCH_COLUMN + "_regione"
             addinfo.set_regioni_tag(detail_column)
             addinfo.run_simple_match()
             self.not_match = addinfo.get_result(suffix_result_columns=self.SUFFIX_DEFAULT)
@@ -309,8 +312,8 @@ class AddGeographicalInfo:
                 df_changes[cfg.TAG_COMUNE].str.split(r"/").apply(lambda x: x + [r"/".join(x), r"/".join(x[::-1])])
             )
             df_changes = df_changes.explode(cfg.TAG_COMUNE)
-            df_changes[cfg.TAG_COMUNE] = _clean_denom_text(df_changes[cfg.TAG_COMUNE])
-            df_changes["new_denominazione_comune"] = _clean_denom_text(df_changes["new_denominazione_comune"])
+            df_changes[cfg.TAG_COMUNE] = _clean_denomination_text(df_changes[cfg.TAG_COMUNE])
+            df_changes["new_denominazione_comune"] = _clean_denomination_text(df_changes["new_denominazione_comune"])
             df_changes["data_decorrenza"] = pd.to_datetime(df_changes["data_decorrenza"])
             df_changes.sort_values([cfg.TAG_COMUNE, "data_decorrenza"], ascending=False, inplace=True)
             df_changes = df_changes.groupby(cfg.TAG_COMUNE)["new_denominazione_comune"].last().to_dict()
@@ -543,11 +546,11 @@ class AddGeographicalInfo:
 
     @validate
     def get_result(
-            self,
-            add_missing: bool = False,
-            drop_not_match: bool = False,
-            suffix_result_columns: str = "",
-            handle_duplicate_column: str = "error"
+        self,
+        add_missing: bool = False,
+        drop_not_match: bool = False,
+        suffix_result_columns: str = "",
+        handle_duplicate_column: str = "error"
     ) -> pd.DataFrame:
         if self.not_match is None:
             raise Exception("Run simple match before get the result.")
@@ -560,14 +563,16 @@ class AddGeographicalInfo:
             log.info(f"Found every values.")
 
         # Check column names in original dataset for any duplicates
+        output_columns = list(set(self.OUTPUT_COLUMNS).intersection(self.istat_registry.columns))
+        self.istat_registry = self.istat_registry[[self.MATCH_COLUMN] + output_columns]
         rename_columns = {
             col: col + suffix_result_columns
             for col in self.istat_registry.columns
             if col != self.MATCH_COLUMN
         }
         self.istat_registry.rename(columns=rename_columns, inplace=True)
-        output_columns = list(set(self.OUTPUT_COLUMNS).intersection(self.istat_registry.columns))
-        self.istat_registry = self.istat_registry[[self.MATCH_COLUMN] + output_columns]
+        output_columns = list(self.istat_registry)
+        output_columns.remove(self.MATCH_COLUMN)
 
         column_duplicates = list(set(output_columns).intersection(self.original_df.columns))
 
@@ -604,7 +609,7 @@ class AddGeographicalInfo:
             else:
                 how = "left"
             result = self.df.merge(self.istat_registry, on=self.MATCH_COLUMN, how=how)
-            result = result.merge(self.original_df, on=join_columns, how=how)
+            result = self.original_df.merge(result, on=join_columns, how=how)
 
         if (len(column_duplicates) > 0) & (handle_duplicate_column == "overwrite"):
             result.drop(columns=[col + "geo_ita_rename_handler" for col in column_duplicates], inplace=True)
@@ -886,7 +891,7 @@ def get_city_from_coordinates(
     map_city = gpd.sjoin(geo_df, df_comuni, op="within", how="left")
 
     # Log missing points
-    missing_points = map_city[map_city[cfg.TAG_COMUNE].isna()]["geometry"].unique()
+    missing_points = map_city[map_city[cfg.TAG_COMUNE].isna() & (~map_city["geometry"].is_empty)]["geometry"].unique()
     if missing_points:
         log.warning(f"Unable to find the city for {len(missing_points)} points: "
                     f"{[(pt.x, pt.y) for pt in missing_points]}")
@@ -1348,404 +1353,301 @@ def aggregate_point_by_distance(
 
 
 class GeoDataQuality:
+    POINT_COLUMN = "geometry"
+    CHECK_SUFFIX = "_check"
+    CORRECTION_SUFFIX = "_correction"
+    FLAG_ITALY_COLUMN = "is_in_italy"
+    DATA_QUALITY_CHECK_TAG = "check_data_quality_add_info"
+
     @validate
     def __init__(self, df: pd.DataFrame):
         self.original_df = df
-        self.keys = None
-        self.comuni_tag = None
-        self.comuni_code = None
-        self.comuni_result_tag = cfg.TAG_COMUNE
-        self.province_tag = None
-        self.province_code = None
-        self.province_result_tag = cfg.TAG_PROVINCIA
-        self.regioni_tag = None
-        self.regioni_code = None
-        self.regioni_result_tag = cfg.TAG_REGIONE
-        self.nazione_tag = None
-        self.latitude_tag = None
-        self.longitude_tag = None
-        self.check_tag = "_check"
-        self.propose_tag = "_suggestion"
-        self.flag_in_italy = "is_in_italy"
-        self.sensitive = None
+        self.unique_key_column = None
+        self.italy_name = "italy"
+        self.detail_level = {}
 
     @validate
-    def set_keys(self, col_name: str):
-        test_column_in_dataframe(self.original_df, col_name)
-        if not self.original_df[col_name].is_unique:
-            raise Exception(r"Insert a column with unique values.")
-        self.keys = col_name
+    def set_unique_key_column(self, column_name: str):
+        test_column_in_dataframe(self.original_df, column_name)
+        if not self.original_df[column_name].is_unique:
+            raise Exception("Insert a column with unique values.")
+        self.unique_key_column = column_name
 
     @validate
-    def set_nazione_tag(self, col_name: str):
-        test_column_in_dataframe(self.original_df, col_name)
-        self.nazione_tag = col_name
+    def set_comuni_tag(self, column_name: str):
+        test_column_in_dataframe(self.original_df, column_name)
+        code_level = infer_geographical_category(list(self.original_df[column_name].unique()))
+        if code_level == CodeLevel.SIGLA:
+            raise Exception(f"Found values in {column_name} similar to Province Sigla. "
+                            f"Check the column name passed and the values on columns.")
+        self.detail_level[GeoLevel.COMUNE] = (column_name, code_level)
 
     @validate
-    def set_regioni_tag(self, col_name: str):
-        test_column_in_dataframe(self.original_df, col_name)
-        self.regioni_tag = col_name
-        self.regioni_code = infer_geographical_category(list(self.original_df[col_name].unique()))
-        self.regioni_result_tag = get_tag_registry(self.regioni_code, cfg.LEVEL_REGIONE)
+    def set_province_tag(self, column_name: str):
+        test_column_in_dataframe(self.original_df, column_name)
+        code_level = infer_geographical_category(list(self.original_df[column_name].unique()))
+        self.detail_level[GeoLevel.PROVINCIA] = (column_name, code_level)
 
     @validate
-    def set_comuni_tag(self, col_name: str, use_for_check_nation: bool = False):
-        self.use_for_check_nation = use_for_check_nation
-        test_column_in_dataframe(self.original_df, col_name)
-        self.comuni_tag = col_name
-        self.comuni_code = infer_geographical_category(list(self.original_df[col_name].unique()))
-        self.comuni_result_tag = get_tag_registry(self.comuni_code, cfg.LEVEL_COMUNE)
+    def set_regioni_tag(self, column_name: str):
+        test_column_in_dataframe(self.original_df, column_name)
+        code_level = infer_geographical_category(list(self.original_df[column_name].unique()))
+        if code_level == CodeLevel.SIGLA:
+            raise Exception(f"Found values in {column_name} similar to Province Sigla. "
+                            f"Check the column name passed and the values on columns.")
+        self.detail_level[GeoLevel.REGIONE] = (column_name, code_level)
 
     @validate
-    def set_province_tag(self, col_name: str):
-        test_column_in_dataframe(self.original_df, col_name)
-        self.province_tag = col_name
-        self.province_code = infer_geographical_category(list(self.original_df[col_name].unique()))
-        self.province_result_tag = get_tag_registry(self.province_code, cfg.LEVEL_PROVINCIA)
+    def set_country_tag(self, column_name: str):
+        test_column_in_dataframe(self.original_df, column_name)
+        self.detail_level[GeoLevel.COUNTRY] = (column_name, CodeLevel.DENOMINATION)
 
     @validate
-    def set_latitude_longitude_tag(self, lat_col: str, long_col: str):
-        test_column_in_dataframe(self.original_df, lat_col)
-        test_column_in_dataframe(self.original_df, long_col)
-        self.latitude_tag = lat_col
-        self.longitude_tag = long_col
+    def set_latitude_longitude_tag(self, latitude_column: str, longitude_column: str):
+        test_column_in_dataframe(self.original_df, latitude_column)
+        test_column_in_dataframe(self.original_df, longitude_column)
 
-    def _check_nazione(self):
-        self.original_df[self.nazione_tag] = self._clean_denomination(self.original_df[self.nazione_tag])
-        itali_string_names = ["it", "italy", "italia"]
-        self._check_missing_values(self.nazione_tag)
-        self.original_df[self.flag_in_italy] = self.original_df[self.nazione_tag].str.lower().isin(itali_string_names)
-        if self.original_df[self.flag_in_italy].sum() > 0:
-            values = self.original_df.loc[self.original_df[self.flag_in_italy], self.nazione_tag].value_counts()
-            if values.shape[0] >= 1:
-                self.italy_name = values.index[0]
-                wrong_positions = (self.original_df[self.nazione_tag] != self.italy_name) & self.original_df[
-                    self.flag_in_italy]
+        # Create point column
+        self.original_df[self.POINT_COLUMN + "_x"] = pd.to_numeric(self.original_df[longitude_column], errors="coerce")
+        self.original_df[self.POINT_COLUMN + "_y"] = pd.to_numeric(self.original_df[latitude_column], errors="coerce")
+        self.original_df[self.POINT_COLUMN] = self.original_df.apply(
+            lambda row: Point(row[self.POINT_COLUMN + "_x"], row[self.POINT_COLUMN + "_y"]),
+            axis=1)
+        self.original_df.drop(columns=[self.POINT_COLUMN + "_x", self.POINT_COLUMN + "_y"], inplace=True)
 
-                self.original_df[self.nazione_tag + self.check_tag] = self.original_df[
-                                                                          self.nazione_tag + self.check_tag] | wrong_positions
-                self.original_df.loc[wrong_positions, self.nazione_tag + self.propose_tag] = self.italy_name
+        self.detail_level[GeoLevel.COORDINATES] = (self.POINT_COLUMN, CodeLevel.COORDINATES)
 
-    def _clean_denomination(self, series):
-        if not self.sensitive:
-            series = series.str.lower()  # All strig in lowercase
-            series = series.str.replace(r'[^\w\s]', ' ', regex=True)  # Remove non alphabetic characters
-            series = series.str.strip()
-            series = series.str.replace(r'\s+', ' ', regex=True)
-            series = series.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode(
-                'utf-8')  # Remove accent
+    def _first_check(self, geo_level):
+        original_column = self.detail_level[geo_level][0]
+        original_code = self.detail_level[geo_level][1]
+        tag = get_tag_registry(CodeLevel.DENOMINATION, geo_level)
+
+        # Clean column
+        if original_code == CodeLevel.DENOMINATION:
+            self.original_df[tag] = self._clean_denomination(self.original_df[original_column])
+        elif original_code == CodeLevel.CODE:
+            self.original_df[tag] = self.original_df[original_column].astype("Int", errors="coerce")
+        else:
+            self.original_df[tag] = self.original_df[original_column]
+
+        # Check for missing values
+        self.original_df[tag + self.CHECK_SUFFIX] = self.original_df[original_column].isna()
+
+    def _second_check(self, geo_level):
+        original_column = self.detail_level[geo_level][0]
+        original_code = self.detail_level[geo_level][1]
+        tag = get_tag_registry(CodeLevel.DENOMINATION, geo_level)
+
+        self.original_df[tag + self.CHECK_SUFFIX] |= self.original_df[tag + "_" + geo_level].isna()
+        if GeoLevel.COUNTRY in self.detail_level:
+            country_column = self.detail_level[GeoLevel.COUNTRY][0]
+            self.original_df[get_tag_registry(CodeLevel.DENOMINATION, GeoLevel.COUNTRY) + "_" + geo_level] = np.where(
+                self.original_df[tag + "_" + geo_level].notnull(),
+                self.italy_name,
+                self.original_df[country_column]
+            )
+
+        # Check original value
+        self.original_df[tag + self.CORRECTION_SUFFIX] = None
+        if original_code == CodeLevel.DENOMINATION:
+            wrong_position = (self.original_df[tag + "_" + geo_level] != self.original_df[tag]) & \
+                             self.original_df[tag + "_" + geo_level].notnull()
+            self.original_df.loc[wrong_position, tag + self.CHECK_SUFFIX] = True
+            self.original_df.loc[wrong_position, tag + self.CORRECTION_SUFFIX] = self.original_df.loc[
+                wrong_position, tag + "_" + geo_level]
+
+    def _check_two_level(self, level1, level2):
+        tag = get_tag_registry(CodeLevel.DENOMINATION, level1)
+        check_pos = (self.original_df[tag + "_" + level2].notnull() &
+                     (self.original_df[tag + "_" + level2] != self.original_df[tag + "_" + level1]))
+        self.original_df.loc[check_pos, tag + self.CHECK_SUFFIX] = True
+        fill_na_pos = check_pos & self.original_df[tag + "_" + level1].isna() & self.original_df[tag + self.CORRECTION_SUFFIX].isna()
+        self.original_df.loc[fill_na_pos, tag + self.CORRECTION_SUFFIX] = self.original_df.loc[fill_na_pos, tag + "_" + level2]
+        different_correction_pos = check_pos & self.original_df[tag + "_" + level1].isna() & (self.original_df[
+            tag + self.CORRECTION_SUFFIX] != self.original_df[tag + "_" + level2])
+        self.original_df.loc[different_correction_pos, tag + self.CORRECTION_SUFFIX] = None
+
+    def _check_country(self):
+        self._first_check(GeoLevel.COUNTRY)
+
+        original_column = self.detail_level[GeoLevel.COUNTRY][0]
+        tag = get_tag_registry(CodeLevel.DENOMINATION, GeoLevel.COUNTRY)
+
+        italy_string_names = ["it", "italy", "italia", "ita"]
+        # Get italy name
+        values = self.original_df.loc[self.original_df[original_column].isin(italy_string_names), original_column].value_counts()
+        if values.shape[0] >= 1:
+            self.italy_name = values.index[0]
+
+        self.original_df[tag + "_" + GeoLevel.COUNTRY] = self.original_df[original_column].map({name: self.italy_name for name in italy_string_names})
+
+        self._second_check(GeoLevel.COUNTRY)
+
+
+    @staticmethod
+    def _clean_denomination(series):
+        series = series.str.lower()  # All strig in lowercase
+        series = series.str.replace(r'[^\w\s]', ' ', regex=True)  # Remove non alphabetic characters
+        series = series.str.strip()
+        series = series.str.replace(r'\s+', ' ', regex=True)
+        series = series.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode(
+            'utf-8')  # Remove accent
+        series = series.replace("", None)
         return series
 
     def _check_regione(self):
-        self.original_df[self.regioni_tag] = self._clean_denomination(self.original_df[self.regioni_tag])
-        self._check_missing_values(self.regioni_tag)
-        addinfo = AddGeographicalInfo(self.original_df)
-        addinfo.set_regioni_tag(self.regioni_tag)
-        addinfo.run_simple_match()
-        check_df = addinfo.get_result()
-        check_df[cfg.TAG_REGIONE] = self._clean_denomination(check_df[cfg.TAG_REGIONE])
-        tag = self.regioni_result_tag
-        self.original_df[tag + "_regione"] = check_df[tag]
-        not_found_position = check_df[tag].isna() & self.original_df[self.flag_in_italy]
-        self.original_df[self.regioni_tag + self.check_tag] = self.original_df[
-                                                                  self.regioni_tag + self.check_tag] | not_found_position
-        wrong_position = check_df[tag].notnull() & (check_df[tag] != check_df[self.regioni_tag])
-        self.original_df.loc[wrong_position, self.regioni_tag + self.check_tag] = True
-        self.original_df.loc[wrong_position, self.regioni_tag + self.propose_tag] = check_df.loc[wrong_position, tag]
+        self._first_check(GeoLevel.REGIONE)
 
-    def _check_regione_nazione(self):
-        pos = (self.original_df[self.nazione_tag].isna() | (self.original_df[self.nazione_tag] != self.italy_name)) & (
-            self.original_df[self.regioni_result_tag + "_regione"].notnull())
-        self.original_df.loc[pos, self.nazione_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.nazione_tag + self.propose_tag] = self.italy_name
-        self.original_df.loc[pos, self.flag_in_italy] = True
+        regione_column = self.detail_level[GeoLevel.REGIONE][0]
+        regione_code = self.detail_level[GeoLevel.REGIONE][1]
+
+        # Start finding the right name
+        addinfo = AddGeographicalInfo(self.original_df)
+        addinfo.set_regioni_tag(regione_column)
+        addinfo.run_simple_match()
+        if regione_code == CodeLevel.DENOMINATION:
+            addinfo.run_similarity_match(threshold=0.85)
+            addinfo.accept_similarity_result()
+        check_df = addinfo.get_result(suffix_result_columns=self.DATA_QUALITY_CHECK_TAG)
+        self.original_df[cfg.TAG_REGIONE + "_" + GeoLevel.REGIONE] = self._clean_denomination(
+            check_df[cfg.TAG_REGIONE + self.DATA_QUALITY_CHECK_TAG])
+
+        self._second_check(GeoLevel.REGIONE)
 
     def _check_provincia(self):
-        self.original_df[self.province_tag] = self._clean_denomination(self.original_df[self.province_tag])
-        self._check_missing_values(self.province_tag)
+        self._first_check(GeoLevel.PROVINCIA)
+
+        provincia_column = self.detail_level[GeoLevel.PROVINCIA][0]
+        provincia_code = self.detail_level[GeoLevel.PROVINCIA][1]
+
+        # Start finding the right name
         addinfo = AddGeographicalInfo(self.original_df)
-        addinfo.set_province_tag(self.province_tag)
+        addinfo.set_province_tag(provincia_column)
         addinfo.run_simple_match()
-        check_df = addinfo.get_result()
-        check_df[cfg.TAG_REGIONE] = self._clean_denomination(check_df[cfg.TAG_REGIONE])
-        check_df[cfg.TAG_PROVINCIA] = self._clean_denomination(check_df[cfg.TAG_PROVINCIA])
-        check_df[cfg.TAG_SIGLA] = self._clean_denomination(check_df[cfg.TAG_SIGLA])
-        tag = self.province_result_tag
-        self.original_df[self.regioni_result_tag + "_provincia"] = check_df[self.regioni_result_tag]
-        self.original_df[tag + "_provincia"] = check_df[tag]
-        not_found_position = check_df[tag].isna() & self.original_df[self.flag_in_italy]
-        self.original_df.loc[not_found_position, self.province_tag + self.check_tag] = True
-        wrong_position = check_df[tag].notnull() & (check_df[tag] != check_df[self.province_tag]) & (
-                check_df[tag] != check_df[self.province_tag])
-        self.original_df.loc[wrong_position, self.province_tag + self.check_tag] = True
-        self.original_df.loc[wrong_position, self.province_tag + self.propose_tag] = check_df.loc[
-            wrong_position, tag]
+        if provincia_code == CodeLevel.DENOMINATION:
+            addinfo.run_similarity_match(threshold=0.85)
+            addinfo.accept_similarity_result()
+        check_df = addinfo.get_result(suffix_result_columns=self.DATA_QUALITY_CHECK_TAG)
+        self.original_df[cfg.TAG_REGIONE + "_" + GeoLevel.PROVINCIA] = self._clean_denomination(
+            check_df[cfg.TAG_REGIONE + self.DATA_QUALITY_CHECK_TAG])
+        self.original_df[cfg.TAG_PROVINCIA + "_" + GeoLevel.PROVINCIA] = self._clean_denomination(
+            check_df[cfg.TAG_PROVINCIA + self.DATA_QUALITY_CHECK_TAG])
 
-    def _check_provincia_nazione(self):
-        pos = (self.original_df[self.nazione_tag].isna() | (self.original_df[self.nazione_tag] != self.italy_name)) & (
-            self.original_df[self.regioni_result_tag + "_provincia"].notnull())
-        self.original_df.loc[pos, self.nazione_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.nazione_tag + self.propose_tag] = self.italy_name
-        self.original_df.loc[pos, self.flag_in_italy] = True
-
-    def _check_provincia_regione(self):
-        pos = self.original_df[self.regioni_result_tag + "_provincia"].notnull() & self.original_df[
-            self.regioni_result_tag + "_regione"].isna()
-        self.original_df.loc[pos, self.regioni_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.regioni_tag + self.propose_tag] = self.original_df.loc[
-            pos, self.regioni_result_tag + "_provincia"]
-        pos = self.original_df[self.regioni_result_tag + "_provincia"].notnull() & self.original_df[
-            self.regioni_result_tag + "_regione"].notnull() & (
-                      self.original_df[self.regioni_result_tag + "_provincia"] != self.original_df[
-                  self.regioni_result_tag + "_regione"])
-        self.original_df.loc[pos, self.regioni_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.regioni_tag + self.propose_tag] = None
+        self._second_check(GeoLevel.PROVINCIA)
 
     def _check_comune(self):
-        self._check_missing_values(self.comuni_tag)
-        if self.use_for_check_nation:
-            addinfo = AddGeographicalInfo(self.original_df)
-        else:
-            addinfo = AddGeographicalInfo(self.original_df[self.original_df[self.flag_in_italy]])
-        addinfo.set_comuni_tag(self.comuni_tag)
-        if self.province_tag:
-            addinfo.set_province_tag(self.province_tag)
+        self._first_check(GeoLevel.COMUNE)
+
+        comune_column = self.detail_level[GeoLevel.COMUNE][0]
+        comune_code = self.detail_level[GeoLevel.COMUNE][1]
+
+        # Start finding the right name
+        addinfo = AddGeographicalInfo(self.original_df)
+        addinfo.set_comuni_tag(comune_column)
+        if GeoLevel.PROVINCIA in self.detail_level:
+            addinfo.set_province_tag(self.detail_level[GeoLevel.PROVINCIA][0])
+        if GeoLevel.REGIONE in self.detail_level:
+            addinfo.set_regioni_tag(self.detail_level[GeoLevel.REGIONE][0])
         addinfo.run_simple_match()
-        # try:
-        addinfo.run_find_frazioni()
-        addinfo.run_find_frazioni_from_google()
-        # except:
-        #    pass
-        check_df = addinfo.get_result()
-        self.original_df[self.comuni_tag] = self._clean_denomination(self.original_df[self.comuni_tag])
-        check_df[cfg.TAG_REGIONE] = self._clean_denomination(check_df[cfg.TAG_REGIONE])
-        check_df[cfg.TAG_PROVINCIA] = self._clean_denomination(check_df[cfg.TAG_PROVINCIA])
-        check_df[cfg.TAG_SIGLA] = self._clean_denomination(check_df[cfg.TAG_SIGLA])
-        check_df[cfg.TAG_COMUNE] = self._clean_denomination(check_df[cfg.TAG_COMUNE])
-        if self.use_for_check_nation:
-            self.original_df[self.regioni_result_tag + "_comune"] = check_df[self.regioni_result_tag]
-            self.original_df[self.province_result_tag + "_comune"] = check_df[self.province_result_tag]
-            self.original_df[self.comuni_result_tag + "_comune"] = check_df[self.comuni_result_tag]
-        else:
-            self.original_df.loc[self.original_df[self.flag_in_italy], self.regioni_result_tag + "_comune"] = check_df[
-                self.regioni_result_tag]
-            self.original_df.loc[self.original_df[self.flag_in_italy], self.province_result_tag + "_comune"] = check_df[
-                self.province_result_tag]
-            self.original_df.loc[self.original_df[self.flag_in_italy], self.comuni_result_tag + "_comune"] = check_df[
-                self.comuni_result_tag]
-        not_found_position = check_df[self.comuni_result_tag].isna() & self.original_df[self.flag_in_italy]
-        self.original_df.loc[not_found_position, self.comuni_tag + self.check_tag] = True
-        wrong_position = (self.original_df[self.comuni_result_tag + "_comune"] != self.original_df[self.comuni_tag]) & \
-                         self.original_df[self.comuni_result_tag + "_comune"]
-        self.original_df.loc[wrong_position, self.comuni_tag + self.check_tag] = True
-        self.original_df.loc[wrong_position, self.comuni_tag + self.propose_tag] = check_df.loc[
-            wrong_position, self.comuni_result_tag]
+        if comune_code == CodeLevel.DENOMINATION:
+            addinfo.run_find_frazioni()
+            addinfo.run_find_frazioni_on_web()
+            addinfo.run_similarity_match(threshold=0.85)
+            addinfo.accept_similarity_result()
+        check_df = addinfo.get_result(suffix_result_columns=self.DATA_QUALITY_CHECK_TAG)
+        self.original_df[cfg.TAG_REGIONE + "_" + GeoLevel.COMUNE] = self._clean_denomination(
+            check_df[cfg.TAG_REGIONE + self.DATA_QUALITY_CHECK_TAG])
+        self.original_df[cfg.TAG_PROVINCIA + "_" + GeoLevel.COMUNE] = self._clean_denomination(
+            check_df[cfg.TAG_PROVINCIA + self.DATA_QUALITY_CHECK_TAG])
+        self.original_df[cfg.TAG_COMUNE + "_" + GeoLevel.COMUNE] = self._clean_denomination(
+            check_df[cfg.TAG_COMUNE + self.DATA_QUALITY_CHECK_TAG])
 
-    def _check_comune_nazione(self):
-        pos = (self.original_df[self.nazione_tag].isna() | (self.original_df[self.nazione_tag] != self.italy_name)) & (
-            self.original_df[self.regioni_result_tag + "_comune"].notnull())
-        self.original_df.loc[pos, self.nazione_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.nazione_tag + self.propose_tag] = self.italy_name
-        self.original_df.loc[pos, self.flag_in_italy] = True
-
-    def _check_comune_regione(self):
-        pos = self.original_df[self.regioni_result_tag + "_comune"].notnull() & self.original_df[
-            self.regioni_result_tag + "_regione"].isna() & self.original_df[self.regioni_tag + self.propose_tag].isna()
-        self.original_df.loc[pos, self.regioni_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.regioni_tag + self.propose_tag] = self.original_df.loc[
-            pos, self.regioni_result_tag + "_comune"]
-        pos = self.original_df[self.regioni_result_tag + "_comune"].notnull() & (
-                (self.original_df[self.regioni_result_tag + "_regione"].notnull() &
-                 (self.original_df[self.regioni_result_tag + "_comune"] != self.original_df[
-                     self.regioni_result_tag + "_regione"])) |
-                (self.original_df[self.regioni_tag + self.propose_tag].notnull() &
-                 (self.original_df[self.regioni_result_tag + "_comune"] != self.original_df[
-                     self.regioni_tag + self.propose_tag])))
-        self.original_df.loc[pos, self.regioni_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.regioni_tag + self.propose_tag] = None
-
-    def _check_comune_provincia(self):
-        pos = self.original_df[self.province_result_tag + "_comune"].notnull() & self.original_df[
-            self.province_result_tag + "_provincia"].isna()
-        self.original_df.loc[pos, self.province_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.province_tag + self.propose_tag] = self.original_df.loc[
-            pos, self.province_result_tag + "_comune"]
-        pos = self.original_df[self.province_result_tag + "_comune"].notnull() & self.original_df[
-            self.province_result_tag + "_provincia"].notnull() & (
-                      self.original_df[self.province_result_tag + "_comune"] != self.original_df[
-                  self.province_result_tag + "_provincia"])
-        self.original_df.loc[pos, self.province_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.province_tag + self.propose_tag] = None
+        self._second_check(GeoLevel.COMUNE)
 
     def _check_coordinates(self):
-        check_tag = "coordinates" + self.check_tag
-        self.original_df[check_tag] = (self.original_df[self.latitude_tag].isna() |
-                                       self.original_df[self.longitude_tag].isna()) & self.original_df[
-                                          self.flag_in_italy]
-        check_df = get_city_from_coordinates(self.original_df, self.latitude_tag, self.longitude_tag)
-        check_df[cfg.TAG_REGIONE] = self._clean_denomination(check_df[cfg.TAG_REGIONE])
-        check_df[cfg.TAG_PROVINCIA] = self._clean_denomination(check_df[cfg.TAG_PROVINCIA])
-        check_df[cfg.TAG_SIGLA] = self._clean_denomination(check_df[cfg.TAG_SIGLA])
-        check_df[cfg.TAG_COMUNE] = self._clean_denomination(check_df[cfg.TAG_COMUNE])
-        not_found_position = check_df[cfg.TAG_COMUNE].isna() & self.original_df[self.flag_in_italy]
-        self.original_df.loc[not_found_position, check_tag] = True
-        self.original_df[self.regioni_result_tag + "_coordinates"] = check_df[self.regioni_result_tag]
-        self.original_df[self.province_result_tag + "_coordinates"] = check_df[self.province_result_tag]
-        self.original_df[self.comuni_result_tag + "_coordinates"] = check_df[self.comuni_result_tag]
+        self._first_check(GeoLevel.COORDINATES)
 
-    def _check_coordinates_nazione(self):
-        pos = (self.original_df[self.nazione_tag].isna() | (self.original_df[self.nazione_tag] != self.italy_name)) & (
-            self.original_df[cfg.TAG_REGIONE + "_coordinates"].notnull())
-        self.original_df.loc[pos, self.nazione_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.nazione_tag + self.propose_tag] = self.italy_name
-        self.original_df.loc[pos, self.flag_in_italy] = True
+        check_df = get_city_from_coordinates(self.original_df, suffix_result_columns=self.DATA_QUALITY_CHECK_TAG)
+        self.original_df[cfg.TAG_REGIONE + "_" + GeoLevel.COORDINATES] = self._clean_denomination(
+            check_df[cfg.TAG_REGIONE + self.DATA_QUALITY_CHECK_TAG])
+        self.original_df[cfg.TAG_PROVINCIA + "_" + GeoLevel.COORDINATES] = self._clean_denomination(
+            check_df[cfg.TAG_PROVINCIA + self.DATA_QUALITY_CHECK_TAG])
+        self.original_df[cfg.TAG_COMUNE + "_" + GeoLevel.COORDINATES] = self._clean_denomination(
+            check_df[cfg.TAG_COMUNE + self.DATA_QUALITY_CHECK_TAG])
+        self.original_df[cfg.TAG_COORDINATES + "_" + GeoLevel.COORDINATES] = self.original_df[cfg.TAG_COMUNE + "_" + GeoLevel.COORDINATES].where(
+            self.original_df[cfg.TAG_COMUNE + "_" + GeoLevel.COORDINATES].notnull()
+        )
 
-    def _check_coordinates_regione(self):
-        pos = self.original_df[self.regioni_result_tag + "_coordinates"].notnull() & self.original_df[
-            self.regioni_result_tag + "_regione"].isna() & self.original_df[self.regioni_tag + self.propose_tag].isna()
-        self.original_df.loc[pos, self.regioni_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.regioni_tag + self.propose_tag] = self.original_df.loc[
-            pos, self.regioni_result_tag + "_coordinates"]
-        pos = self.original_df[self.regioni_result_tag + "_coordinates"].notnull() & (
-                (self.original_df[self.regioni_result_tag + "_regione"].notnull() &
-                 (self.original_df[self.regioni_result_tag + "_coordinates"] != self.original_df[
-                     self.regioni_result_tag + "_regione"])) |
-                (self.original_df[self.regioni_tag + self.propose_tag].notnull() &
-                 (self.original_df[self.regioni_result_tag + "_coordinates"] != self.original_df[
-                     self.regioni_tag + self.propose_tag])))
-        self.original_df.loc[pos, self.regioni_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.regioni_tag + self.propose_tag] = None
-
-    def _check_coordinates_provincia(self):
-        pos = self.original_df[self.province_result_tag + "_coordinates"].notnull() & self.original_df[
-            self.province_result_tag + "_provincia"].isna() & self.original_df[
-                  self.province_tag + self.propose_tag].isna()
-        self.original_df.loc[pos, self.province_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.province_tag + self.propose_tag] = self.original_df.loc[
-            pos, self.province_result_tag + "_coordinates"]
-        pos = self.original_df[self.province_result_tag + "_coordinates"].notnull() & (
-                (self.original_df[self.province_result_tag + "_provincia"].notnull() &
-                 (self.original_df[self.province_result_tag + "_coordinates"] != self.original_df[
-                     self.province_result_tag + "_provincia"])) |
-                (self.original_df[self.province_tag + self.propose_tag].notnull() &
-                 (self.original_df[self.province_result_tag + "_coordinates"] != self.original_df[
-                     self.province_tag + self.propose_tag])))
-        self.original_df.loc[pos, self.province_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.province_tag + self.propose_tag] = None
-
-    def _check_coordinates_comune(self):
-        pos = self.original_df[self.comuni_result_tag + "_coordinates"].notnull() & self.original_df[
-            self.comuni_result_tag + "_comune"].isna()
-        self.original_df.loc[pos, self.comuni_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.comuni_tag + self.propose_tag] = self.original_df.loc[
-            pos, cfg.TAG_COMUNE + "_coordinates"]
-        pos = self.original_df[self.comuni_result_tag + "_coordinates"].notnull() & self.original_df[
-            self.comuni_result_tag + "_comune"].notnull() & (
-                      self.original_df[self.comuni_result_tag + "_coordinates"] != self.original_df[
-                  self.comuni_result_tag + "_comune"])
-        self.original_df.loc[pos, self.comuni_tag + self.check_tag] = True
-        self.original_df.loc[pos, self.comuni_tag + self.propose_tag] = None
+        self._second_check(GeoLevel.COORDINATES)
 
     @validate
-    def start_check(self, show_only_warning: bool = True, sensitive: bool = False) -> pd.DataFrame:
-        self.sensitive = sensitive
-        col_list = [self.keys, self.nazione_tag, self.regioni_tag, self.province_tag, self.comuni_tag,
-                    self.latitude_tag, self.longitude_tag]
-        col_list = [a for a in col_list if a is not None]
-        self.original_df = self.original_df[col_list].drop_duplicates()
+    def start_check(self) -> None:
 
-        self.original_df[self.flag_in_italy] = True
-        if self.nazione_tag is not None:
-            self._check_nazione()
+        column_list = [v[0] for v in self.detail_level.values()]
+        if self.unique_key_column is not None:
+            column_list = [self.unique_key_column] + column_list
+        self.original_df = self.original_df[column_list].drop_duplicates()
 
-        if self.regioni_tag is not None:
+        # Create a flag for italy positions
+        if GeoLevel.COUNTRY in self.detail_level:
+            self._check_country()
+
+        if GeoLevel.REGIONE in self.detail_level:
             self._check_regione()
-            if self.nazione_tag is not None:
-                self._check_regione_nazione()
+            if GeoLevel.COUNTRY in self.detail_level:
+                self._check_two_level(GeoLevel.COUNTRY, GeoLevel.REGIONE)
 
-        if self.province_tag is not None:
+        if GeoLevel.PROVINCIA in self.detail_level:
             self._check_provincia()
-            if self.nazione_tag is not None:
-                self._check_provincia_nazione()
-            if self.regioni_tag is not None:
-                self._check_provincia_regione()
+            if GeoLevel.COUNTRY in self.detail_level:
+                self._check_two_level(GeoLevel.COUNTRY, GeoLevel.PROVINCIA)
+            if GeoLevel.REGIONE in self.detail_level:
+                self._check_two_level(GeoLevel.REGIONE, GeoLevel.PROVINCIA)
 
-        if self.comuni_tag is not None:
+        if GeoLevel.COMUNE in self.detail_level:
             self._check_comune()
-            if self.nazione_tag is not None:
-                self._check_comune_nazione()
-            if self.regioni_tag is not None:
-                self._check_comune_regione()
-            if self.province_tag is not None:
-                self._check_comune_provincia()
+            if GeoLevel.COUNTRY in self.detail_level:
+                self._check_two_level(GeoLevel.COUNTRY, GeoLevel.COMUNE)
+            if GeoLevel.REGIONE in self.detail_level:
+                self._check_two_level(GeoLevel.REGIONE, GeoLevel.COMUNE)
+            if GeoLevel.PROVINCIA in self.detail_level:
+                self._check_two_level(GeoLevel.PROVINCIA, GeoLevel.COMUNE)
 
-        if self.latitude_tag is not None:
+        if GeoLevel.COORDINATES in self.detail_level:
             self._check_coordinates()
-            if self.nazione_tag is not None:
-                self._check_coordinates_nazione()
-            if self.regioni_tag is not None:
-                self._check_coordinates_regione()
-            if self.province_tag is not None:
-                self._check_coordinates_provincia()
-            if self.comuni_tag is not None:
-                self._check_coordinates_comune()
+            if GeoLevel.COUNTRY in self.detail_level:
+                self._check_two_level(GeoLevel.COUNTRY, GeoLevel.COORDINATES)
+            if GeoLevel.REGIONE in self.detail_level:
+                self._check_two_level(GeoLevel.REGIONE, GeoLevel.COORDINATES)
+            if GeoLevel.PROVINCIA in self.detail_level:
+                self._check_two_level(GeoLevel.PROVINCIA, GeoLevel.COORDINATES)
+            if GeoLevel.COMUNE in self.detail_level:
+                self._check_two_level(GeoLevel.COMUNE, GeoLevel.COORDINATES)
 
-        check_list = [self.nazione_tag, self.regioni_tag, self.province_tag, self.comuni_tag]
-        if self.latitude_tag is not None:
-            check_list.append("coordinates")
-        check_list = [a + self.check_tag for a in check_list if a is not None]
+        check_list = [col for col in self.original_df.columns if self.CHECK_SUFFIX in col]
+        self.original_df["check"] = self.original_df[check_list].sum(axis='columns')
+        solved_list = [col for col in self.original_df.columns if self.CORRECTION_SUFFIX in col]
+        self.original_df["solved"] = (self.original_df[solved_list].notnull()).sum(axis='columns')
+        self.original_df["solved"] = (self.original_df["solved"] > 0) & (self.original_df["solved"] == self.original_df["check"])
+        self.original_df["check"] = self.original_df["check"] > 0
 
-        self.original_df["check"] = self.original_df[check_list].any(axis='columns')
-        self.original_df["solved"] = np.where(self.original_df["check"], True, None)
-        for c in check_list:
-            pos = self.original_df[c]
-            if c != ("coordinates" + self.check_tag):
-                not_solved = self.original_df[c.replace(self.check_tag, self.propose_tag)].isna()
-                self.original_df.loc[pos & not_solved, "solved"] = False
-            else:
-                self.original_df.loc[pos, "solved"] = False
         n_tot = self.original_df.shape[0]
 
         n_check = self.original_df["check"].sum()
         n_solved = self.original_df["solved"].sum()
-        log.info("Found {} problems over {} ({}%), of which {} solved ({}%)".format(n_check, n_tot,
-                                                                                    round(n_check / n_tot * 100, 1),
-                                                                                    n_solved,
-                                                                                    round(n_solved / n_check * 100, 1)))
-        if self.nazione_tag:
-            log.info("Field {}: {} problem, {} solved".format(
-                self.nazione_tag, self.original_df[self.nazione_tag + self.check_tag].sum(),
-                self.original_df[self.nazione_tag + self.propose_tag].notnull().sum()
-            ))
-        if self.regioni_tag:
-            log.info("Field {}: {} problem, {} solved".format(
-                self.regioni_tag, self.original_df[self.regioni_tag + self.check_tag].sum(),
-                self.original_df[self.regioni_tag + self.propose_tag].notnull().sum()
-            ))
-        if self.province_tag:
-            log.info("Field {}: {} problem, {} solved".format(
-                self.province_tag, self.original_df[self.province_tag + self.check_tag].sum(),
-                self.original_df[self.province_tag + self.propose_tag].notnull().sum()
-            ))
-        if self.comuni_tag:
-            log.info("Field {}: {} problem, {} solved".format(
-                self.comuni_tag, self.original_df[self.comuni_tag + self.check_tag].sum(),
-                self.original_df[self.comuni_tag + self.propose_tag].notnull().sum()
-            ))
-        if self.latitude_tag:
-            log.info("Coordinates: {} problem".format(
-                self.original_df["coordinates" + self.check_tag].sum()
-            ))
+        log.info(f"Found {n_check} problems over {n_tot} ({n_check / n_tot:.2%}), "
+                 f"of which {n_solved} solved ({n_solved/n_check:.2%}).")
 
-        if show_only_warning:
-            result = self.original_df[self.original_df["check"]]
-        else:
-            result = self.original_df
-        return result
+        for geo_level, v in self.detail_level.items():
+            tag = get_tag_registry(CodeLevel.DENOMINATION, geo_level)
+            original_column = v[0]
+            n_problem = self.original_df[tag + self.CHECK_SUFFIX].sum()
+            n_problem_solved = self.original_df[tag + self.CORRECTION_SUFFIX].notnull().sum()
+            log.info(f"Column {original_column}: {n_problem} problem, {n_problem_solved} solved.")
+        return
 
-    def _check_missing_values(self, col_name):
-        self.original_df[col_name + self.check_tag] = self.original_df[col_name].isna() & self.original_df[
-            self.flag_in_italy]
+    def get_results(self) -> pd.DataFrame:
+        return self.original_df[self.original_df["check"]]
 
     @staticmethod
     def _create_header(width, background_color, text_color, title, subtitle):
@@ -2198,10 +2100,10 @@ class GeoDataQuality:
 
 @validate
 def get_population_nearby(
-    df: pd.DataFrame,
-    radius: Union[int, float],
-    latitude_column: str = None,
-    longitude_column: str = None
+        df: pd.DataFrame,
+        radius: Union[int, float],
+        latitude_column: str = None,
+        longitude_column: str = None
 ) -> pd.DataFrame:
     """
     Calculate the total population within a specified radius for each point in the dataset.

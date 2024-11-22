@@ -32,7 +32,7 @@ import xyzservices.providers as xyz
 import geo_ita.src.config as cfg
 from geo_ita.src._data import get_df_comuni, get_df_province, get_df_regioni
 from geo_ita.src._data_enrichment import (
-    _clean_denom_text_value, _clean_denom_text, _get_tag_anag, _code_or_desc,
+    _clean_denom_text_value, _clean_denomination_text, _get_tag_anag, _code_or_desc,
     AddGeographicalInfo, __create_geo_dataframe, __find_coord_columns, __find_coordinates_system
 )
 
@@ -239,7 +239,7 @@ def _create_choropleth_map(df0,
         else:
             filter_list = [_clean_denom_text_value(x) for x in filter_list]
 
-        shape = shape[_clean_denom_text(shape[tag_2]).isin(filter_list)]
+        shape = shape[_clean_denomination_text(shape[tag_2]).isin(filter_list)]
 
     numeric_values = is_numeric_dtype(df[value_tag])
 
@@ -495,7 +495,7 @@ def _create_choropleth_map_interactive(df0,
             filter_list = [x.upper() for x in filter_list]
         else:
             filter_list = [_clean_denom_text_value(x) for x in filter_list]
-        shape = shape[_clean_denom_text(shape[tag_2]).isin(filter_list)]
+        shape = shape[_clean_denomination_text(shape[tag_2]).isin(filter_list)]
 
     col_list = list(dict_values.keys())
     col_list.append(geo_tag_anag)
@@ -1120,7 +1120,7 @@ def _get_margins(filter_comune=None,
         code = _code_or_desc(filter_comune)
         shape = _get_shape_from_level(cfg.LEVEL_COMUNE)
         tag_shape = _get_tag_anag(code, cfg.LEVEL_COMUNE)
-        shape[tag_shape] = _clean_denom_text(shape[tag_shape])
+        shape[tag_shape] = _clean_denomination_text(shape[tag_shape])
         margins = shape[shape[tag_shape].isin(filter_comune)]
         margins = gpd.GeoDataFrame(margins, geometry="geometry")
     elif filter_provincia is not None:
@@ -1128,7 +1128,7 @@ def _get_margins(filter_comune=None,
         code = _code_or_desc(filter_provincia)
         shape = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
         tag_shape = _get_tag_anag(code, cfg.LEVEL_PROVINCIA)
-        shape[tag_shape] = _clean_denom_text(shape[tag_shape])
+        shape[tag_shape] = _clean_denomination_text(shape[tag_shape])
         margins = shape[shape[tag_shape].isin(filter_provincia)]
         margins = gpd.GeoDataFrame(margins, geometry="geometry")
     elif filter_regione is not None:
@@ -1136,7 +1136,7 @@ def _get_margins(filter_comune=None,
         code = _code_or_desc(filter_regione)
         shape = _get_shape_from_level(cfg.LEVEL_REGIONE)
         tag_shape = _get_tag_anag(code, cfg.LEVEL_REGIONE)
-        shape[tag_shape] = _clean_denom_text(shape[tag_shape])
+        shape[tag_shape] = _clean_denomination_text(shape[tag_shape])
         margins = shape[shape[tag_shape].isin(filter_regione)]
         margins = gpd.GeoDataFrame(margins, geometry="geometry")
     else:
