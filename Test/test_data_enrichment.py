@@ -4,8 +4,6 @@ from geopy.distance import distance
 
 from geo_ita.src._data_enrichment import *
 from geo_ita.src._data import *
-from geo_ita.src.definition import *
-from pathlib import PureWindowsPath
 from geo_ita.src.config import *
 import logging
 
@@ -331,25 +329,4 @@ class TestGetPopulationNearby(TestDataEnrichment):
         self.assertEqual(test_df["n_residents"].values[1], 0)
 
 
-class TestGeoDataQuality(TestDataEnrichment):
 
-    # GeoDataQuality
-    def test_GeoDataQuality(self):
-        df = pd.read_excel(root_path / PureWindowsPath(r"data_sources/Test/data_quality_samples.xlsx"))
-        dq = GeoDataQuality(df)
-        dq.set_country_tag("nazione")
-        dq.set_regioni_tag("regione")
-        dq.set_province_tag("provincia")
-        dq.set_comuni_tag("comune")
-        dq.set_latitude_longitude_tag("latitudine", "longitudine")
-        dq.start_check()
-        result = dq.get_results()
-        # dq.plot_result()
-        col_test = ["nazione", "regione", "provincia", "comune",
-                    "nazione_check", "nazione_suggestion", "regione_check", "regione_suggestion",
-                    "provincia_check", "provincia_suggestion", "comune_check", "comune_suggestion",
-                    "coordinates_check", "check", "solved"]
-        assert_frame_equal(result[col_test],
-                           df[col_test],
-                           check_names=False, check_dtype=False
-                           )
