@@ -20,8 +20,22 @@ class GeoLevel(Enum):
     def __lt__(self, other):
         if not isinstance(other, GeoLevel):
             return NotImplemented
-        # Compare based on their order in the Enum
         return list(GeoLevel).index(self) < list(GeoLevel).index(other)
+
+    def __le__(self, other):
+        if not isinstance(other, GeoLevel):
+            return NotImplemented
+        return list(GeoLevel).index(self) <= list(GeoLevel).index(other)
+
+    def __gt__(self, other):
+        if not isinstance(other, GeoLevel):
+            return NotImplemented
+        return list(GeoLevel).index(self) > list(GeoLevel).index(other)
+
+    def __ge__(self, other):
+        if not isinstance(other, GeoLevel):
+            return NotImplemented
+        return list(GeoLevel).index(self) >= list(GeoLevel).index(other)
 
     # The sum will concatenate the name of the value
     def __str__(self):
@@ -43,6 +57,12 @@ class CodeLevel(Enum):
     SIGLA = "sigla"
     DENOMINATION = "denomination"
     COORDINATES = "coordinates"
+
+
+class Check(Enum):
+    OK = "OK"
+    WARNING = "Warning"
+    SOLVED = "Warning solved"
 
 
 def infer_geographical_category(list_values: List[Union[str, int, float]]) -> CodeLevel:
@@ -137,3 +157,12 @@ def clean_denomination_text_value(value):
     for k, v in cfg.clear_denomination.items():
         value = value.replace(k, v)
     return value
+
+
+def ensure_list(value, default=None):
+    if value is None:
+        return default
+    if not isinstance(value, list):
+        value = [value]
+    return value
+

@@ -4,6 +4,7 @@ from itertools import combinations
 
 import geopandas as gpd
 import pandas as pd
+from shapely import Point
 
 from geo_ita.src._data import get_df_comuni
 from geo_ita.src._geo_data_quality import GeoDataQuality
@@ -153,3 +154,138 @@ class TestGeoDataQuality(unittest.TestCase):
         result = dq.get_results()
         self.assertEqual(len(df_check), len(result))
         self.assertEqual(0, result["solved"].sum())
+
+    def test_plot_result_combination(self):
+        df = self.df_comuni.sample(50)
+        df = gpd.GeoDataFrame(df, geometry="geometry")
+        df["points"] = df.sample_points(size=10)
+        df["geometry"] = df["points"]
+        df.drop(columns=["points"], inplace=True)
+        df = df.explode("geometry")
+        df = df.reset_index(drop=True)
+        df[cfg.TAG_COUNTRY] = "Italy"
+
+        tags = [
+            ("set_country_tag", cfg.TAG_COUNTRY),
+            ("set_regioni_tag", cfg.TAG_REGIONE),
+            ("set_province_tag", cfg.TAG_PROVINCIA),
+            ("set_comuni_tag", cfg.TAG_COMUNE),
+            ("set_latitude_longitude_tag", {"geometry_column": "geometry"})
+        ]
+
+        for k in range(2, len(tags) + 1):
+            for perm in combinations(tags, k):
+                _df = df.copy()
+                for j in range(0, k - 1):
+                    if perm[j][0] == "set_country_tag":
+                        _df[perm[j][1]] = None
+                    else:
+                        _df[perm[j][1]] = ["wrong" if i % 2 == 0 else None for i in range(len(_df))]
+                dq = GeoDataQuality(_df)
+                for method, arg in perm:
+                    if isinstance(arg, dict):
+                        getattr(dq, method)(**arg)
+                    else:
+                        getattr(dq, method)(arg)
+                dq.start_check()
+                dq.plot_result(save_in_path="test_plot_result_combination.html")
+
+    def test_plot_result(self):
+        # Create a test DataFrame with different errors
+        all_df = []
+        # 1. Correct
+        df = self.df_comuni.sample(5)
+        df = gpd.GeoDataFrame(df, geometry="geometry")
+        df["points"] = df.sample_points(size=1)
+        df["geometry"] = df["points"]
+        df.drop(columns=["points"], inplace=True)
+        df = df.explode("geometry")
+        df = df.reset_index(drop=True)
+        df[cfg.TAG_COUNTRY] = "Italy"
+        df = df[[cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_REGIONE, cfg.TAG_COUNTRY, "geometry"]]
+        all_df.append(df)
+
+        # 2. Other Country
+        df = pd.DataFrame(data=[["Madrid", "Madrid", "", "Spain", Point(40.41588398208069, -3.7015212072478687)]], columns=df.columns)
+
+        # 3. Missing Country
+        df = self.df_comuni.sample(2)
+        df = gpd.GeoDataFrame(df, geometry="geometry")
+        df["points"] = df.sample_points(size=1)
+        df["geometry"] = df["points"]
+        df.drop(columns=["points"], inplace=True)
+        df = df.explode("geometry")
+        df = df.reset_index(drop=True)
+        df[cfg.TAG_COUNTRY] = None
+        df = df[[cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_REGIONE, cfg.TAG_COUNTRY, "geometry"]]
+        all_df.append(df)
+
+        # 4. Missing Comune
+        df = self.df_comuni.sample(2)
+        df = gpd.GeoDataFrame(df, geometry="geometry")
+        df["points"] = df.sample_points(size=1)
+        df["geometry"] = df["points"]
+        df.drop(columns=["points"], inplace=True)
+        df = df.explode("geometry")
+        df = df.reset_index(drop=True)
+        df[cfg.TAG_COUNTRY] = "Italy"
+        df[cfg.TAG_COMUNE] = None
+        df = df[[cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_REGIONE, cfg.TAG_COUNTRY, "geometry"]]
+        all_df.append(df)
+
+        # 5. Missing Coordinates
+        df = self.df_comuni.sample(2)
+        df = gpd.GeoDataFrame(df, geometry="geometry")
+        df["points"] = df.sample_points(size=1)
+        df["geometry"] = df["points"]
+        df.drop(columns=["points"], inplace=True)
+        df = df.explode("geometry")
+        df = df.reset_index(drop=True)
+        df[cfg.TAG_COUNTRY] = "Italy"
+        df["geometry"] = None
+        df = df[[cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_REGIONE, cfg.TAG_COUNTRY, "geometry"]]
+        all_df.append(df)
+
+        # 5. Wrong Coordinates
+        df = self.df_comuni.sample(2)
+        df = gpd.GeoDataFrame(df, geometry="geometry")
+        df["points"] = df.sample_points(size=1)
+        df["geometry"] = df["points"]
+        df.drop(columns=["points"], inplace=True)
+        df = df.explode("geometry")
+        df = df.reset_index(drop=True)
+        df[cfg.TAG_COUNTRY] = "Italy"
+        df["geometry"] = df["geometry"].apply(lambda x: Point(x.y, x.x))
+        df.loc[0, "geometry"] = Point(0, 0)
+        df = df[[cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_REGIONE, cfg.TAG_COUNTRY, "geometry"]]
+        all_df.append(df)
+
+
+        # 6. Conflict
+        df = sample_unique_by_column(self.df_comuni, cfg.TAG_REGIONE, 16)
+        df = gpd.GeoDataFrame(df, geometry="geometry")
+        df = df.reset_index(drop=True)
+        df.index = df.index % 8
+        df_check = df.iloc[0:8]
+        df_check[cfg.TAG_PROVINCIA] = df.iloc[8:16][cfg.TAG_PROVINCIA]
+
+        df = gpd.GeoDataFrame(df_check, geometry="geometry")
+        df["points"] = df.sample_points(size=1)
+        df["geometry"] = df["points"]
+        df.drop(columns=["points"], inplace=True)
+        df = df.explode("geometry")
+        df = df.reset_index(drop=True)
+        df[cfg.TAG_COUNTRY] = "Italy"
+        df = df[[cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_REGIONE, cfg.TAG_COUNTRY, "geometry"]]
+        all_df.append(df)
+
+        all_df = pd.concat(all_df, ignore_index=True)
+
+        dq = GeoDataQuality(all_df)
+        dq.set_country_tag(cfg.TAG_COUNTRY)
+        dq.set_regioni_tag(cfg.TAG_REGIONE)
+        dq.set_province_tag(cfg.TAG_PROVINCIA)
+        dq.set_comuni_tag(cfg.TAG_COMUNE)
+        dq.set_latitude_longitude_tag(geometry_column="geometry")
+        dq.start_check()
+        dq.plot_result()

@@ -161,7 +161,8 @@ class AddGeographicalInfo:
         if n_not_match == 0:
             log.info(f"Matching completed, found {n_tot} different sigle.")
         else:
-            log.warning(f"Matched {n_tot - n_not_match} over {n_tot}. Missing {n_not_match} unique values ({n_not_match / n_tot:.1%}).")
+            log.warning(
+                f"Matched {n_tot - n_not_match} over {n_tot}. Missing {n_not_match} unique values ({n_not_match / n_tot:.1%}).")
 
     def _run_code_match(self):
         # Perform matching based on codes
@@ -501,7 +502,10 @@ class AddGeographicalInfo:
 
     def _find_info_on_page(self, url, denomination):
         # Find information on a webpage
-        res = requests.get(url, verify=False)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+        }
+        res = requests.get(url, headers=headers, verify=False)
         html_page = res.content
         soup = BeautifulSoup(html_page, 'html.parser')
         blacklist = [
@@ -573,11 +577,11 @@ class AddGeographicalInfo:
 
     @validate
     def get_result(
-        self,
-        add_missing: bool = False,
-        drop_not_match: bool = False,
-        suffix_result_columns: str = "",
-        handle_duplicate_column: str = "error"
+            self,
+            add_missing: bool = False,
+            drop_not_match: bool = False,
+            suffix_result_columns: str = "",
+            handle_duplicate_column: str = "error"
     ) -> pd.DataFrame:
         # Get the result dataframe after matching
         if self.not_match is None:
@@ -628,7 +632,8 @@ class AddGeographicalInfo:
 
         self.original_df = self.original_df.reset_index()
 
-        self.original_df = self.original_df.merge(self.df[[self.MATCH_COLUMN] + join_columns], on=join_columns, how="left")
+        self.original_df = self.original_df.merge(self.df[[self.MATCH_COLUMN] + join_columns], on=join_columns,
+                                                  how="left")
         self.original_df = (
             self.original_df
             .set_index(original_index_name)
@@ -696,7 +701,7 @@ class AddGeographicalInfo:
         _ = self._check_non_match(self.istat_registry[self.MATCH_COLUMN])
 
     @staticmethod
-    def _find_match(not_match1, not_match2, threshold, unique=False) -> Dict: 
+    def _find_match(not_match1, not_match2, threshold, unique=False) -> Dict:
         """
         Find the best match for each value in not_match1 from not_match2
 
@@ -747,23 +752,22 @@ def __find_coord_columns(df):
     return flag_coord_found, lat_tag, long_tag
 
 
-def __create_geo_dataframe(df0, lat_tag=None, long_tag=None):
+def _create_geo_dataframe(df0, lat_tag=None, long_tag=None, geo_tag=None):
     if isinstance(df0, gpd.GeoDataFrame):
         df = df0.copy()
         if df.crs is None:
             coord_system = __find_coordinates_system(df, geometry="geometry")
             df.crs = {'init': coord_system}
     elif isinstance(df0, pd.DataFrame):
-        if lat_tag is None:
-            flag_coord_found, lat_tag, long_tag = __find_coord_columns(df0)
-        else:
-            flag_coord_found = True
-        if flag_coord_found:
-            df = df0[df0[long_tag].notnull()]
+        if lat_tag is not None and long_tag is not None:
+            df = df0[df0[long_tag].notnull() & df0[lat_tag].notnull()]
             df = gpd.GeoDataFrame(
                 df.drop([long_tag, lat_tag], axis=1), geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
-            # df.loc[(df[long_tag].isna()) | (df[lat_tag].isna()), "geometry"] = None
             coord_system = __find_coordinates_system(df, lat_tag, long_tag)
+            df.crs = {'init': coord_system}
+        elif geo_tag is not None:
+            df = gpd.GeoDataFrame(df0, geometry=geo_tag)
+            coord_system = __find_coordinates_system(df0, geometry=geo_tag)
             df.crs = {'init': coord_system}
         elif "geometry" in df0.columns:
             df = gpd.GeoDataFrame(df0)
@@ -771,7 +775,14 @@ def __create_geo_dataframe(df0, lat_tag=None, long_tag=None):
             df.crs = {'init': coord_system}
             log.info("Found geometry columns")
         else:
-            raise Exception("The DataFrame must have a geometry attribute or lat-long.")
+            flag_coord_found, lat_tag, long_tag = __find_coord_columns(df0)
+            if not flag_coord_found:
+                raise Exception("The DataFrame must have a geometry attribute or lat-long.")
+            df = df0[df0[long_tag].notnull() & df0[lat_tag].notnull()]
+            df = gpd.GeoDataFrame(
+                df.drop([long_tag, lat_tag], axis=1), geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
+            coord_system = __find_coordinates_system(df, lat_tag, long_tag)
+            df.crs = {'init': coord_system}
     else:
         raise Exception("You need to pass a Pandas DataFrame of GeoDataFrame.")
     return df
@@ -919,7 +930,7 @@ def get_city_from_coordinates(
     df_comuni = df_comuni.to_crs("epsg:4326")  # Convert to WGS84
 
     # Create a GeoDataFrame from the input dataframe coordinates
-    geo_df = __create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column)
+    geo_df = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column)
     geo_df = geo_df[geo_df["geometry"].notnull()]  # Drop rows with missing geometries
     geo_df = geo_df[["key_mapping", "geometry"]].drop_duplicates()  # Remove duplicate geometries
 
@@ -928,8 +939,6 @@ def get_city_from_coordinates(
     geo_df["prova_x"] = geo_df["geometry"].x
     geo_df["prova_y"] = geo_df["geometry"].y
     geo_df = geo_df.to_crs("epsg:4326")
-    geo_df["prova2_x"] = geo_df["geometry"].x
-    geo_df["prova2_y"] = geo_df["geometry"].y
 
     # Perform spatial join with city boundaries
     map_city = gpd.sjoin(geo_df, df_comuni, op="within", how="left")
@@ -1359,7 +1368,7 @@ def aggregate_point_by_distance(
     df["key_mapping"] = range(df.shape[0])  # Unique identifier for each point
 
     # Create a GeoDataFrame
-    gdf = __create_geo_dataframe(df, latitude_column, longitude_column)
+    gdf = _create_geo_dataframe(df, latitude_column, longitude_column)
     gdf = gdf.to_crs(epsg=3857)  # Project to a CRS with units in meters
 
     # Compute centroids (in case geometries are not points)
@@ -1399,8 +1408,6 @@ def aggregate_point_by_distance(
     return df
 
 
-
-
 @validate
 def get_population_nearby(
         df: pd.DataFrame,
@@ -1431,7 +1438,7 @@ def get_population_nearby(
     df = df.rename_axis("key_mapping").reset_index()
 
     # Convert input DataFrame to GeoDataFrame
-    points_gdf = __create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column)[
+    points_gdf = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column)[
         ["key_mapping", "geometry"]]
     points_gdf = points_gdf.to_crs(epsg=4326)  # Convert to df_population metric projections
 
@@ -1492,3 +1499,55 @@ def get_population_nearby(
     df.drop(columns=["key_mapping"], inplace=True)
 
     return df
+
+
+def _get_margins(filter_comune=None,
+                 filter_provincia=None,
+                 filter_regione=None,
+                 epsg=3857):
+    filter_comune = ensure_list(filter_comune)
+    filter_provincia = ensure_list(filter_provincia)
+    filter_regione = ensure_list(filter_regione)
+    if filter_comune is not None:
+        filter_comune = [clean_denomination_text_value(a) for a in filter_comune]
+        code = infer_geographical_category(filter_comune)
+        shape = get_df(GeoLevel.COMUNE)
+        tag_shape = get_tag_registry(code, GeoLevel.COMUNE)
+        shape[tag_shape] = _clean_denomination_text(shape[tag_shape])
+        margins = shape[shape[tag_shape].isin(filter_comune)]
+        margins = gpd.GeoDataFrame(margins, geometry="geometry")
+    elif filter_provincia is not None:
+        filter_provincia = [clean_denomination_text_value(a) for a in filter_provincia]
+        code = infer_geographical_category(filter_provincia)
+        shape = get_df(GeoLevel.PROVINCIA)
+        tag_shape = get_tag_registry(code, GeoLevel.PROVINCIA)
+        shape[tag_shape] = _clean_denomination_text(shape[tag_shape])
+        margins = shape[shape[tag_shape].isin(filter_provincia)]
+        margins = gpd.GeoDataFrame(margins, geometry="geometry")
+    elif filter_regione is not None:
+        filter_regione = [clean_denomination_text_value(a) for a in filter_regione]
+        code = infer_geographical_category(filter_regione)
+        shape = get_df(GeoLevel.REGIONE)
+        tag_shape = get_tag_registry(code, GeoLevel.REGIONE)
+        shape[tag_shape] = _clean_denomination_text(shape[tag_shape])
+        margins = shape[shape[tag_shape].isin(filter_regione)]
+        margins = gpd.GeoDataFrame(margins, geometry="geometry")
+    else:
+        margins = get_df(GeoLevel.REGIONE)
+        margins["key"] = "Italia"
+        margins = gpd.GeoDataFrame(margins, geometry="geometry")
+        margins = margins.dissolve(by='key')
+    if len(margins) == 0:
+        raise Exception("Unable to find the filter.")
+    else:
+        margins = margins[["geometry"]]
+        margins.crs = {'init': "epsg:32632"}
+        margins = margins.to_crs({'init': f'epsg:{epsg}'})
+        margins_coord = margins["geometry"].values
+        margins_coord = (min([margins_coord[i].bounds[0] for i in range(len(margins_coord))]),
+                         min([margins_coord[i].bounds[1] for i in range(len(margins_coord))]),
+                         max([margins_coord[i].bounds[2] for i in range(len(margins_coord))]),
+                         max([margins_coord[i].bounds[3] for i in range(len(margins_coord))]))
+        margins_coord = [[margins_coord[0], margins_coord[2]], [margins_coord[1], margins_coord[3]]]
+
+    return margins_coord, margins

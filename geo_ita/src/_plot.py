@@ -33,7 +33,7 @@ import geo_ita.src.config as cfg
 from geo_ita.src._data import get_df_comuni, get_df_province, get_df_regioni
 from geo_ita.src._data_enrichment import (
     _clean_denom_text_value, _clean_denomination_text, _get_tag_anag, _code_or_desc,
-    AddGeographicalInfo, __create_geo_dataframe, __find_coord_columns, __find_coordinates_system
+    AddGeographicalInfo, _create_geo_dataframe, __find_coord_columns, __find_coordinates_system
 )
 
 HEADER_BOKEH = {cfg.LEVEL_COMUNE: 'Comune',
@@ -1004,7 +1004,7 @@ def plot_point_map_interactive(df0: pd.DataFrame,
     if (latitude_columns is None) or (longitude_columns is None):
         flag_coord_found, latitude_columns, longitude_columns = __find_coord_columns(df0)
 
-    df = __create_geo_dataframe(df0, lat_tag=latitude_columns, long_tag=longitude_columns)
+    df = _create_geo_dataframe(df0, lat_tag=latitude_columns, long_tag=longitude_columns)
     if latitude_columns is None:
         latitude_columns = "geo_ita_lat"
         longitude_columns = "geo_ita_lon"
@@ -1108,56 +1108,7 @@ def plot_point_map_interactive(df0: pd.DataFrame,
     return p
 
 
-def _get_margins(filter_comune=None,
-                 filter_provincia=None,
-                 filter_regione=None,
-                 epsg=3857):
-    filter_comune = _check_filter(filter_comune)
-    filter_provincia = _check_filter(filter_provincia)
-    filter_regione = _check_filter(filter_regione)
-    if filter_comune is not None:
-        filter_comune = [_clean_denom_text_value(a) for a in filter_comune]
-        code = _code_or_desc(filter_comune)
-        shape = _get_shape_from_level(cfg.LEVEL_COMUNE)
-        tag_shape = _get_tag_anag(code, cfg.LEVEL_COMUNE)
-        shape[tag_shape] = _clean_denomination_text(shape[tag_shape])
-        margins = shape[shape[tag_shape].isin(filter_comune)]
-        margins = gpd.GeoDataFrame(margins, geometry="geometry")
-    elif filter_provincia is not None:
-        filter_provincia = [_clean_denom_text_value(a) for a in filter_provincia]
-        code = _code_or_desc(filter_provincia)
-        shape = _get_shape_from_level(cfg.LEVEL_PROVINCIA)
-        tag_shape = _get_tag_anag(code, cfg.LEVEL_PROVINCIA)
-        shape[tag_shape] = _clean_denomination_text(shape[tag_shape])
-        margins = shape[shape[tag_shape].isin(filter_provincia)]
-        margins = gpd.GeoDataFrame(margins, geometry="geometry")
-    elif filter_regione is not None:
-        filter_regione = [_clean_denom_text_value(a) for a in filter_regione]
-        code = _code_or_desc(filter_regione)
-        shape = _get_shape_from_level(cfg.LEVEL_REGIONE)
-        tag_shape = _get_tag_anag(code, cfg.LEVEL_REGIONE)
-        shape[tag_shape] = _clean_denomination_text(shape[tag_shape])
-        margins = shape[shape[tag_shape].isin(filter_regione)]
-        margins = gpd.GeoDataFrame(margins, geometry="geometry")
-    else:
-        margins = _get_shape_from_level(cfg.LEVEL_REGIONE)
-        margins["key"] = "Italia"
-        margins = gpd.GeoDataFrame(margins, geometry="geometry")
-        margins = margins.dissolve(by='key')
-    if len(margins) == 0:
-        raise Exception("Unable to find the filter.")
-    else:
-        margins = margins[["geometry"]]
-        margins.crs = {'init': "epsg:32632"}
-        margins = margins.to_crs({'init': f'epsg:{epsg}'})
-        margins_coord = margins["geometry"].values
-        margins_coord = (min([margins_coord[i].bounds[0] for i in range(len(margins_coord))]),
-                       min([margins_coord[i].bounds[1] for i in range(len(margins_coord))]),
-                       max([margins_coord[i].bounds[2] for i in range(len(margins_coord))]),
-                       max([margins_coord[i].bounds[3] for i in range(len(margins_coord))]))
-        margins_coord = [[margins_coord[0], margins_coord[2]], [margins_coord[1], margins_coord[3]]]
 
-    return margins_coord, margins
 
 
 def _filter_margins(df, margins, long_tag=None, lat_tag=None):
@@ -1199,7 +1150,7 @@ def plot_kernel_density_estimation(df0: pd.DataFrame,
                                    save_in_path: Union[str, Path, None] = None,
                                    dpi: int = 100):
 
-    df = __create_geo_dataframe(df0, lat_tag=latitude_columns, long_tag=longitude_columns)
+    df = _create_geo_dataframe(df0, lat_tag=latitude_columns, long_tag=longitude_columns)
     coord_system_input = df.crs.to_epsg()
 
     shape_list = []
@@ -1314,7 +1265,7 @@ def plot_kernel_density_estimation_interactive(df0: pd.DataFrame,
     margins, shape = _get_margins(filter_comune=filter_comune,
                                   filter_provincia=filter_provincia,
                                   filter_regione=filter_regione)
-    df = __create_geo_dataframe(df0, lat_tag=latitude_columns, long_tag=longitude_columns)
+    df = _create_geo_dataframe(df0, lat_tag=latitude_columns, long_tag=longitude_columns)
     df = df.to_crs({'init': 'epsg:3857'})
     if filter_regione or filter_comune or filter_provincia:
         df = gpd.tools.sjoin(df, shape, op='within')

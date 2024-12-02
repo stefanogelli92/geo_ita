@@ -1,11 +1,12 @@
 import logging
 import os
+from enum import Enum
 from pathlib import Path
 from typing import Union, Optional
 
 from bokeh.models import (
     ColumnDataSource, DataTable, TableColumn, HTMLTemplateFormatter, CategoricalColorMapper,
-    LabelSet, Label, WheelZoomTool, CustomJS, TabPanel, Tabs, TextInput, HoverTool
+    LabelSet, Label, WheelZoomTool, CustomJS, TabPanel, Tabs, TextInput, HoverTool, Legend, LegendItem
 )
 from bokeh.plotting import save, figure
 from bokeh.io import output_file, show
@@ -16,15 +17,13 @@ import numpy as np
 from shapely import Point
 import xyzservices.providers as xyz
 
-from geo_ita.src._data_enrichment import AddGeographicalInfo, get_city_from_coordinates
-from geo_ita.src.utils import GeoLevel, CodeLevel, infer_geographical_category, get_tag_registry, test_column_in_dataframe
+from geo_ita.src._data_enrichment import AddGeographicalInfo, get_city_from_coordinates, _create_geo_dataframe, _get_margins
+from geo_ita.src.utils import GeoLevel, CodeLevel, infer_geographical_category, get_tag_registry, \
+    test_column_in_dataframe, Check
 import geo_ita.src.config as cfg
 
 log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
-
-from pyproj import Proj, transform
-inProj, outProj = Proj(init='epsg:4326'), Proj(init='epsg:3857')
 
 
 class GeoDataQuality:
@@ -79,10 +78,10 @@ class GeoDataQuality:
 
     @validate
     def set_latitude_longitude_tag(
-        self,
-        longitude_column: Optional[str] = None,
-        latitude_column: Optional[str] = None,
-        geometry_column: Optional[str] = None,
+            self,
+            longitude_column: Optional[str] = None,
+            latitude_column: Optional[str] = None,
+            geometry_column: Optional[str] = None,
     ):
         if longitude_column is not None:
             test_column_in_dataframe(self.original_df, latitude_column)
@@ -92,8 +91,10 @@ class GeoDataQuality:
 
         # Create point column
         if longitude_column is not None:
-            self.original_df[self.POINT_COLUMN + "_x"] = pd.to_numeric(self.original_df[longitude_column], errors="coerce")
-            self.original_df[self.POINT_COLUMN + "_y"] = pd.to_numeric(self.original_df[latitude_column], errors="coerce")
+            self.original_df[self.POINT_COLUMN + "_x"] = pd.to_numeric(self.original_df[longitude_column],
+                                                                       errors="coerce")
+            self.original_df[self.POINT_COLUMN + "_y"] = pd.to_numeric(self.original_df[latitude_column],
+                                                                       errors="coerce")
             self.original_df[self.POINT_COLUMN] = self.original_df.apply(
                 lambda row: Point(row[self.POINT_COLUMN + "_x"], row[self.POINT_COLUMN + "_y"]),
                 axis=1)
@@ -271,6 +272,8 @@ class GeoDataQuality:
 
         self._second_check(GeoLevel.COORDINATES)
 
+        # TODO try invert the coordinates
+
     @validate
     def start_check(self) -> None:
 
@@ -320,7 +323,7 @@ class GeoDataQuality:
         solved_list = [col for col in self.original_df.columns if self.CORRECTION_SUFFIX in col]
         self.original_df["solved"] = (self.original_df[solved_list].notnull()).sum(axis='columns')
         self.original_df["solved"] = (self.original_df["solved"] > 0) & (
-                    self.original_df["solved"] == self.original_df["check"])
+                self.original_df["solved"] == self.original_df["check"])
         self.original_df["check"] = self.original_df["check"] > 0
 
         n_tot = self.original_df.shape[0]
@@ -341,12 +344,77 @@ class GeoDataQuality:
     def get_results(self) -> pd.DataFrame:
         return self.original_df[self.original_df["check"]]
 
-    @staticmethod
-    def _create_header(width, background_color, text_color, title, subtitle):
-        height = 100 if subtitle is not None else 50
-        header = figure(x_range=(0, 1), y_range=(0, 1),
-                        width=width, height=height,
-                        tools="")
+    @validate
+    def plot_result(
+            self,
+            background_color: str = "white",
+            text_color: str = "black",
+            title: str = "Geographical DataQuality",
+            subtitle: str = None,
+            save_in_path: Union[str, Path] = None
+    ):
+        self._prepare_plot_data()
+        header = self._create_header(background_color, text_color, title, subtitle)
+        text_input = self._create_text_key_copy()
+        data_table, check_plot = self._create_data_table_and_check_plot(text_input)
+        perc_plot = self._create_perc_plot()
+        plot = column(perc_plot, row(data_table, check_plot))
+
+        if GeoLevel.COORDINATES in self.detail_level:
+            map_plot = self._create_map_plot()
+            tabs = [TabPanel(child=plot, title="Details"), TabPanel(child=map_plot, title="Map")]
+            plot = Tabs(tabs=tabs, tabs_location='left')
+
+        plot = column(header, text_input, plot)
+        self._save_plot(plot, save_in_path)
+
+    def _prepare_plot_data(self):
+        plot_data = self.original_df[self.original_df["check"]].copy()
+
+        # Filter only column needed
+        check_col = [a for a in plot_data.columns if self.CHECK_SUFFIX in a]
+        propose_col = [a for a in plot_data.columns if self.CORRECTION_SUFFIX in a]
+        original_columns = [v[0] for v in self.detail_level.values()]
+        cross_columns = [
+            f"{get_tag_registry(CodeLevel.DENOMINATION, list(self.detail_level.keys())[i])}_{list(self.detail_level.keys())[j]}"
+            for i in range(len(self.detail_level))
+            for j in range(i, len(self.detail_level))
+        ]
+        plot_data = plot_data[original_columns + check_col + propose_col + cross_columns + ["check", "solved"]]
+
+        plot_data["x"] = 0.5
+        plot_data["y"] = range(plot_data.shape[0])[::-1]
+        plot_data["y"] += 0.5
+        plot_data["selected_color"] = "transparent"
+        plot_data["selected_alpha"] = 1
+        plot_data["check_color"] = np.select(
+            [~plot_data["check"], plot_data["check"] & ~plot_data["solved"], plot_data["solved"]],
+            [Check.OK.value, Check.WARNING.value, Check.SOLVED.value],
+        )
+        if self.unique_key_column is None:
+            self.unique_key_column = "index"
+            plot_data = plot_data.reset_index().rename(columns={plot_data.index.name: self.unique_key_column})
+        plot_data[self.unique_key_column] = plot_data[self.unique_key_column].astype(str)
+
+        plot_data[propose_col] = plot_data[propose_col].fillna("")
+        if GeoLevel.COORDINATES in self.detail_level:
+            coord_column = self.detail_level[GeoLevel.COORDINATES][0]
+            # Create GeoDataframe
+            plot_data = _create_geo_dataframe(plot_data, geo_tag=coord_column)
+            plot_data["coordinates"] = plot_data[coord_column].apply(
+                lambda p: f"{p.x:.6f}-{p.y:.6f}" if p else None)
+            plot_data = plot_data.to_crs({'init': "epsg:3857"})
+            plot_data["longitudine_marcator"], plot_data[
+                "latitudine_marcator"] = plot_data.geometry.x, plot_data.geometry.y
+            plot_data = plot_data.to_crs({'init': "epsg:3857"})
+            plot_data.drop(columns=["geometry"], inplace=True)
+            plot_data = pd.DataFrame(plot_data)
+            plot_data.rename(columns={"coordinates": coord_column}, inplace=True)
+        self.plot_data = plot_data
+
+    def _create_header(self, background_color, text_color, title, subtitle):
+        height = 100 if subtitle else 50
+        header = figure(x_range=(0, 1), y_range=(0, 1), width=1000, height=height, tools="")
         header.background_fill_color = background_color
         header.xgrid.grid_line_color = None
         header.ygrid.grid_line_color = None
@@ -358,298 +426,145 @@ class GeoDataQuality:
         header.min_border_right = 0
         header.min_border_top = 0
         header.min_border_bottom = 0
-
         header.add_layout(
-            Label(x=0.005, y=.8, text=title,
-                  text_font_style="bold",
-                  text_font_size="20pt",
-                  text_baseline="top",
+            Label(x=0.005, y=.8, text=title, text_font_style="bold", text_font_size="20pt", text_baseline="top",
                   text_color=text_color))
-
-        if subtitle is not None:
+        if subtitle:
             header.add_layout(
-                Label(x=0.005, y=.4, text=subtitle,
-                      text_font_size="12pt",
-                      text_baseline="top",
-                      text_color=text_color))
+                Label(x=0.005, y=.4, text=subtitle, text_font_size="12pt", text_baseline="top", text_color=text_color))
         return header
 
-    def _create_map_plot(self, width, source_info):
-
-        margins = [[723576.6901562785, 2070542.52875489], [4355801.264971882, 5999391.278141545]]
-
-        map_plot = figure(x_range=(margins[0][0], margins[0][1]),
-                          y_range=(margins[1][0], margins[1][1]),
-                          x_axis_type="mercator", y_axis_type="mercator", width=width,
-                          tools='pan,tap,wheel_zoom')
-        map_plot.add_tile(xyz.CartoDB.Positron)
-        map_plot.xgrid.grid_line_color = None
-        map_plot.ygrid.grid_line_color = None
-        map_plot.yaxis.visible = False
-        map_plot.grid.visible = False
-        map_plot.toolbar.logo = None
-        map_plot.outline_line_color = None
-        map_plot.xaxis.major_tick_line_color = None
-        map_plot.xaxis.minor_tick_line_color = None
-        map_plot.xaxis.major_label_text_font_size = '0pt'
-
-        plot1 = map_plot.circle(x="longitudine_marcator", y="latitudine_marcator",
-                                size=7,
-                                fill_alpha="selected_alpha",
-                                line_color="gray", line_width=0.5, source=source_info)
-        # plot1 = map_plot.add_glyph(source_info, points)
-
-        tooltips = [(self.keys, "@" + self.keys)]
-        if self.nazione_tag is not None:
-            tooltips.append(("Nazione", "@" + self.nazione_tag))
-        if self.regioni_tag is not None:
-            tooltips.append(("Regione", "@" + self.regioni_tag))
-        if self.province_tag is not None:
-            tooltips.append(("Provincia", "@" + self.province_tag))
-        if self.comuni_tag is not None:
-            tooltips.append(("Comune", "@" + self.comuni_tag))
-
-        tooltips.append(
-            ("Coordinates", "(@" + self.latitude_tag + "{0,0.0000000}-@" + self.longitude_tag + "{0,0.0000000})"))
-
-        map_plot.add_tools(HoverTool(renderers=[plot1], tooltips=tooltips))
-
-        map_plot.toolbar.active_scroll = map_plot.select_one(WheelZoomTool)
-
-        return map_plot
-
     def _create_text_key_copy(self):
-        text_input = TextInput(value="", title=self.keys + ": ", width=200)
-        return text_input
+        return TextInput(value="", title=self.unique_key_column + ": ", width=200)
 
-    @validate
-    def plot_result(self, background_color: str = "white", text_color: str = "black",
-                    title: str = "Geographical DataQuality",
-                    subtitle: str = None,
-                    show_only_warning: bool = True,
-                    save_in_path: Union[str, Path] = None):
-        n_tot = self.original_df.shape[0]
-        width = 1000
-        width_check = 250
-        row_height = 30
-        perc_height = 50
-        ok_tag = "OK"
-        warning_tag = "Warning"
-        solved_tag = "Warning solved"
-        if show_only_warning:
-            source = self.original_df[self.original_df["check"]]
-        else:
-            source = self.original_df
-        n_plot = source.shape[0]
-        height = (n_plot + 1) * row_height
-        source["x"] = 0.5
-        source["y"] = range(n_plot)[::-1]
-        source["y"] += 0.5
-        source["check_color"] = ok_tag
-        source["selected_color"] = "transparent"
-        source["selected_alpha"] = 1
-        if self.latitude_tag:
-            source['longitudine_marcator'], source['latitudine_marcator'] = transform(inProj, outProj,
-                                                                                      source[
-                                                                                          self.longitude_tag].tolist(),
-                                                                                      source[
-                                                                                          self.latitude_tag].tolist())
-        pos = source["check"]
-        source.loc[pos, "check_color"] = warning_tag
-        pos = source["solved"]
-        source.loc[pos, "check_color"] = solved_tag
+    def _create_data_table_and_check_plot(self, text_input):
+        columns = self._create_table_columns()
+        self.height = (self.plot_data.shape[0] + 1) * 30
+        self.n_rows = self.plot_data.shape[0]
+        self.original_source = ColumnDataSource(self.plot_data)
+        self.source = ColumnDataSource(self.plot_data)
+        data_table = DataTable(source=self.source, columns=columns, fit_columns=True, selectable=True,
+                               sortable=False, editable=True, index_position=None, row_height=30,
+                               height=self.height, width=1000)
+        self.source.selected.js_on_change(
+            'indices',
+            CustomJS(args=dict(source=self.source,
+                               text=text_input), code="""
+                var indices = cb_obj.indices;
+                console.log(cb_obj)
+                if (indices.length > 0){{
+                    var current_value = text.value; 
+                    var pos = cb_obj.indices[0];
+                    console.log("Selected", pos) 
+                    var data = source.data;
 
-        if self.keys is None:
-            self.keys = "index"
-            source = source.reset_index().rename(columns={source.index.name: self.keys})
+                    var selected_value = data["{key}"][pos];
+                    if (current_value != selected_value){{
+                        for (var i = 0; i < data["{key}"].length; i++) {{
+                            data["selected_alpha"][i] = 0;
+                        }}
+                    }} else {{
+                        for (var i = 0; i < data["{key}"].length; i++) {{
+                            data["selected_alpha"][i] = 1;
+                        }}
+                    }}
+                    if (current_value == "") {{
+                        text.value = selected_value;
+                        data["selected_color"][pos] = "yellow";
+                        data["selected_alpha"][pos] = 1;
+                    }} else {{
+                        for (var i = 0; i < data["{key}"].length; i++) {{
+                            data["selected_color"][i] = "transparent";
+                        }}
+                        if (current_value != selected_value) {{
+                            text.value = selected_value;
+                            data["selected_color"][pos] = "yellow";
+                            data["selected_alpha"][pos] = 1;
+                        }} else {{
+                            text.value = "";
+                        }}
+                    }}
+                    source.change.emit();
+                }}
+                console.log("Ended")
+                cb_obj.indices = [];
+            """.format(key=self.unique_key_column))
+        )
+        check_plot = self._create_check_plot()
+        return data_table, check_plot
 
-        source[self.keys] = source[self.keys].astype(str)
+    def _create_table_columns(self):
+        columns = [TableColumn(field=self.unique_key_column, title=self.unique_key_column,
+                               formatter=HTMLTemplateFormatter(template=self._get_template()))]
+        for level, v in self.detail_level.items():
+            tag = get_tag_registry(CodeLevel.DENOMINATION, level)
+            # if level != GeoLevel.COORDINATES:
+            self._create_html_column(tag, v[0])
+            columns.append(TableColumn(field=v[0] + "_html", title=v[0],
+                                       formatter=HTMLTemplateFormatter(template=self._get_template(level, tag))))
+            # else:
+            #    columns.append(TableColumn(field=v[0], title=v[0],
+            #                               formatter=HTMLTemplateFormatter(template=self._get_template(level, tag))))
+        return columns
 
-        # source = source.where(pd.notnull(source), None)
-        propose_col = [a for a in source.columns if self.propose_tag in a]
-        source[propose_col] = source[propose_col].fillna("")
+    def _create_html_column(self, column, original_column):
+        pos = self.plot_data[column + self.CORRECTION_SUFFIX] != ""
+        original = self.plot_data[original_column].fillna("NaN").copy()
+        self.plot_data[original_column + "_html"] = np.where(pos,
+                                                             original + "||" + self.plot_data[
+                                                                 column + self.CORRECTION_SUFFIX],
+                                                             " ||" + original)
+        self.plot_data[original_column + "_html"] = self.plot_data[original_column + "_html"] + "||" + original + "||" + \
+                                                    self.plot_data[
+                                                        column + self.CORRECTION_SUFFIX]
 
-        col_list = [self.nazione_tag, self.regioni_tag, self.province_tag, self.comuni_tag]
-        col_list = [a for a in col_list if a is not None]
+        def add_html_detail(self, level):
+            tag = f"{column}_{level}"
+            if tag in self.plot_data.columns:
+                self.plot_data[original_column + "_html"] = self.plot_data[original_column + "_html"] + "||" + \
+                                                            self.plot_data[tag].fillna("-")
 
-        template = """
-               <div style="background:<%= 
-               (function colorfromint(){{
-                        return(selected_color)
-                            }}()) %>; 
-                   color: black">
-               <%= value %> 
-               </div>
-               """
-        formatter = HTMLTemplateFormatter(template=template)
-        columns = [TableColumn(field=self.keys, title=self.keys, formatter=formatter)]
+        for level in self.detail_level.keys():
+            add_html_detail(self, level)
+        return
 
-        tag_mapping = {self.nazione_tag: (None, None),
-                       self.regioni_tag: (self.regioni_result_tag, "Regione"),
-                       self.province_tag: (self.province_result_tag, "Provincia"),
-                       self.comuni_tag: (self.comuni_result_tag, "Comune")}
+    def _get_template(self, level=None, column=None):
+        if column:
+            return f"""
+        <div style="background:<%=
+            (function colorfromint(){{
+                if({column + self.CHECK_SUFFIX}){{
+                    if({column + self.CORRECTION_SUFFIX} != ""){{
+                        return("orange")
+                        }} else {{
+                        return("red")
+                    }}
+                }}
+            }}()) %>;
+            color: black">
+        <span href="#" data-toggle="tooltip" title="Original: <%= value.split('||')[2] %>\nSuggestion: <%= value.split('||')[3] %>{self._get_additional_tooltip(level)}">
+            <strike><%=  value.split("||")[0] %></strike> <%= value.split("||")[1] %>
+        </span>
+        </div>
+        """
+        return """
+        <div style="background:<%= selected_color %>; color: black">
+        <%= value %>
+        </div>
+        """
 
-        perc_data = []
-        legend_data = []
-        html_tag = "_html"
-        i = 1
-        for c in col_list:
-            n_check = (source[c + self.check_tag] & (source[c + self.propose_tag] == "")).sum()
-            perc_data.append([i + 0.8, 0.75, "{} ({}%)".format(n_check, int(round(n_check / n_tot * 100, 0)))])
-            n_propose = (source[c + self.propose_tag] != "").sum()
-            perc_data.append([i + 0.8, 0.25, "{} ({}%)".format(n_propose, int(round(n_propose / n_tot * 100, 0)))])
-            legend_data.append([i + 0.9, 0.75, warning_tag, c + self.check_tag])
-            legend_data.append([i + 0.9, 0.25, solved_tag, c + self.check_tag])
-            pos = source[c + self.propose_tag] != ""
-            # source[c].fillna("NaN", inplace=True)
-            original = source[c].fillna("NaN").copy()
-            source[c + html_tag] = np.where(pos,
-                                            original + "||" + source[c + self.propose_tag],
-                                            " ||" + original)
-            source[c + html_tag] = source[c + html_tag] + "||" + original + "||" + source[c + self.propose_tag]
-            tag, name = tag_mapping[c]
-            html_tooltip = ""
-            if tag is not None:
-                if tag + "_regione" in source.columns:
-                    html_tooltip += "\n{} found from regione: <%= value.split('||')[4] %>".format(name)
-                    source[c + html_tag] += "||" + source[tag + "_regione"].fillna("-")
-                else:
-                    source[c + html_tag] += "|| "
-                if tag + "_provincia" in source.columns:
-                    html_tooltip += "\n{} found from provincia: <%= value.split('||')[5] %>".format(name)
-                    source[c + html_tag] += "||" + source[tag + "_provincia"].fillna("-")
-                else:
-                    source[c + html_tag] += "|| "
-                if tag + "_comune" in source.columns:
-                    html_tooltip += "\n{} found from comune: <%= value.split('||')[6] %>".format(name)
-                    source[c + html_tag] += "||" + source[tag + "_comune"].fillna("-")
-                else:
-                    source[c + html_tag] += "|| "
-                if tag + "_coordinates" in source.columns:
-                    html_tooltip += "\n{} found from coordinates: <%= value.split('||')[7] %>".format(name)
-                    source[c + html_tag] += "||" + source[tag + "_coordinates"].fillna("-")
-                else:
-                    source[c + html_tag] += "|| "
-            template = """
-                        <div style="background:<%= 
-                            (function colorfromint(){{
-                                if({check}){{
-                                    if({propose} != ""){{
-                                        return("orange")
-                                        }} else {{
-                                        return("red")
-                                    }}
-                                }}
-                            }}()) %>; 
-                            color: black">
-                        <span href="#" data-toggle="tooltip" title="Original: <%= value.split('||')[2] %>\nSuggestion: <%= value.split('||')[3] %>{html_tooltip}">
-                            <strike><%=  value.split("||")[0] %></strike> <%= value.split("||")[1] %>
-                        </span>
-                        </div>
-                        """.format(check=c + self.check_tag,
-                                   propose=c + self.propose_tag,
-                                   html_tooltip=html_tooltip)
-            formatter = HTMLTemplateFormatter(template=template)
-            columns.append(TableColumn(field=c + html_tag, title=c, formatter=formatter))
-            i += 1
+    def _get_additional_tooltip(self, level):
+        additional_tooltip = ""
+        i = 4
+        for level2 in [GeoLevel.COUNTRY, GeoLevel.REGIONE, GeoLevel.PROVINCIA, GeoLevel.COMUNE]:
+            if (level2 in self.detail_level) & (level2 <= level):
+                additional_tooltip += f"\n{str(level).capitalize()} found from {self.detail_level[level2][0]}: <%= value.split('||')[{i}] %>"
+                i += 1
+        return additional_tooltip
 
-        if self.latitude_tag:
-            n_check = source["coordinates" + self.check_tag].sum()
-            perc_data.append([i + 0.8, 0.75, "{} ({}%)".format(n_check, int(round(n_check / n_tot * 100, 0)))])
-            legend_data.append([i + 0.9, 0.75, warning_tag, "coordinates" + self.check_tag])
-            i += 1
-            perc_data.append([i + 0.8, 0.75, "{} ({}%)".format(n_check, int(round(n_check / n_tot * 100, 0)))])
-            legend_data.append([i + 0.9, 0.75, warning_tag, "coordinates" + self.check_tag])
-            i += 1
-            template = """
-                        <div style="background:<%= 
-                            (function colorfromint(){{
-                                if({}){{
-                                    return("red")}}
-                                }}()) %>; 
-                            color: black"> 
-                        <%= value %>
-                        </div>
-                        """.format("coordinates" + self.check_tag)
-            formatter = HTMLTemplateFormatter(template=template)
-            columns.append(
-                TableColumn(field=self.latitude_tag, title=self.latitude_tag, formatter=formatter))
-            columns.append(
-                TableColumn(field=self.longitude_tag, title=self.longitude_tag, formatter=formatter))
-
-        header = self._create_header(width + width_check, background_color, text_color, title, subtitle)
-        text_input = self._create_text_key_copy()
-        column_drop = ["is_in_italy", self.regioni_tag + "_regione", self.regioni_tag + "_provincia",
-                       self.regioni_tag + "_comune", self.regioni_tag + "_coordinates",
-                       self.province_tag + "_provincia", self.province_tag + "_comune",
-                       self.province_tag + "_coordinates",
-                       self.comuni_tag + "_comune", self.comuni_tag + "_coordinates"]
-        column_drop = [a for a in column_drop if a in source.columns]
-        source = source.drop(column_drop, axis=1)
-        originalsource = ColumnDataSource(source)
-        source = ColumnDataSource(source)
-        data_table = DataTable(source=source,
-                               columns=columns,
-                               fit_columns=True,
-                               selectable=True,
-                               sortable=False,
-                               editable=True,
-                               index_position=None,
-                               row_height=row_height,
-                               height=height, width=width)
-
-        source.selected.js_on_change('indices',
-                                     CustomJS(args=dict(source=source,
-                                                        text=text_input), code="""
-                            var indices = cb_obj.indices;
-                            console.log(cb_obj)
-                            if (indices.length > 0){{
-
-                                var current_value = text.value; 
-                                var pos = cb_obj.indices[0];
-                                console.log("Selected", pos) 
-                                var data = source.data;
-
-                                var selected_value = data["{key}"][pos];
-                                if (current_value != selected_value){{
-                                    for (var i = 0; i < data["{key}"].length; i++) {{
-                                        data["selected_alpha"][i] = 0;
-                                    }}
-                                }} else {{
-                                    for (var i = 0; i < data["{key}"].length; i++) {{
-                                        data["selected_alpha"][i] = 1;
-                                    }}
-                                }}
-                                if (current_value == "") {{
-                                    text.value = selected_value;
-                                    data["selected_color"][pos] = "yellow";
-                                    data["selected_alpha"][pos] = 1;
-                                }} else {{
-                                    for (var i = 0; i < data["{key}"].length; i++) {{
-                                        data["selected_color"][i] = "transparent";
-                                    }}
-                                    if (current_value != selected_value) {{
-                                        text.value = selected_value;
-                                        data["selected_color"][pos] = "yellow";
-                                        data["selected_alpha"][pos] = 1;
-                                    }} else {{
-                                        text.value = "";
-                                    }}
-                                }}
-                                source.change.emit();
-                            }}
-                            console.log("Ended")
-                            cb_obj.indices = [];
-                        """.format(key=self.keys))
-                                     )
-
-        check_plot = figure(
-            height=height,
-            width=width_check,
-            x_range=(0, 1),
-            y_range=(0, n_plot),
-            x_axis_location="above",
-            tools='')
+    def _create_check_plot(self):
+        check_plot = figure(height=self.height, width=250, x_range=(0, 1), y_range=(0, self.n_rows),
+                            x_axis_location="above", tools='')
         check_plot.xgrid.grid_line_color = None
         check_plot.ygrid.grid_line_color = None
         check_plot.yaxis.visible = False
@@ -659,20 +574,36 @@ class GeoDataQuality:
         check_plot.xaxis.major_label_text_font_size = '10pt'
         check_plot.xaxis.ticker = [0.5]
         check_plot.xaxis.major_label_overrides = {0.5: "Check"}
-
+        color_mapper = CategoricalColorMapper(
+            factors=[Check.OK.value, Check.WARNING.value, Check.SOLVED.value],
+            palette=["green", "red", "orange"])
         check_plot.circle(x="x", y="y", size=9, line_width=0.5,
-                          fill_color={"field": "check_color",
-                                      "transform": CategoricalColorMapper(factors=[ok_tag, solved_tag, warning_tag],
-                                                                          palette=["green", "orange", "red"])},
-                          source=source, legend_label="check_color")
-        check_plot.add_layout(check_plot.legend[0], 'right')
+                          color={'field': 'check_color', 'transform': color_mapper}, source=self.source,
+                          )
+        legend_data = {
+            'category': [Check.OK.value, Check.WARNING.value, Check.SOLVED.value],
+            'color': ["green", "red", "orange"],
+            'alpha': [1, 1, 1],
+            'x': [1, 2, 3],
+            'y': [-1, -1, -1],
+        }
+        legend_source = ColumnDataSource(legend_data)
 
-        perc_plot = figure(
-            height=perc_height,
-            width=width,
-            x_range=(0, i),
-            y_range=(0, 1),
-            tools='tap')
+        legend_renderers = check_plot.circle(
+            x='x', y='y', source=legend_source,
+            size=10, color='color', alpha='alpha',
+        )
+
+        # Creazione degli elementi della legenda
+        legend = Legend(items=[
+            LegendItem(label=dict(field="category"), renderers=[legend_renderers])
+        ])
+        check_plot.add_layout(legend, 'right')
+        return check_plot
+
+    def _create_perc_plot(self, ):
+        perc_data, legend_data = self._prepare_perc_and_legend_data()
+        perc_plot = figure(height=50, width=1000, x_range=(0, len(self.detail_level)), y_range=(0, 1), tools='tap')
         perc_plot.title.text_font_size = '16pt'
         perc_plot.xgrid.grid_line_color = None
         perc_plot.ygrid.grid_line_color = None
@@ -685,106 +616,153 @@ class GeoDataQuality:
         perc_plot.xaxis.minor_tick_line_color = None
         perc_plot.xaxis.major_label_text_font_size = '0pt'
         perc_plot.toolbar_location = None
-        legend_data = np.array(legend_data)
-        legend_data = ColumnDataSource(dict(
-            x=legend_data[:, 0].astype(float),
-            y=legend_data[:, 1].astype(float),
-            color=legend_data[:, 2],
-            column=legend_data[:, 3],
-            alpha=np.ones(legend_data.shape[0]) * 0.5))
+        legend_data = ColumnDataSource(
+            dict(x=legend_data[:, 0].astype(float), y=legend_data[:, 1].astype(float), color=legend_data[:, 2],
+                 column=legend_data[:, 3], alpha=np.ones(legend_data.shape[0]) * 0.5))
+        legend_data.selected.js_on_change(
+            'indices',
+            CustomJS(args=dict(source=self.source,
+                               original_source=self.original_source,
+                               legend_source=legend_data), code=f"""
+            var indices = cb_obj.indices;
+            if (indices.length > 0){{
+                var df_legend = legend_source.data;
+                var pos = cb_obj.indices[0];
+                console.log("Selected", pos) 
+                var data = source.data;
+                var column_selected = df_legend["column"][pos];
+                var color_selected = df_legend["y"][pos];
+                var previous_selected = (df_legend["alpha"][pos] == 1);
+                console.log("Previous selected", previous_selected) 
+                var df0 = original_source.data;
+                var df = source.data;
+                if (previous_selected){{
+                    df_legend["alpha"][pos] = 0.5
+                    for (var key in df0) {{
+                        df[key] = [];
+                        for (var i = 0; i < df0[key].length; ++i) {{
+                            df[key].push(df0[key][i]);
+                        }}
+                    }}
+                }} else {{
+                    df_legend["alpha"][pos] = 1
+                    for (var key in df0) {{
+                        var y_val = df0[key].length + 0.5
+                        df[key] = [];
+                        for (i = 0; i < df0[key].length;i++){{
+                            if (column_selected.includes("coordinates")) {{
+                                if (df0[column_selected][i]){{
+                                    if (key == "y"){{
+                                        y_val = y_val - 1
+                                        df[key].push(y_val);
+                                    }} else {{
+                                        df[key].push(df0[key][i]); 
+                                    }}
+                                }}
+                            }} else if (df0[column_selected][i] & (color_selected>0.5) & 
+                            (df0[column_selected.replace("{self.CHECK_SUFFIX}", "{self.CORRECTION_SUFFIX}")][i]=="")) {{
+                                if (key == "y"){{
+                                    y_val = y_val - 1
+                                    df[key].push(y_val);
+                                }} else {{
+                                    df[key].push(df0[key][i]); 
+                                }}
+                            }} else if (df0[column_selected][i] & (color_selected<=0.5) & 
+                            (df0[column_selected.replace("{self.CHECK_SUFFIX}", "{self.CORRECTION_SUFFIX}")][i]!="")) {{
+                                if (key == "y"){{
+                                    y_val = y_val - 1
+                                    df[key].push(y_val);
+                                }} else {{
+                                    df[key].push(df0[key][i]); 
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+                source.change.emit();
+                legend_source.change.emit();
+            }}
+            console.log("Ended")
+            cb_obj.indices = [];
+            """))
+        perc_plot.circle(x="x", y="y", size=9, line_width=0.5, fill_color={"field": "color",
+                                                                           "transform": CategoricalColorMapper(
+                                                                               factors=[Check.WARNING.value,
+                                                                                        Check.SOLVED.value],
+                                                                               palette=["red", "orange"])},
+                         fill_alpha="alpha", source=legend_data)
+        perc_data = ColumnDataSource(
+            dict(x=perc_data[:, 0].astype(float), y=perc_data[:, 1].astype(float), perc=perc_data[:, 2]))
+        perc_plot.add_layout(
+            LabelSet(x="x", y="y", text="perc", source=perc_data, text_align="right", y_offset=0, text_font_size="12px",
+                     text_baseline="middle"))
+        return perc_plot
 
-        legend_data.selected.js_on_change('indices',
-                                          CustomJS(args=dict(source=source,
-                                                             original_source=originalsource,
-                                                             legend_source=legend_data), code="""
-                                    var indices = cb_obj.indices;
-                                    if (indices.length > 0){
-                                        var df_legend = legend_source.data;
-                                        var pos = cb_obj.indices[0];
-                                        console.log("Selected", pos) 
-                                        var data = source.data;
-                                        var column_selected = df_legend["column"][pos];
-                                        var color_selected = df_legend["y"][pos];
-                                        var previus_selected = (df_legend["alpha"][pos] == 1);
-                                        console.log("Previus selected", previus_selected) 
-                                        var df0 = original_source.data;
-                                        var df = source.data;
-                                        if (previus_selected){
-                                            df_legend["alpha"][pos] = 0.5
-                                            for (var key in df0) {
-                                                df[key] = [];
-                                                for (var i = 0; i < df0[key].length; ++i) {
-                                                    df[key].push(df0[key][i]);
-                                                }
-                                            }
-                                        } else {
-                                            df_legend["alpha"][pos] = 1
-                                            for (var key in df0) {
-                                                var y_val = df0[key].length + 0.5
-                                                df[key] = [];
-                                                for (i = 0; i < df0[key].length;i++){
-                                                    if (column_selected.includes("coordinates")) {
-                                                        if (df0[column_selected][i]){
-                                                            if (key == "y"){
-                                                                y_val = y_val - 1
-                                                                df[key].push(y_val);
-                                                            } else {
-                                                                df[key].push(df0[key][i]); 
-                                                            }
-                                                        }
-                                                    } else if (df0[column_selected][i] & (color_selected>0.5) & (df0[column_selected.replace("_check", "_suggestion")][i]=="")) {
-                                                        if (key == "y"){
-                                                            y_val = y_val - 1
-                                                            df[key].push(y_val);
-                                                        } else {
-                                                            df[key].push(df0[key][i]); 
-                                                        }
-                                                    } else if (df0[column_selected][i] & (color_selected<=0.5) & (df0[column_selected.replace("_check", "_suggestion")][i]!="")) {
-                                                        if (key == "y"){
-                                                            y_val = y_val - 1
-                                                            df[key].push(y_val);
-                                                        } else {
-                                                            df[key].push(df0[key][i]); 
-                                                        }
-                                                    }
-                                                }
-                                            }
+    def _prepare_perc_and_legend_data(self):
+        perc_data = []
+        legend_data = []
+        i = 0
+        for level, v in self.detail_level.items():
+            tag = get_tag_registry(CodeLevel.DENOMINATION, level)
+            check_pos = self.plot_data[tag + self.CHECK_SUFFIX]
+            if level != GeoLevel.COORDINATES:
+                check_pos = check_pos & (self.plot_data[tag + self.CORRECTION_SUFFIX] == "")
+            n_check = check_pos.sum()
+            perc_data.append(
+                [i + 0.8, 0.75, "{} ({}%)".format(n_check, int(round(n_check / self.plot_data.shape[0] * 100, 0)))])
+            legend_data.append([i + 0.9, 0.75, Check.WARNING.value, tag + self.CHECK_SUFFIX])
+            if level != GeoLevel.COORDINATES:
+                n_propose = (self.plot_data[tag + self.CORRECTION_SUFFIX] != "").sum()
+                perc_data.append(
+                    [i + 0.8, 0.25,
+                     "{} ({}%)".format(n_propose, int(round(n_propose / self.plot_data.shape[0] * 100, 0)))])
+                legend_data.append([i + 0.9, 0.25, Check.SOLVED.value, tag + self.CHECK_SUFFIX])
+            i += 1
+        return np.array(perc_data), np.array(legend_data)
 
-                                        }
-                                        source.change.emit();
-                                        legend_source.change.emit();
-                                    }
-                                    console.log("Ended")
-                                    cb_obj.indices = [];
-                                    """))
-        perc_plot.circle(x="x", y="y", size=9, line_width=0.5,
-                         fill_color={"field": "color",
-                                     "transform": CategoricalColorMapper(factors=[warning_tag, solved_tag],
-                                                                         palette=["red", "orange"])},
-                         fill_alpha="alpha",
-                         source=legend_data)
+    def _create_map_plot(self):
+        margins, shape = _get_margins()
 
-        perc_data = np.array(perc_data)
-        perc_data = ColumnDataSource(dict(
-            x=perc_data[:, 0].astype(float),
-            y=perc_data[:, 1].astype(float),
-            perc=perc_data[:, 2]))
+        map_plot = figure(x_range=(margins[0][0], margins[0][1]),
+                          y_range=(margins[1][0], margins[1][1]),
+                          x_axis_type="mercator", y_axis_type="mercator", width=1250, tools='pan,tap,wheel_zoom')
+        map_plot.add_tile(xyz.CartoDB.Positron)
+        map_plot.xgrid.grid_line_color = None
+        map_plot.ygrid.grid_line_color = None
+        map_plot.yaxis.visible = False
+        map_plot.grid.visible = False
+        map_plot.toolbar.logo = None
+        map_plot.outline_line_color = None
+        map_plot.xaxis.major_tick_line_color = None
+        map_plot.xaxis.minor_tick_line_color = None
+        map_plot.xaxis.major_label_text_font_size = '0pt'
+        map_plot.toolbar_location = None
+        color_mapper = CategoricalColorMapper(
+            factors=[Check.OK.value, Check.WARNING.value, Check.SOLVED.value],
+            palette=["green", "red", "orange"])
+        plot1 = map_plot.circle(x="longitudine_marcator", y="latitudine_marcator", size=7, fill_alpha="selected_alpha",
+                                line_color="gray", line_width=0.5, source=self.source, legend_field="check_color",
+                                color={'field': 'check_color', 'transform': color_mapper})
+        tooltips = [(self.unique_key_column, "@" + self.unique_key_column)]
+        if GeoLevel.COUNTRY in self.detail_level:
+            tooltips.append(("Nazione", "@" + self.detail_level[GeoLevel.COUNTRY][0]))
+        if GeoLevel.REGIONE in self.detail_level:
+            tooltips.append(("Regione", "@" + self.detail_level[GeoLevel.REGIONE][0]))
+        if GeoLevel.PROVINCIA in self.detail_level:
+            tooltips.append(("Provincia", "@" + self.detail_level[GeoLevel.PROVINCIA][0]))
+        if GeoLevel.COMUNE in self.detail_level:
+            tooltips.append(("Comune", "@" + self.detail_level[GeoLevel.COMUNE][0]))
+        tooltips.append(("Coordinates", "@" + self.detail_level[GeoLevel.COORDINATES][0]))
+        map_plot.add_tools(HoverTool(renderers=[plot1], tooltips=tooltips))
+        map_plot.toolbar.active_scroll = map_plot.select_one(WheelZoomTool)
+        return map_plot
 
-        image_perc = LabelSet(x="x", y="y", text="perc", source=perc_data, text_align="right", y_offset=0,
-                              text_font_size="12px", text_baseline="middle")
-        perc_plot.add_layout(image_perc)
-
-        plot = column(perc_plot, row(data_table, check_plot))
-        if self.latitude_tag:
-            map_plot = self._create_map_plot(width + width_check, source)
-            tabs = [TabPanel(child=plot, title="Details"), TabPanel(child=map_plot, title="Map")]
-            plot = Tabs(tabs=tabs, tabs_location='left')
-
-        plot = column(header, text_input, plot)
-
+    def _save_plot(self, plot, save_in_path):
         if save_in_path:
             output_file(save_in_path, mode='inline')
             save(plot)
-            os.startfile(save_in_path)
         else:
-            show(plot)
+            temp_path = os.path.join(os.path.expanduser("~"), "temp_plot.html")
+            output_file(temp_path, mode='inline')
+            save(plot)
+            os.startfile(temp_path)
