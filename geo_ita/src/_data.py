@@ -297,7 +297,7 @@ def _calculate_area_from_shape(df):
         df, geometry="geometry"
     )
     df.crs = {'init': "epsg:32632"}
-    df[cfg.TAG_SUPERFICIE] = df["geometry"].area
+    df[cfg.TAG_SUPERFICIE] = df["geometry"].area / 10 ** 6  # Convert to km2
     return pd.DataFrame(df)
 
 

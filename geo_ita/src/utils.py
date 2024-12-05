@@ -5,6 +5,7 @@ from typing import List, Union
 import numpy as np
 import pandas as pd
 import unidecode
+from matplotlib.colors import LinearSegmentedColormap
 
 import geo_ita.src.config as cfg
 
@@ -47,9 +48,7 @@ class GeoLevel(Enum):
         return NotImplemented
 
 
-simplify_values = {GeoLevel.REGIONE: 500,
-                   GeoLevel.PROVINCIA: 500,
-                   GeoLevel.COMUNE: 250}
+
 
 
 class CodeLevel(Enum):
@@ -166,3 +165,28 @@ def ensure_list(value, default=None):
         value = [value]
     return value
 
+
+def _human_format(num):
+    # Show float number in more readable format
+    num = float('{:.2g}'.format(num))
+    magnitude = 0
+    while abs(num) >= 1000:
+        magnitude += 1
+        num /= 1000.0
+    return '{}{}'.format('{:f}'.format(num).rstrip('0').rstrip('.'), ['', 'K', 'M', 'B', 'T'][magnitude])
+
+
+def _truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
+    new_cmap = LinearSegmentedColormap.from_list(
+        'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
+        cmap(np.linspace(minval, maxval, n)))
+    return new_cmap
+
+
+def _linear_colormap(color_name1="white", color_name2=None, minval=0, maxval=1):
+    # Create a 2 color linear map
+    if color_name2 is None:
+        color_name2 = "blue"
+    cmap = _truncate_colormap(LinearSegmentedColormap.from_list("", [color_name1, color_name2]), minval=minval,
+                              maxval=maxval)
+    return cmap

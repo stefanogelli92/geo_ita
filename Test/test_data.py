@@ -17,6 +17,16 @@ class TestData(unittest.TestCase):
         self.logger = logging.getLogger(self.__class__.__name__)
         logging.basicConfig(level=logging.INFO)
 
+    def test_update_data_istat(self):
+        logging.basicConfig(level=logging.INFO)
+        update_data_istat(year=2022)
+        df = get_df_comuni()
+        n_population_2022 = 59019317.0
+        self.assertEqual(n_population_2022, df[cfg.TAG_POPOLAZIONE].sum())
+        update_data_istat()
+        df = get_df_comuni()
+        self.assertNotEqual(n_population_2022, df[cfg.TAG_POPOLAZIONE].sum())
+
     def check_dataframe(self, df, non_empty_columns, numeric_columns=[]):
         self.assertTrue(isinstance(df, pd.DataFrame))
         self.assertGreater(df.shape[0], 0)
@@ -64,23 +74,13 @@ class TestData(unittest.TestCase):
         self.assertTrue(isinstance(result, list))
         self.assertGreater(len(result), 0)
 
-    def xtest_download_high_density_population_df(self):
+    def test_download_high_density_population_df(self):
         remove_high_resolution_population_density_file()
         df = get_high_resolution_population_density_df()
         del df
         df = get_high_resolution_population_density_df()
         self.assertTrue(isinstance(df, pd.DataFrame))
         self.assertGreater(df.shape[0], 0)
-
-    def test_update_data_istat(self):
-        logging.basicConfig(level=logging.INFO)
-        update_data_istat(year=2022)
-        df = get_df_comuni()
-        n_population_2022 = 59019317.0
-        self.assertEqual(n_population_2022, df[cfg.TAG_POPOLAZIONE].sum())
-        update_data_istat()
-        df = get_df_comuni()
-        self.assertNotEqual(n_population_2022, df[cfg.TAG_POPOLAZIONE].sum())
 
 
 if __name__ == '__main__':

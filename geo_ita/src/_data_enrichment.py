@@ -268,6 +268,11 @@ class AddGeographicalInfo:
                 "You can distinguish them only by using another geographic information (ex.: provincia or regione). "
                 "If you want to identify the right comune add provincia or regione detail or homonym comuni will be "
                 "ignored.")
+            registry_column_detail = get_tag_registry(CodeLevel.SIGLA, GeoLevel.PROVINCIA)
+            comuni_homonym_df["key"] = comuni_homonym_df[cfg.TAG_COMUNE] + " " + comuni_homonym_df[
+                registry_column_detail]
+            self.istat_registry = self._split_comuni_homonym(self.istat_registry, registry_column_detail,
+                                                             comuni_homonym_df)
             return
         log.info(f"The column {detail_column} will be used in order to found the right comune.")
         comuni_homonym_df["key"] = comuni_homonym_df[cfg.TAG_COMUNE] + " " + comuni_homonym_df[registry_column_detail]
