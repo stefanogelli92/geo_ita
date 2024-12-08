@@ -14,7 +14,7 @@ import pandas as pd
 import geopandas as gpd
 from pandas.api.types import is_numeric_dtype, is_string_dtype
 from bokeh.palettes import (
-    Blues9, Greens9, Reds9, Greys9, Purples9, Oranges9, Category10, Category20, RdYlGn11
+    Blues9, Greens9, Reds9, Greys9, Purples9, Oranges9, Category10, Category20, RdYlGn11, Viridis256
 )
 from bokeh.plotting import save, figure
 from bokeh.layouts import column, row
@@ -31,6 +31,7 @@ from geo_ita.src._data import get_df
 from geo_ita.src._data_enrichment import (
     _clean_denomination_text, AddGeographicalInfo, _create_geo_dataframe, _get_margins
 )
+#from geo_ita.src._density import SpatialDensity
 from geo_ita.src.utils import infer_geographical_category, get_tag_registry, ensure_list, GeoLevel, CodeLevel, \
     clean_denomination_text_value, _linear_colormap, _human_format
 
@@ -43,156 +44,156 @@ PLOT_VALUE_COLUMN = "geo_ita_value_plot"
 
 @validate
 def plot_choropleth_map_regionale(
-        df: pd.DataFrame,
-        regione_tag: str,
-        value_tag: str,
-        **kwargs,
+    df: pd.DataFrame,
+    regione_column: str,
+    color_column: str,
+    **kwargs,
 ):
     """
     Wrapper for regioni choropleth map plotting.
 
     Args:
         df (pd.DataFrame): DataFrame containing the data to plot.
-        regione_tag (str): Column name in `df` with regione identifiers.
-        value_tag (str): Column name in `df` with values to visualize.
+        regione_column (str): Column name in `df` with regione identifiers.
+        color_column (str): Column name in `df` with values to visualize.
         kwargs: Additional arguments passed to the generic `plot_choropleth_map`.
 
     Returns:
         None
     """
-    _create_choropleth_map(df, regione_tag, value_tag, GeoLevel.REGIONE, interactive=False, **kwargs)
+    _create_choropleth_map(df, regione_column, color_column, GeoLevel.REGIONE, interactive=False, **kwargs)
 
 
 @validate
 def plot_choropleth_map_provinciale(
-        df: pd.DataFrame,
-        provincia_tag: str,
-        value_tag: str,
-        **kwargs,
+    df: pd.DataFrame,
+    provincia_column: str,
+    color_column: str,
+    **kwargs,
 ):
     """
     Wrapper for province choropleth map plotting.
 
     Args:
        df (pd.DataFrame): DataFrame containing the data to plot.
-       provincia_tag (str): Column name in `df` with provincia identifiers.
-       value_tag (str): Column name in `df` with values to visualize.
+       provincia_column (str): Column name in `df` with provincia identifiers.
+       color_column (str): Column name in `df` with values to visualize.
        kwargs: Additional arguments passed to the generic `plot_choropleth_map`.
 
     Returns:
        None
     """
-    _create_choropleth_map(df, provincia_tag, value_tag, GeoLevel.PROVINCIA, interactive=False, **kwargs)
+    _create_choropleth_map(df, provincia_column, color_column, GeoLevel.PROVINCIA, interactive=False, **kwargs)
 
 
 @validate
 def plot_choropleth_map_comunale(
-        df: pd.DataFrame,
-        comune_tag: str,
-        value_tag: str,
-        **kwargs
+    df: pd.DataFrame,
+    comune_column: str,
+    color_column: str,
+    **kwargs
 ):
     """
     Wrapper for comuni choropleth map plotting.
 
     Args:
       df (pd.DataFrame): DataFrame containing the data to plot.
-      comune_tag (str): Column name in `df` with comune identifiers.
-      value_tag (str): Column name in `df` with values to visualize.
+      comune_column (str): Column name in `df` with comune identifiers.
+      color_column (str): Column name in `df` with values to visualize.
       kwargs: Additional arguments passed to the generic `plot_choropleth_map`.
 
     Returns:
       None
     """
-    _create_choropleth_map(df, comune_tag, value_tag, GeoLevel.COMUNE, interactive=False, **kwargs)
+    _create_choropleth_map(df, comune_column, color_column, GeoLevel.COMUNE, interactive=False, **kwargs)
 
 
 @validate
 def plot_choropleth_map_comunale_interactive(
-        df: pd.DataFrame,
-        comune_tag: str,
-        values_tag: Union[str, list, dict],
-        **kwargs
+    df: pd.DataFrame,
+    comune_column: str,
+    color_columns: Union[str, list, dict],
+    **kwargs
 ):
     """
     Wrapper for comuni choropleth map plotting.
 
     Args:
       df (pd.DataFrame): DataFrame containing the data to plot.
-      comune_tag (str): Column name in `df` with comune identifiers.
-      values_tag (Union[str, list, dict]): Columns name in `df` with values to visualize.
+      comune_column (str): Column name in `df` with comune identifiers.
+      color_columns (Union[str, list, dict]): Columns name in `df` with values to visualize.
       kwargs: Additional arguments passed to the generic `plot_choropleth_map`.
 
     Returns:
       None
     """
-    _create_choropleth_map(df, comune_tag, values_tag, GeoLevel.COMUNE, interactive=True, **kwargs)
+    _create_choropleth_map(df, comune_column, color_columns, GeoLevel.COMUNE, interactive=True, **kwargs)
 
 
 @validate
 def plot_choropleth_map_provinciale_interactive(
-        df: pd.DataFrame,
-        provincia_tag: str,
-        values_tag: Union[str, list, dict],
-        **kwargs
+    df: pd.DataFrame,
+    provincia_column: str,
+    color_columns: Union[str, list, dict],
+    **kwargs
 ):
     """
     Wrapper for province choropleth map plotting.
 
     Args:
       df (pd.DataFrame): DataFrame containing the data to plot.
-      provincia_tag (str): Column name in `df` with provincia identifiers.
-      values_tag (Union[str, list, dict]): Columns name in `df` with values to visualize.
+      provincia_column (str): Column name in `df` with provincia identifiers.
+      color_columns (Union[str, list, dict]): Columns name in `df` with values to visualize.
       kwargs: Additional arguments passed to the generic `plot_choropleth_map`.
 
     Returns:
       None
     """
-    _create_choropleth_map(df, provincia_tag, values_tag, GeoLevel.PROVINCIA, interactive=True, **kwargs)
+    _create_choropleth_map(df, provincia_column, color_columns, GeoLevel.PROVINCIA, interactive=True, **kwargs)
 
 
 @validate
 def plot_choropleth_map_regionale_interactive(
-        df: pd.DataFrame,
-        regione_tag: str,
-        values_tag: Union[str, list, dict],
-        **kwargs
+    df: pd.DataFrame,
+    regione_column: str,
+    color_columns: Union[str, list, dict],
+    **kwargs
 ):
     """
     Wrapper for regioni choropleth map plotting.
 
     Args:
       df (pd.DataFrame): DataFrame containing the data to plot.
-      regione_tag (str): Column name in `df` with regione identifiers.
-      values_tag (Union[str, list, dict]): Columns name in `df` with values to visualize.
+      regione_column (str): Column name in `df` with regione identifiers.
+      color_columns (Union[str, list, dict]): Columns name in `df` with values to visualize.
       kwargs: Additional arguments passed to the generic `plot_choropleth_map`.
 
     Returns:
       None
     """
-    _create_choropleth_map(df, regione_tag, values_tag, GeoLevel.REGIONE, interactive=True, **kwargs)
+    _create_choropleth_map(df, regione_column, color_columns, GeoLevel.REGIONE, interactive=True, **kwargs)
 
 
 def _create_choropleth_map(
-        df0: pd.DataFrame,
-        geo_tag: str,
-        values_tag: Union[str, list, dict],
-        geo_level: GeoLevel,
-        filter_regione: Optional[Union[str, List[str]]] = None,
-        filter_provincia: Optional[Union[str, List[str]]] = None,
-        filter_comune: Optional[Union[str, List[str]]] = None,
-        fillna: Optional[Union[float, str, bool]] = 0,
-        interactive: bool = False,
-        aggregate_function: Optional[Union[str, list]] = None,
-        **kwargs
+    df0: pd.DataFrame,
+    geo_column: str,
+    color_columns: Union[str, list, dict],
+    geo_level: GeoLevel,
+    filter_regione: Optional[Union[str, List[str]]] = None,
+    filter_provincia: Optional[Union[str, List[str]]] = None,
+    filter_comune: Optional[Union[str, List[str]]] = None,
+    fillna: Optional[Union[float, str, bool]] = 0,
+    interactive: bool = False,
+    aggregate_function: Optional[Union[str, list]] = None,
+    **kwargs
 ):
     """
     Plots a choropleth map at the specified geographic level.
 
     Args:
        df0 (pd.DataFrame): DataFrame containing the data to plot.
-       geo_tag (str): Column name in `df` that contains the geographic identifiers.
-       values_tag (Union[str, list, dict]): Column names in `df` that contains the values to be visualized.
+       geo_column (str): Column name in `df` that contains the geographic identifiers.
+       color_columns (Union[str, list, dict]): Column names in `df` that contains the values to be visualized.
        geo_level (GeoLevel): Geographic level to plot (e.g., REGIONE, PROVINCIA, COMUNE).
        filter_regione (Union[str, List[str]], optional): Filter for specific regions. Defaults to None.
        filter_provincia (Union[str, List[str]], optional): Filter for specific provinces. Defaults to None.
@@ -209,8 +210,8 @@ def _create_choropleth_map(
     # Todo Plot backgroud regions grey
     # Todo auto check if center scale and use 3 color map
 
-    df = _prepare_choropleth_data(df0, geo_tag, geo_level)
-    geo_tag = get_tag_registry(CodeLevel.CODE, geo_level)
+    df = _prepare_choropleth_data(df0, geo_column, geo_level)
+    geo_column = get_tag_registry(CodeLevel.CODE, geo_level)
 
     shape = get_df(geo_level)
 
@@ -218,26 +219,31 @@ def _create_choropleth_map(
     filter_list = ensure_list(filter_list)
     shape = _filter_data(shape, filter_list, filter_level)
 
-    values_tag = values_tag if isinstance(values_tag, dict) else {v: v for v in ensure_list(values_tag)}
+    color_columns = color_columns if isinstance(color_columns, dict) else {v: v for v in ensure_list(color_columns)}
 
-    col_list = list(values_tag.keys())
-    col_list.append(geo_tag)
-    df = shape.merge(df[col_list], how="left", on=geo_tag, suffixes=["_new", ""])
+    col_list = list(color_columns.keys())
+    col_list.append(geo_column)
 
-    for col in values_tag.keys():
+    df = shape.merge(df[col_list], how="left", on=geo_column, suffixes=["_new", ""])
+
+    for col in color_columns.keys():
         if is_numeric_dtype(df[col]):
             df[col] = df[col].fillna(fillna)
         else:
             df[col] = df[col].fillna("NaN")
 
-    if df.groupby(geo_tag).size().max() > 1:
+    if df.groupby(geo_column).size().max() > 1:
         if aggregate_function is None:
             raise Exception("The plot has multiple values for the same geographical level. Elaborate the data "
                             "accordingly or pass an aggregate function to the plot.")
         else:
             aggregate_function = aggregate_function if isinstance(aggregate_function, list) \
-                else [aggregate_function for _ in range(len(values_tag))]
-            df = df.groupby(geo_tag).agg({k: v for k, v in zip(values_tag.keys(), aggregate_function)}).reset_index()
+                else [aggregate_function for _ in range(len(color_columns))]
+            df = (
+                df.groupby(geo_column)
+                .agg({k: v for k, v in zip(color_columns.keys(), aggregate_function)})
+                .reset_index()
+            )
 
     df = gpd.GeoDataFrame(df, geometry="geometry")
 
@@ -246,29 +252,28 @@ def _create_choropleth_map(
     line_width = 0.2 if geo_level in [GeoLevel.COMUNE, None] else 0.4 if geo_level == GeoLevel.PROVINCIA else 0.8
 
     if not interactive:
-        return _plot_choropleth_map(df, list(values_tag.keys())[0], shape_list, line_width, **kwargs)
+        return _plot_choropleth_map(df, list(color_columns.keys())[0], shape_list, line_width, **kwargs)
     else:
-        return _plot_bokeh_choropleth_map(df, geo_tag, geo_level, values_tag, shape_list, **kwargs)
+        return _plot_bokeh_choropleth_map(df, geo_column, geo_level, color_columns, shape_list, **kwargs)
 
 
-def _prepare_choropleth_data(df0, geo_tag, geo_level):
+def _prepare_choropleth_data(df0, geo_column, geo_level):
     """
     Prepares the DataFrame for choropleth map plotting.
     """
     geo_inf = AddGeographicalInfo(df0)
     if geo_level == GeoLevel.COMUNE:
-        geo_inf.set_comuni_tag(geo_tag)
+        geo_inf.set_comuni_tag(geo_column)
     elif geo_level == GeoLevel.PROVINCIA:
-        geo_inf.set_province_tag(geo_tag)
+        geo_inf.set_province_tag(geo_column)
     elif geo_level == GeoLevel.REGIONE:
-        geo_inf.set_regioni_tag(geo_tag)
+        geo_inf.set_regioni_tag(geo_column)
     geo_inf.run_simple_match()
     if geo_level == GeoLevel.COMUNE:
         geo_inf.run_find_frazioni()
         geo_inf.run_similarity_match(unique_flag=False)
         geo_inf.accept_similarity_result()
     df = geo_inf.get_result(handle_duplicate_column="overwrite", drop_not_match=True)
-    # TODO ADD WARNING IF THERE ARE NULL VALUES
     return df
 
 
@@ -325,32 +330,32 @@ def get_boundaries_list(geo_level, df):
 
 
 def _plot_choropleth_map(
-        df: gpd.GeoDataFrame,
-        value_column: str,
-        boundary_list: List,
-        line_width,
-        color: str = "blue",
-        ax: Axes = None,
-        title: str = None,
-        show_colorbar: bool = True,
-        min_value: float = None,
-        max_value: float = None,
-        value_tag: str = "value",
-        prefix: str = "",
-        suffix: str = "",
-        labels_size: Union[int, float] = None,
-        facecolor: Union[str, bool] = True,
-        print_labels: bool = True,
-        print_perc: bool = False,
-        save_path: Union[str, Path] = None,
-        dpi: int = 100,
+    df: gpd.GeoDataFrame,
+    color_column: str,
+    boundary_list: List,
+    line_width,
+    color: str = "blue",
+    ax: Axes = None,
+    title: str = None,
+    show_colorbar: bool = True,
+    min_value: float = None,
+    max_value: float = None,
+    value_tag: str = "value",
+    prefix: str = "",
+    suffix: str = "",
+    labels_size: Union[int, float] = None,
+    facecolor: Union[str, bool] = True,
+    print_labels: bool = True,
+    print_perc: bool = False,
+    save_path: Union[str, Path] = None,
+    dpi: int = 100,
 ):
     """
     Plots a choropleth map with the specified parameters.
 
     Args:
          df (gpd.GeoDataFrame): DataFrame containing the data to plot.
-         value_column (str): Column name in `df` with the values to visualize.
+         color_column (str): Column name in `df` with the values to visualize.
          boundary_list (List): List of shapes to be plotted on the map.
          line_width: Width of the boundary lines.
          color (str): Name of the color to use. Defaults to "blue".
@@ -382,21 +387,21 @@ def _plot_choropleth_map(
             ax.set_title(title, fontsize=labels_size)
     ax.axis('off')
 
-    if is_numeric_dtype(df[value_column]):
+    if is_numeric_dtype(df[color_column]):
         if min_value is None:
-            min_value = df[value_column].min()
+            min_value = df[color_column].min()
         if max_value is None:
-            max_value = df[value_column].max()
+            max_value = df[color_column].max()
         cmap = _linear_colormap(color_name2=color)
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=min_value, vmax=max_value))
         sm._A = []
-        df.plot(value_column, cmap=cmap, vmin=min_value, vmax=max_value, linewidth=line_width, edgecolor='0.8', ax=ax)
+        df.plot(color_column, cmap=cmap, vmin=min_value, vmax=max_value, linewidth=line_width, edgecolor='0.8', ax=ax)
         if show_colorbar:
             fmt = lambda x, pos: str(prefix) + _human_format(x) + str(suffix)
             cbar = plt.colorbar(sm, format=FuncFormatter(fmt), ax=ax)
             cbar.ax.tick_params(labelsize=10)
     else:
-        color_map = df[value_column].value_counts(dropna=False).reset_index()
+        color_map = df[color_column].value_counts(dropna=False).reset_index()
         if color_map.shape[0] <= 10:
             cmap = get_cmap('tab10')
         else:
@@ -404,9 +409,9 @@ def _plot_choropleth_map(
         color_map["color"] = None
         for i in range(color_map.shape[0]):
             color_map.iat[i, 2] = cmap(i % 10)
-        df["color"] = df[value_column].map(color_map.set_index("index")["color"])
+        df["color"] = df[color_column].map(color_map.set_index("index")["color"])
         legend_elements = [Patch(facecolor=row.color, label=row["index"]) for index, row in color_map.iterrows()]
-        df.plot(value_column, linewidth=line_width, edgecolor='0.8', ax=ax, color=df["color"].values)
+        df.plot(color_column, linewidth=line_width, edgecolor='0.8', ax=ax, color=df["color"].values)
         ax.legend(title=value_tag, handles=legend_elements, bbox_to_anchor=(1.02, 1), loc='upper left')
 
     edgecolor = "0.6"
@@ -415,7 +420,7 @@ def _plot_choropleth_map(
         edgecolor = "0.4"
 
     if print_labels:
-        _add_labels_on_plot(df, value_column, ax, print_perc, prefix, suffix, labels_size=labels_size)
+        _add_labels_on_plot(df, color_column, ax, print_perc, prefix, suffix, labels_size=labels_size)
 
     if fig is not None:
         if save_path is not None:
@@ -437,7 +442,11 @@ def _add_labels_on_plot(df, value_column, ax, print_perc, prefix, suffix, labels
             df.loc[df[cfg.TAG_REGIONE].isin(["Calabria", "Liguria"]), "tx_color"] = "black"
         for idx, row in df.iterrows():
             if row[value_column] > 0:
-                text = f"{round(row[value_column] / total * 100, 1)}%" if print_perc else f"{prefix}{_human_format(row[value_column])}{suffix}"
+                text = (
+                    f"{round(row[value_column] / total * 100, 1)}%"
+                    if print_perc
+                    else f"{prefix}{_human_format(row[value_column])}{suffix}"
+                )
                 ax.annotate(text, xy=(row['center_x'], row['center_y']), ha='center', va="center", fontsize=labels_size,
                             color=row["tx_color"], wrap=True)
     else:
@@ -662,21 +671,21 @@ def _plot_bokeh_choropleth_map(df, geo_tag, level, dict_values, shape_list, titl
 
 @validate
 def plot_point_map(
-        df0: pd.DataFrame,
-        latitude_column: str = None,
-        longitude_column: str = None,
-        geo_column: str = None,
-        filter_comune: Union[str, List[str]] = None,
-        filter_provincia: Union[str, List[str]] = None,
-        filter_regione: Union[str, List[str]] = None,
-        color_tag: str = None,
-        ax=None,
-        title: str = None,
-        legend_font: Union[int, float] = None,
-        show_colorbar: bool = True,
-        size: int = 6,
-        save_in_path: Union[str, Path] = None,
-        dpi: int = 100
+    df0: pd.DataFrame,
+    latitude_column: str = None,
+    longitude_column: str = None,
+    geometry_column: str = None,
+    filter_comune: Union[str, List[str]] = None,
+    filter_provincia: Union[str, List[str]] = None,
+    filter_regione: Union[str, List[str]] = None,
+    color_column: str = None,
+    ax=None,
+    title: str = None,
+    legend_font: Union[int, float] = None,
+    show_colorbar: bool = True,
+    size: int = 6,
+    save_in_path: Union[str, Path] = None,
+    dpi: int = 100
 ) -> Axes:
     """
     Plots a point map based on the provided DataFrame and filters.
@@ -685,11 +694,11 @@ def plot_point_map(
         df0 (pd.DataFrame): DataFrame containing the data to plot.
         latitude_column (str, optional): Column name for latitude. Defaults to None.
         longitude_column (str, optional): Column name for longitude. Defaults to None.
-        geo_column (str, optional): Column name for geographic data. Defaults to None.
+        geometry_column (str, optional): Column name for geographic data. Defaults to None.
         filter_comune (Union[str, List[str]], optional): Filter for specific Comune. Defaults to None.
         filter_provincia (Union[str, List[str]], optional): Filter for specific Provincia. Defaults to None.
         filter_regione (Union[str, List[str]], optional): Filter for specific Regione. Defaults to None.
-        color_tag (str, optional): Column name for color coding. Defaults to None.
+        color_column (str, optional): Column name for color coding. Defaults to None.
         ax (Axes, optional): Matplotlib Axes object to plot on. Defaults to None.
         title (str, optional): Title of the plot. Defaults to None.
         legend_font (Union[int, float], optional): Font size for the legend. Defaults to None.
@@ -702,7 +711,7 @@ def plot_point_map(
         Axes: Matplotlib Axes object with the plot.
     """
     df = df0.copy()
-    df = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column, geo_tag=geo_column)
+    df = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column, geo_tag=geometry_column)
 
     filter_level, filter_list = _get_filter_params(filter_regione, filter_provincia, filter_comune)
     filter_list = ensure_list(filter_list)
@@ -728,7 +737,7 @@ def plot_point_map(
     if title:
         ax.set_title(title)
 
-    _plot_points(df, ax, color_tag, size, show_colorbar, legend_font)
+    _plot_points(df, ax, color_column, size, show_colorbar, legend_font)
     _plot_shapes(ax, shape_list)
 
     ax.axis('off')
@@ -808,11 +817,11 @@ def plot_point_map_interactive(
     df0: pd.DataFrame,
     latitude_column: str = None,
     longitude_column: str = None,
-    geo_column: str = None,
+    geometry_column: str = None,
     filter_comune: Union[str, List[str]] = None,
     filter_provincia: Union[str, List[str]] = None,
     filter_regione: Union[str, List[str]] = None,
-    color_tag: str = None,
+    color_column: str = None,
     info_dict: Dict[str, str] = None,
     title: str = None,
     table: bool = True,
@@ -828,7 +837,7 @@ def plot_point_map_interactive(
     - df0 (pd.DataFrame): DataFrame containing the data to plot.
     - latitude_column (str, optional): Column name for latitude. Defaults to None.
     - longitude_column (str, optional): Column name for longitude. Defaults to None.
-    - geo_column (str, optional): Column name for geographic data. Defaults to None.
+    - geometry_column (str, optional): Column name for geographic data. Defaults to None.
     - filter_comune (Union[str, List[str]], optional): Filter for specific Comune. Defaults to None.
     - filter_provincia (Union[str, List[str]], optional): Filter for specific Provincia. Defaults to None.
     - filter_regione (Union[str, List[str]], optional): Filter for specific Regione. Defaults to None.
@@ -859,7 +868,7 @@ def plot_point_map_interactive(
 
     column_list = list(df0.columns)
 
-    df = _create_geo_dataframe(df0, lat_tag=latitude_column, long_tag=longitude_column, geo_tag=geo_column)
+    df = _create_geo_dataframe(df0, lat_tag=latitude_column, long_tag=longitude_column, geo_tag=geometry_column)
     if latitude_column is None:
         latitude_column = "geo_ita_lat"
         longitude_column = "geo_ita_lon"
@@ -873,7 +882,7 @@ def plot_point_map_interactive(
         table_columns = list(info_dict.keys())
     else:
         table_columns = column_list[:10]
-        table_columns += [color_tag] if color_tag is not None else []
+        table_columns += [color_column] if color_column is not None else []
         if "geometry" in table_columns:
             table_columns.remove("geometry")
     if (latitude_column is not None) and (latitude_column not in table_columns):
@@ -891,13 +900,13 @@ def plot_point_map_interactive(
         columns = [TableColumn(field=a, title=b) for a, b in info_dict.items()]
     else:
         columns = [TableColumn(field=a, title=a) for a in table_columns if
-                   a not in [longitude_column, latitude_column, geo_column]]
+                   a not in [longitude_column, latitude_column, geometry_column]]
 
     legend = False
-    if color_tag is not None:
-        if is_numeric_dtype(df[color_tag]):
-            min_values = df[color_tag].min()
-            max_values = df[color_tag].max()
+    if color_column is not None:
+        if is_numeric_dtype(df[color_column]):
+            min_values = df[color_column].min()
+            max_values = df[color_column].max()
             if min_values >= 0:
                 exp_cmap = LinearColorMapper(palette=Reds9[::-1], low=0,
                                              high=max_values)
@@ -905,11 +914,11 @@ def plot_point_map_interactive(
                 palette_max = max(np.abs(min_values), max_values)
                 exp_cmap = LinearColorMapper(palette=RdYlGn11[::-1], low=-palette_max,
                                              high=palette_max)
-            fill_color = {'field': color_tag, 'transform': exp_cmap}
-        elif is_string_dtype(df[color_tag]):
-            values = list(df[color_tag].unique())
+            fill_color = {'field': color_column, 'transform': exp_cmap}
+        elif is_string_dtype(df[color_column]):
+            values = list(df[color_column].unique())
             n_values = len(values)
-            fill_color = {"field": color_tag, "transform": CategoricalColorMapper(factors=values,
+            fill_color = {"field": color_column, "transform": CategoricalColorMapper(factors=values,
                                                                                   palette=Category20[
                                                                                       20] if n_values > 10 else
                                                                                   Category10[10])}
@@ -921,9 +930,9 @@ def plot_point_map_interactive(
 
     if legend:
         plot1 = plot.circle(x="x", y="y", size=7, fill_color=fill_color, line_width=0.5,
-                            legend_field=color_tag,
+                            legend_field=color_column,
                             source=source)
-        plot.legend.title = color_tag
+        plot.legend.title = color_column
         plot.legend.title_text_font_size = "20px"
         plot.legend.title_text_font_style = "bold"
     else:
@@ -939,13 +948,14 @@ def plot_point_map_interactive(
                 tooltips1.append((values, '@' + key))
     else:
         for values in table_columns:
-            if values not in [longitude_column, latitude_column, geo_column]:
+            if values not in [longitude_column, latitude_column, geometry_column]:
                 if is_numeric_dtype(df[values]):
                     tooltips1.append((values, '@' + values + '{0.[0] a}'))
                 else:
                     tooltips1.append((values, '@' + values))
     if (latitude_column is not None) and (longitude_column is not None):
-        tooltips1.append(("Coords", "(@" + latitude_column + "{0,0.[0000000]}-@" + longitude_column + "{0,0.[0000000]})"))
+        tooltips1.append(
+            ("Coords", "(@" + latitude_column + "{0,0.[0000000]}-@" + longitude_column + "{0,0.[0000000]})"))
 
     plot.add_tools(HoverTool(renderers=[plot1], tooltips=tooltips1))
 

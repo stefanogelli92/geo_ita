@@ -48,9 +48,6 @@ class GeoLevel(Enum):
         return NotImplemented
 
 
-
-
-
 class CodeLevel(Enum):
     CODE = "code"
     SIGLA = "sigla"
@@ -99,36 +96,35 @@ def infer_geographical_category(list_values: List[Union[str, int, float]]) -> Co
 
 
 def get_tag_registry(code, level):
-    if level == GeoLevel.COMUNE:
-        if code == CodeLevel.CODE:
-            result = cfg.TAG_CODICE_COMUNE
-        else:
-            result = cfg.TAG_COMUNE
-    elif level == GeoLevel.PROVINCIA:
-        if code == CodeLevel.CODE:
-            result = cfg.TAG_CODICE_PROVINCIA
-        elif code == CodeLevel.SIGLA:
-            result = cfg.TAG_SIGLA
-        else:
-            result = cfg.TAG_PROVINCIA
-    elif level == GeoLevel.REGIONE:
-        if code == CodeLevel.CODE:
-            result = cfg.TAG_CODICE_REGIONE
-        else:
-            result = cfg.TAG_REGIONE
-    elif level == GeoLevel.COUNTRY:
-        if code == CodeLevel.DENOMINATION:
-            result = cfg.TAG_COUNTRY
-        else:
-            raise Exception("Only denomination for country.")
-    elif level == GeoLevel.COORDINATES:
-        if code == CodeLevel.DENOMINATION:
-            result = cfg.TAG_COORDINATES
-        else:
-            raise Exception("Only denomination for country.")
-    else:
+    tag_mapping = {
+        GeoLevel.COMUNE: {
+            CodeLevel.CODE: cfg.TAG_CODICE_COMUNE,
+            CodeLevel.DENOMINATION: cfg.TAG_COMUNE
+        },
+        GeoLevel.PROVINCIA: {
+            CodeLevel.CODE: cfg.TAG_CODICE_PROVINCIA,
+            CodeLevel.SIGLA: cfg.TAG_SIGLA,
+            CodeLevel.DENOMINATION: cfg.TAG_PROVINCIA
+        },
+        GeoLevel.REGIONE: {
+            CodeLevel.CODE: cfg.TAG_CODICE_REGIONE,
+            CodeLevel.DENOMINATION: cfg.TAG_REGIONE
+        },
+        GeoLevel.COUNTRY: {
+            CodeLevel.DENOMINATION: cfg.TAG_COUNTRY
+        },
+        GeoLevel.COORDINATES: {
+            CodeLevel.DENOMINATION: cfg.TAG_COORDINATES
+        }
+    }
+
+    if level not in tag_mapping:
         raise Exception("Level UNKNOWN")
-    return result
+
+    if code not in tag_mapping[level]:
+        raise Exception("Invalid code for the given level")
+
+    return tag_mapping[level][code]
 
 
 def clean_htmltext(text: str) -> str:
@@ -190,3 +186,34 @@ def _linear_colormap(color_name1="white", color_name2=None, minval=0, maxval=1):
     cmap = _truncate_colormap(LinearSegmentedColormap.from_list("", [color_name1, color_name2]), minval=minval,
                               maxval=maxval)
     return cmap
+
+
+def check_duplicate_column_output(original_df, output_df, output_columns, suffix, handle_duplicate_column, log):
+    if suffix is not None:
+        rename_columns = {
+            col: col + suffix
+            for col in output_columns
+        }
+        output_df.rename(columns=rename_columns, inplace=True)
+        output_columns = [col + suffix for col in output_columns]
+    column_duplicates = list(set(output_columns).intersection(original_df.columns))
+    if len(column_duplicates) > 0:
+        if handle_duplicate_column == "error":
+            raise Exception(f"Found column in dataset with the same name of one of the output columns:\n"
+                            f"{column_duplicates}, change the 'handle_duplicate_column' params in order to handle "
+                            f"those columns.\n'overwrite'= the original columns will be overwrite.\n"
+                            f"suffix (str): this string will be used as suffix for the new columns.")
+        elif handle_duplicate_column == "overwrite":
+            log.warning(f"Columns: {column_duplicates} will be overwrite in dataset.")
+            original_df.drop(columns=column_duplicates, inplace=True)
+        elif handle_duplicate_column == "progressive":
+            log.warning(f"Found column in dataset with the same name of one of the output columns:\n"
+                        f"{column_duplicates}, the new columns will be added with a progressive suffix.")
+            for col in column_duplicates:
+                i = 1
+                while f"{col}_{i}" in original_df.columns:
+                    i += 1
+                output_df.rename(columns={col: f"{col}_{i}"}, inplace=True)
+        else:
+            raise Exception(f"Invalid value for 'handle_duplicate_column' params: {handle_duplicate_column}.")
+

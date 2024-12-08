@@ -97,8 +97,8 @@ class TestPlot(unittest.TestCase):
 
     def test_plot_choropleth_map(self):
         tests = [
-            (GeoLevel.REGIONE, plot_choropleth_map_regionale, plot_choropleth_map_regionale_interactive),
-            (GeoLevel.PROVINCIA, plot_choropleth_map_provinciale, plot_choropleth_map_provinciale_interactive),
+           (GeoLevel.REGIONE, plot_choropleth_map_regionale, plot_choropleth_map_regionale_interactive),
+           (GeoLevel.PROVINCIA, plot_choropleth_map_provinciale, plot_choropleth_map_provinciale_interactive),
             (GeoLevel.COMUNE, plot_choropleth_map_comunale, plot_choropleth_map_comunale_interactive)
         ]
         for level, func, func_interactive in tests:
@@ -126,42 +126,39 @@ class TestPlot(unittest.TestCase):
         df.drop(columns=["points"], inplace=True)
         df = df.explode("geometry")
         df = df.reset_index(drop=True)
-        plot_point_map(df, color_tag=cfg.TAG_SUPERFICIE, save_in_path="test_point_map_new.png")
+        plot_point_map(df, color_column=cfg.TAG_SUPERFICIE, save_in_path="test_point_map_new.png")
         compare_images("test_point_map_new.png", "test_point_map_test.png")
 
-        plot_point_map(df, filter_regione="Toscana", color_tag=cfg.TAG_SUPERFICIE,
+        plot_point_map(df, filter_regione="Toscana", color_column=cfg.TAG_SUPERFICIE,
                        save_in_path="test_point_map_toscana_new.png")
         compare_images("test_point_map_toscana_new.png", "test_point_map_toscana_test.png")
 
-        plot_point_map_interactive(df, color_tag=cfg.TAG_SUPERFICIE, save_in_path="test_point_map_interactive_new.html",
+        plot_point_map_interactive(df, color_column=cfg.TAG_SUPERFICIE, save_in_path="test_point_map_interactive_new.html",
                                    show_flag=False)
         compare_html_files("test_point_map_interactive_new.html", "test_point_map_interactive_test.html")
 
-        plot_point_map_interactive(df, color_tag=cfg.TAG_SUPERFICIE, filter_regione="Toscana",
+        plot_point_map_interactive(df, color_column=cfg.TAG_SUPERFICIE, filter_regione="Toscana",
                                    save_in_path="test_point_map_interactive_toscana_new.html", show_flag=False)
         compare_html_files("test_point_map_interactive_toscana_new.html", "test_point_map_interactive_toscana_test.html")
 
-
     """
-    def test_point_map(self):
-        test_df = get_df_province()
-        plot_point_map_interactive(test_df,
-                                   longitude_columns="center_x",
-                                   latitude_columns="center_y",
-                                   filter_regione="Toscana", show_flag=False,
-                                   save_in_path="usage_point_map_1.html")
-        plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x',
-                        size=12, title="Province", save_in_path="usage_point_map_comuni.png",
-                        color_tag="popolazione")
-        test_df = get_df_comuni()
-        plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x',
-                       filter_regione="Toscana", color_tag="denominazione_provincia",
-                       size=8, title="Comuni", save_in_path="usage_point_map_comuni2.png")
-        plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x', color_tag="popolazione", filter_provincia="Prato")
-        plot_point_map(test_df, latitude_columns='center_y', longitude_columns='center_x', color_tag="denominazione_regione", legend_font=5)
-        plot_point_map_interactive(test_df, latitude_columns='center_y', longitude_columns='center_x',
-                                   color_tag="denominazione_regione", save_in_path="usage_point_map_2.html")
+    def test_density_heatmap(self):
+        test_df = get_df(GeoLevel.COMUNE)
+        plot_density_heatmap(test_df, latitude_column='center_y', longitude_column='center_x',
+                             save_in_path="test_density_heatmap_simple_new.png")
+        compare_images("test_density_heatmap_simple_new.png", "test_density_heatmap_simple_test.png")
 
+        plot_density_heatmap(test_df, value_column="popolazione", latitude_column='center_y', longitude_column='center_x',
+                             save_in_path="test_density_heatmap_variable_new.png")
+        compare_images("test_density_heatmap_variable_new.png", "test_density_heatmap_variable_test.png")
+
+        plot_density_heatmap(test_df, value_column="popolazione", latitude_column='center_y',
+                                         longitude_column='center_x', filter_regione="Lazio",
+                             interactive=True,
+                                         save_in_path="test_density_heatmap_interactive_new.html")
+        compare_html_files("test_density_heatmap_interactive_new.html", "test_density_heatmap_interactive_test.html")
+    """
+"""
     def test_density(self):
         #df = get_high_resolution_population_density_df()
         #plot_kernel_density_estimation(df, n_grid_x=500, n_grid_y=500)

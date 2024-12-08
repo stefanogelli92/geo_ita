@@ -3,6 +3,7 @@ from geopy import Point
 from geopy.distance import distance
 
 from geo_ita.src._data_enrichment import *
+#from geo_ita.src._density import SpatialDensity
 from geo_ita.src._data import *
 from geo_ita.src.config import *
 import logging
@@ -81,7 +82,7 @@ class TestGetAddressFromCoordinates(unittest.TestCase):
         result = get_address_from_coordinates(df)
         self.assertEqual("Roma", result["city"].values[0])
         df = pd.DataFrame(data=[[41.93683317516326, 12.471707219950744]], columns=["lat", "lon"])
-        result = get_address_from_coordinates(df, latitude_col="lat", longitude_col="lon")
+        result = get_address_from_coordinates(df, latitude_column="lat", longitude_column="lon")
         self.assertEqual("Roma", result["city"].values[0])
         df = pd.DataFrame(data=[[43.884609765796114, 8.8971202373737]], columns=["lat", "lon"])
         result = get_address_from_coordinates(df)
@@ -99,7 +100,7 @@ class TestGetCityFromCoordinates(TestDataEnrichment):
         df.drop(columns=["points"], inplace=True)
         df = df.explode("geometry")
 
-        df = get_city_from_coordinates(df,  suffix_result_columns="_test")
+        df = get_city_from_coordinates(df,  suffix="_test")
         column_test = [column.replace("_test", "") for column in df.columns if "_test" in column]
         self.check_result_on_same_dataframe(df, column_test, suffix="_test")
 
@@ -111,47 +112,48 @@ class TestAddGeographicalInfo(TestDataEnrichment):
 
     def test_simple_match(self):
         df = self.df_comuni.copy()
+        df.drop(columns=[cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE], inplace=True)
 
         addinfo = AddGeographicalInfo(df.sample(400))
         addinfo.set_comuni_tag(cfg.TAG_CODICE_COMUNE)
         addinfo.run_simple_match()
-        result = addinfo.get_result(handle_duplicate_column="_test")
-        column_test = [column.replace("_test", "") for column in result.columns if "_test" in column]
+        result = addinfo.get_result(suffix="_test")
+        column_test = [column.replace("_test", "") for column in result.columns if ("_test" in column) and (column.replace("_test", "") in df.columns)]
         self.check_result_on_same_dataframe(result, column_test, suffix="_test")
 
-        addinfo = AddGeographicalInfo(df.drop(columns=[cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]).sample(400))
+        addinfo = AddGeographicalInfo(df.sample(400))
         addinfo.set_province_tag(cfg.TAG_CODICE_PROVINCIA)
         addinfo.run_simple_match()
-        result = addinfo.get_result(handle_duplicate_column="_test")
-        column_test = [column.replace("_test", "") for column in result.columns if "_test" in column]
+        result = addinfo.get_result(suffix="_test")
+        column_test = [column.replace("_test", "") for column in result.columns if ("_test" in column) and (column.replace("_test", "") in df.columns)]
         self.check_result_on_same_dataframe(result, column_test, suffix="_test")
 
-        addinfo = AddGeographicalInfo(df.drop(columns=[cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]).sample(400))
+        addinfo = AddGeographicalInfo(df.sample(400))
         addinfo.set_regioni_tag(cfg.TAG_CODICE_REGIONE)
         addinfo.run_simple_match()
-        result = addinfo.get_result(handle_duplicate_column="_test")
-        column_test = [column.replace("_test", "") for column in result.columns if "_test" in column]
+        result = addinfo.get_result(suffix="_test")
+        column_test = [column.replace("_test", "") for column in result.columns if ("_test" in column) and (column.replace("_test", "") in df.columns)]
         self.check_result_on_same_dataframe(result, column_test, suffix="_test")
 
-        addinfo = AddGeographicalInfo(df.drop(columns=[cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]).sample(400))
+        addinfo = AddGeographicalInfo(df.sample(400))
         addinfo.set_regioni_tag(cfg.TAG_REGIONE)
         addinfo.run_simple_match()
-        result = addinfo.get_result(handle_duplicate_column="_test")
-        column_test = [column.replace("_test", "") for column in result.columns if "_test" in column]
+        result = addinfo.get_result(suffix="_test")
+        column_test = [column.replace("_test", "") for column in result.columns if ("_test" in column) and (column.replace("_test", "") in df.columns)]
         self.check_result_on_same_dataframe(result, column_test, suffix="_test")
 
-        addinfo = AddGeographicalInfo(df.drop(columns=[cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]).sample(400))
+        addinfo = AddGeographicalInfo(df.sample(400))
         addinfo.set_province_tag(cfg.TAG_PROVINCIA)
         addinfo.run_simple_match()
-        result = addinfo.get_result(handle_duplicate_column="_test")
-        column_test = [column.replace("_test", "") for column in result.columns if "_test" in column]
+        result = addinfo.get_result(suffix="_test")
+        column_test = [column.replace("_test", "") for column in result.columns if ("_test" in column) and (column.replace("_test", "") in df.columns)]
         self.check_result_on_same_dataframe(result, column_test, suffix="_test")
 
-        addinfo = AddGeographicalInfo(df.drop(columns=[cfg.TAG_POPOLAZIONE, cfg.TAG_SUPERFICIE]).sample(400))
+        addinfo = AddGeographicalInfo(df.sample(400))
         addinfo.set_province_tag(cfg.TAG_SIGLA)
         addinfo.run_simple_match()
-        result = addinfo.get_result(handle_duplicate_column="_test")
-        column_test = [column.replace("_test", "") for column in result.columns if "_test" in column]
+        result = addinfo.get_result(suffix="_test")
+        column_test = [column.replace("_test", "") for column in result.columns if ("_test" in column) and (column.replace("_test", "") in df.columns)]
         self.check_result_on_same_dataframe(result, column_test, suffix="_test")
 
         addinfo = AddGeographicalInfo(df.reset_index(drop=True))
@@ -163,8 +165,8 @@ class TestAddGeographicalInfo(TestDataEnrichment):
         addinfo.set_comuni_tag("key")
         addinfo.set_province_tag(cfg.TAG_SIGLA)
         addinfo.run_simple_match()
-        result = addinfo.get_result(handle_duplicate_column="_test")
-        column_test = [column.replace("_test", "") for column in result.columns if "_test" in column]
+        result = addinfo.get_result(suffix="_test")
+        column_test = [column.replace("_test", "") for column in result.columns if ("_test" in column) and (column.replace("_test", "") in df.columns)]
         self.check_result_on_same_dataframe(result, column_test, suffix="_test")
 
     def test_bilingual_name(self):
@@ -180,7 +182,7 @@ class TestAddGeographicalInfo(TestDataEnrichment):
         addinfo = AddGeographicalInfo(df)
         addinfo.set_comuni_tag(cfg.TAG_COMUNE + cfg.TAG_ITA_STRANIERA)
         addinfo.run_simple_match()
-        result = addinfo.get_result(handle_duplicate_column="_test")
+        result = addinfo.get_result(suffix="_test")
         column_test = [column.replace("_test", "") for column in result.columns if "_test" in column]
         self.check_result_on_same_dataframe(result, column_test, suffix="_test")
 
@@ -192,7 +194,7 @@ class TestAddGeographicalInfo(TestDataEnrichment):
         addinfo = AddGeographicalInfo(df)
         addinfo.set_comuni_tag(cfg.TAG_COMUNE)
         addinfo.run_simple_match()
-        result = addinfo.get_result(handle_duplicate_column="_test")
+        result = addinfo.get_result(suffix="_test")
         result["check"] = result[cfg.TAG_COMUNE].isna()
         self.assertEqual(0, result["check"].sum())
 
@@ -211,9 +213,9 @@ class TestAddGeographicalInfo(TestDataEnrichment):
         addinfo.set_comuni_tag("Citta")
         addinfo.run_simple_match()
         addinfo.run_find_frazioni()
-        result = addinfo.get_result(handle_duplicate_column="_test")
+        result = addinfo.get_result(suffix="_test")
         result = result.where(pd.notnull(result), None)
-        column_test = [column.replace("_test", "") for column in result.columns if "_test" in column]
+        column_test = [column.replace("_test", "") for column in result.columns if ("_test" in column) and (column.replace("_test", "") in df.columns)]
         self.check_result_on_same_dataframe(result, column_test, suffix="_test")
 
     def test_run_find_frazioni_on_web(self):
@@ -231,9 +233,9 @@ class TestAddGeographicalInfo(TestDataEnrichment):
         addinfo.set_comuni_tag("Citta")
         addinfo.run_simple_match()
         addinfo.run_find_frazioni_on_web()
-        result = addinfo.get_result(handle_duplicate_column="_test")
+        result = addinfo.get_result(suffix="_test")
         result = result.where(pd.notnull(result), None)
-        column_test = [column.replace("_test", "") for column in result.columns if "_test" in column]
+        column_test = [column.replace("_test", "") for column in result.columns if ("_test" in column) and (column.replace("_test", "") in df.columns)]
         self.check_result_on_same_dataframe(result, column_test, suffix="_test")
 
     def test_run_similarity_match(self):
@@ -250,9 +252,9 @@ class TestAddGeographicalInfo(TestDataEnrichment):
         addinfo.run_simple_match()
         addinfo.run_similarity_match()
         addinfo.accept_similarity_result()
-        result = addinfo.get_result(handle_duplicate_column="_test")
+        result = addinfo.get_result(suffix="_test")
         result = result.where(pd.notnull(result), None)
-        column_test = [column.replace("_test", "") for column in result.columns if "_test" in column]
+        column_test = [column.replace("_test", "") for column in result.columns if ("_test" in column) and (column.replace("_test", "") in df.columns)]
         self.check_result_on_same_dataframe(result, column_test, suffix="_test")
 
 
@@ -324,9 +326,49 @@ class TestGetPopulationNearby(TestDataEnrichment):
 
         test_df = pd.DataFrame([[41.8343354636729, 12.4684276148718],
                                 [42.23774542118423, 11.961695397335165]], columns=["center_y", "center_x"])
-        test_df = get_population_nearby(test_df, 300, latitude_column="center_y", longitude_column="center_x")
-        self.assertGreater(test_df["n_residents"].values[0], 100)
-        self.assertEqual(test_df["n_residents"].values[1], 0)
+        test_df = get_population_nearby(test_df, 300, latitude_column="center_y", longitude_column="center_x",
+                                        output_column="population")
+        self.assertGreater(test_df["population"].values[0], 100)
+        self.assertEqual(test_df["population"].values[1], 0)
+
+
+class TestSpatialDensity(unittest.TestCase):
+
+    def setUp(self):
+        # Create a sample DataFrame with latitude and longitude
+        data = {
+            'latitude': [45.0, 45.0, 45.1],
+            'longitude': [9.0, 9.1, 9.0],
+            'value': [1, 5, 3]
+        }
+        self.df = pd.DataFrame(data)
+"""
+    def test_density_variation(self):
+        # Test density variation in a grid around the points
+        calculator = SpatialDensity(
+            df=self.df,
+            latitude_column='latitude',
+            longitude_column='longitude',
+            value_column='value',
+        )
+
+        # Define a grid of points around the central point (45.1, 9.1)
+        grid_points = [
+            (9.0, 45.0), (9.1, 45.0), (9.2, 45.0),
+            (9.0, 45.1), (9.1, 45.1), (9.2, 45.1),
+            (9.0, 45.2), (9.1, 45.2), (9.2, 45.2)
+        ]
+
+        # Calculate densities at grid points
+        densities = {point: calculator.calculate_density((point[0], point[1])) for point in grid_points}
+
+        # Check that density increases as we move towards the point with the highest value (45.1, 9.1)
+        self.assertGreater(densities[(9.1, 45.0)], densities[(9.0, 45.0)])
+        self.assertGreater(densities[(9.0, 45.1)], densities[(9.0,  45.0)])
+"""
+
+if __name__ == '__main__':
+    unittest.main()
 
 
 

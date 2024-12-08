@@ -1,5 +1,4 @@
 import difflib
-import os
 import logging
 import ssl
 from datetime import datetime
@@ -162,7 +161,8 @@ class AddGeographicalInfo:
             log.info(f"Matching completed, found {n_tot} different sigle.")
         else:
             log.warning(
-                f"Matched {n_tot - n_not_match} over {n_tot}. Missing {n_not_match} unique values ({n_not_match / n_tot:.1%}).")
+                f"Matched {n_tot - n_not_match} over {n_tot}. "
+                f"Missing {n_not_match} unique values ({n_not_match / n_tot:.1%}).")
 
     def _run_code_match(self):
         # Perform matching based on codes
@@ -229,14 +229,14 @@ class AddGeographicalInfo:
             addinfo.MATCH_COLUMN = addinfo.MATCH_COLUMN + "_provincia"
             addinfo.set_province_tag(detail_column)
             addinfo.run_simple_match()
-            self.not_match = addinfo.get_result(suffix_result_columns=self.SUFFIX_DEFAULT)
+            self.not_match = addinfo.get_result(suffix=self.SUFFIX_DEFAULT)
         elif GeoLevel.REGIONE in self.detail_level:
             detail_column = self.detail_level[GeoLevel.REGIONE][0]
             addinfo = AddGeographicalInfo(self.not_match)
             addinfo.MATCH_COLUMN = addinfo.MATCH_COLUMN + "_regione"
             addinfo.set_regioni_tag(detail_column)
             addinfo.run_simple_match()
-            self.not_match = addinfo.get_result(suffix_result_columns=self.SUFFIX_DEFAULT)
+            self.not_match = addinfo.get_result(suffix=self.SUFFIX_DEFAULT)
 
     @validate
     def get_n_not_matched(self) -> int:
@@ -251,7 +251,8 @@ class AddGeographicalInfo:
         comuni_homonym_df = self._calculate_italian_comuni_homonym()
         # Check if the dataset contains homonym comune
         homonym_comuni_list = list(set(comuni_homonym_df[cfg.TAG_COMUNE]))
-        if (self.df[self.MATCH_COLUMN].isin([a.lower() for a in homonym_comuni_list])).sum() == 0:
+        match_homonym_comuni = self.df[self.MATCH_COLUMN].isin([a.lower() for a in homonym_comuni_list])
+        if not match_homonym_comuni.any():
             return
 
         log.info(f"Found homonym comuni on dataset.")
@@ -268,11 +269,12 @@ class AddGeographicalInfo:
                 "You can distinguish them only by using another geographic information (ex.: provincia or regione). "
                 "If you want to identify the right comune add provincia or regione detail or homonym comuni will be "
                 "ignored.")
-            registry_column_detail = get_tag_registry(CodeLevel.SIGLA, GeoLevel.PROVINCIA)
-            comuni_homonym_df["key"] = comuni_homonym_df[cfg.TAG_COMUNE] + " " + comuni_homonym_df[
-                registry_column_detail]
-            self.istat_registry = self._split_comuni_homonym(self.istat_registry, registry_column_detail,
-                                                             comuni_homonym_df)
+            self.df.loc[match_homonym_comuni, self.MATCH_COLUMN] = ""
+            #registry_column_detail = get_tag_registry(CodeLevel.SIGLA, GeoLevel.PROVINCIA)
+            #comuni_homonym_df["key"] = comuni_homonym_df[cfg.TAG_COMUNE] + " " + comuni_homonym_df[
+            #    registry_column_detail]
+            #self.istat_registry = self._split_comuni_homonym(self.istat_registry, registry_column_detail,
+            #                                                 comuni_homonym_df)
             return
         log.info(f"The column {detail_column} will be used in order to found the right comune.")
         comuni_homonym_df["key"] = comuni_homonym_df[cfg.TAG_COMUNE] + " " + comuni_homonym_df[registry_column_detail]
@@ -460,6 +462,8 @@ class AddGeographicalInfo:
 
         match_dict = {}
         for index, row in self.not_match.iterrows():
+            if (row[self.MATCH_COLUMN] is None) or (row[self.MATCH_COLUMN] == ""):
+                pass
             if cfg.TAG_PROVINCIA + self.SUFFIX_DEFAULT in row:
                 detail = f", {row[cfg.TAG_PROVINCIA + self.SUFFIX_DEFAULT]}" or ""
             elif cfg.TAG_REGIONE + self.SUFFIX_DEFAULT in row:
@@ -559,6 +563,8 @@ class AddGeographicalInfo:
 
         match_dict = {}
         for index, row in self.not_match.iterrows():
+            if (row[self.MATCH_COLUMN] is None) or (row[self.MATCH_COLUMN] == ""):
+                pass
             if cfg.TAG_PROVINCIA + self.SUFFIX_DEFAULT in row:
                 detail = f" {row[cfg.TAG_PROVINCIA + self.SUFFIX_DEFAULT]}" or ""
             elif cfg.TAG_REGIONE + self.SUFFIX_DEFAULT in row:
@@ -582,12 +588,22 @@ class AddGeographicalInfo:
 
     @validate
     def get_result(
-            self,
-            add_missing: bool = False,
-            drop_not_match: bool = False,
-            suffix_result_columns: str = "",
-            handle_duplicate_column: str = "error"
+        self,
+        add_missing: bool = False,
+        drop_not_match: bool = False,
+        suffix: Optional[str] = None,
+        handle_duplicate_column: str = "error"
     ) -> pd.DataFrame:
+        """
+        Get the result dataframe after matching.
+
+        Args:
+            add_missing (bool): Whether to add missing values to the result.
+            drop_not_match (bool): Whether to drop non-matching values from the result.
+            suffix (str): The suffix to add to the result columns.
+            handle_duplicate_column (str): How to handle duplicate columns in the result.
+            Values can be 'error', 'overwrite', or 'progressive'.
+        """
         # Get the result dataframe after matching
         if self.not_match is None:
             raise Exception("Run simple match before get the result.")
@@ -599,64 +615,30 @@ class AddGeographicalInfo:
         else:
             log.info(f"Found every values.")
 
+        join_columns = [name for name, code in self.detail_level.values()]
+        original_index = self.original_df.index
+        self.original_df = self.original_df.merge(self.df[[self.MATCH_COLUMN] + join_columns], on=join_columns,
+                                                  how="left")
+        self.original_df.index = original_index
+
         # Check column names in original dataset for any duplicates
         output_columns = list(set(self.OUTPUT_COLUMNS).intersection(self.istat_registry.columns))
         self.istat_registry = self.istat_registry[[self.MATCH_COLUMN] + output_columns]
-        rename_columns = {
-            col: col + suffix_result_columns
-            for col in self.istat_registry.columns
-            if col != self.MATCH_COLUMN
-        }
-        self.istat_registry.rename(columns=rename_columns, inplace=True)
-        output_columns = list(self.istat_registry)
-        output_columns.remove(self.MATCH_COLUMN)
 
-        column_duplicates = list(set(output_columns).intersection(self.original_df.columns))
-
-        if (len(column_duplicates) > 0) & (handle_duplicate_column == "error"):
-            raise Exception(f"Found column in original dataset with the same name of one of the output columns:\n"
-                            f"{column_duplicates}, change the 'handle_duplicate_column' params in order to handle "
-                            f"those columns.\n'overwrite'= the original columns will be overwrite.\n"
-                            f"suffix (str): this string will be used as suffix for the new columns.")
-        elif (len(column_duplicates) > 0) & (handle_duplicate_column == "overwrite"):
-            log.warning(f"Columns: {column_duplicates} will be overwrite from original dataset.")
-            self.istat_registry.rename(
-                columns={col: col + "geo_ita_rename_handler" for col in column_duplicates},
-                inplace=True
-            )
-        elif (len(column_duplicates) > 0) & (isinstance(handle_duplicate_column, str)) & (
-                handle_duplicate_column != ""):
-            self.istat_registry.rename(
-                columns={col: col + handle_duplicate_column for col in column_duplicates},
-                inplace=True
-            )
-
-        join_columns = [name for name, code in self.detail_level.values()]
-
-        original_index_name = self.original_df.index.name or 'index'
-
-        self.original_df = self.original_df.reset_index()
-
-        self.original_df = self.original_df.merge(self.df[[self.MATCH_COLUMN] + join_columns], on=join_columns,
-                                                  how="left")
-        self.original_df = (
-            self.original_df
-            .set_index(original_index_name)
-        )
-
+        check_duplicate_column_output(self.original_df, self.istat_registry, output_columns,
+                                      suffix,  handle_duplicate_column, log)
         if add_missing:
             how = "outer" if not drop_not_match else "left"
         else:
             how = "inner" if drop_not_match else "left"
 
         result = (
-            self.original_df.reset_index()
+            self.original_df
             .merge(self.istat_registry, on=self.MATCH_COLUMN, how=how)
-            .set_index(original_index_name)
         )
+        if how == "left":
+            self.original_df.index = original_index
 
-        if (len(column_duplicates) > 0) & (handle_duplicate_column == "overwrite"):
-            result.drop(columns=[col + "geo_ita_rename_handler" for col in column_duplicates], inplace=True)
         result.drop(columns=[self.MATCH_COLUMN], inplace=True)
         return result
 
@@ -903,10 +885,12 @@ def get_geo_info_from_provincia(provincia: str, regione: str = None) -> Dict[str
 
 @validate
 def get_city_from_coordinates(
-        df: pd.DataFrame,
-        latitude_column: Optional[str] = None,
-        longitude_column: Optional[str] = None,
-        suffix_result_columns: str = "",
+    df: pd.DataFrame,
+    latitude_column: Optional[str] = None,
+    longitude_column: Optional[str] = None,
+    geometry_column: Optional[str] = None,
+    suffix: Optional[str] = None,
+    handle_duplicate_column: str = "error"
 ) -> pd.DataFrame:
     """
     Map geographic information (city, province, region) to a dataframe based on coordinates.
@@ -915,7 +899,10 @@ def get_city_from_coordinates(
         df (pd.DataFrame): Input dataframe containing coordinate columns.
         latitude_column (str, optional): Name of the column containing latitude values.
         longitude_column (str, optional): Name of the column containing longitude values.
-        suffix_result_columns (str): the suffix of result columns.
+        geometry_column (str, optional): Name of the column containing geometry values.
+        suffix (str): the suffix of result columns.
+        handle_duplicate_column (str): How to handle duplicate columns in the result.
+            Possible values are 'error', 'overwrite', or 'progressive'.
     Returns:
         pd.DataFrame: Input dataframe enriched with geographic information.
     """
@@ -924,6 +911,8 @@ def get_city_from_coordinates(
         test_column_in_dataframe(df, latitude_column)
     if longitude_column:
         test_column_in_dataframe(df, longitude_column)
+    if geometry_column:
+        test_column_in_dataframe(df, geometry_column)
 
     # Add a unique key to map results back to the original dataframe
     df["key_mapping"] = range(len(df))
@@ -935,7 +924,7 @@ def get_city_from_coordinates(
     df_comuni = df_comuni.to_crs("epsg:4326")  # Convert to WGS84
 
     # Create a GeoDataFrame from the input dataframe coordinates
-    geo_df = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column)
+    geo_df = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column, geo_tag=geometry_column)
     geo_df = geo_df[geo_df["geometry"].notnull()]  # Drop rows with missing geometries
     geo_df = geo_df[["key_mapping", "geometry"]].drop_duplicates()  # Remove duplicate geometries
 
@@ -957,24 +946,19 @@ def get_city_from_coordinates(
         log.info("Found the correct city for each point.")
 
     # Select relevant columns for the final mapping
-    map_city = map_city[["key_mapping", cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_SIGLA, cfg.TAG_REGIONE]]
+    output_column = [cfg.TAG_COMUNE, cfg.TAG_PROVINCIA, cfg.TAG_SIGLA, cfg.TAG_REGIONE]
+    map_city = map_city[["key_mapping"] +output_column]
 
-    # Add suffix if suffix_result_columns != ""
-    rename_columns = {
-        col: col + suffix_result_columns
-        for col in map_city.columns
-        if col != "key_mapping"
-    }
-    map_city.rename(columns=rename_columns, inplace=True)
+    check_duplicate_column_output(df, map_city, output_column, suffix, handle_duplicate_column, log)
 
     # Merge the results back to the original dataframe
-    original_index_name = df.index.name or 'index'
+    original_index = df.index
     result = (
-        df.reset_index()
+        df
         .merge(map_city, on="key_mapping", how="left")
         .drop(columns=["key_mapping"])
-        .set_index(original_index_name)
     )
+    result.index = original_index
 
     # Clean up temporary columns from the original dataframe
     df.drop(columns=["key_mapping"], inplace=True, errors="ignore")
@@ -1193,46 +1177,51 @@ def _test_address_with_comune_provincia_regione(df, comuni_tag, province_tag, re
 
 @validate
 def get_coordinates_from_address(
-        df: pd.DataFrame,
-        address_tag: str,
-        comuni_tag: Optional[str] = None,
-        province_tag: Optional[str] = None,
-        regioni_tag: Optional[str] = None,
-        n_url_read: int = 1
+    df: pd.DataFrame,
+    address_column: str,
+    comune_column: Optional[str] = None,
+    provincia_column: Optional[str] = None,
+    regione_column: Optional[str] = None,
+    n_url_read: int = 1,
+    suffix: Optional[str] = None,
+    handle_duplicate_column: str = "error"
 ) -> pd.DataFrame:
     """
     Finds coordinates for addresses in a DataFrame using OpenStreetMap data.
 
     Args:
         df (pd.DataFrame): Input DataFrame with address information.
-        address_tag (str): Column containing the address.
-        comuni_tag (str, optional): Column with municipality names.
-        province_tag (str, optional): Column with province names.
-        regioni_tag (str, optional): Column with region names.
+        address_column (str): Column containing the address.
+        comune_column (str, optional): Column with comuni names.
+        provincia_column (str, optional): Column with province names.
+        regione_column (str, optional): Column with regioni names.
         n_url_read (int): Number of retries for external API requests.
+        suffix (str): the suffix of result columns.
+        handle_duplicate_column (str): How to handle duplicate columns in the result.
+            Possible values are 'error', 'overwrite', or 'progressive'.
 
     Returns:
         pd.DataFrame: Original DataFrame enriched with coordinates.
     """
     # Validate input columns
-    test_column_in_dataframe(df, address_tag)
-    for tag in [comuni_tag, province_tag, regioni_tag]:
+    test_column_in_dataframe(df, address_column)
+    for tag in [comune_column, provincia_column, regione_column]:
         if tag:
             test_column_in_dataframe(df, tag)
 
     # Prepare a unique subset of data for processing
-    relevant_columns = [col for col in [address_tag, comuni_tag, province_tag, regioni_tag] if col]
+    relevant_columns = [col for col in [address_column, comune_column, provincia_column, regione_column] if col]
     unique_addresses = df[relevant_columns].drop_duplicates()
-    unique_addresses["address_search"] = unique_addresses[address_tag].str.lower()
+    unique_addresses["address_search"] = unique_addresses[address_column].str.lower()
 
     # Enrich the address with municipality if not already included
-    if comuni_tag:
-        condition = __test_city_in_address(unique_addresses, comuni_tag, "address_search") | unique_addresses[
-            comuni_tag].isna()
+    if comune_column:
+        condition = __test_city_in_address(unique_addresses, comune_column, "address_search") | unique_addresses[
+            comune_column].isna()
         unique_addresses["address_search"] = np.where(
             condition,
             unique_addresses["address_search"],
-            unique_addresses["address_search"] + ", " + unique_addresses[comuni_tag].str.lower()
+            unique_addresses["address_search"] + ", " + unique_addresses[comune_column].str.lower()
         )
 
     # Initialize geolocator and geocode function
@@ -1245,16 +1234,17 @@ def get_coordinates_from_address(
     # Handle cases where locations were not found
     if unique_addresses["location"].isna().sum() > 0:
         unique_addresses = _try_replace_abbreviation_on_google(unique_addresses, n_url_read, geocode)
-        unique_addresses = _try_wrong_replace_of_apostrophe(unique_addresses, address_tag, geocode)
+        unique_addresses = _try_wrong_replace_of_apostrophe(unique_addresses, address_column, geocode)
 
     # Validate addresses against municipality, province, and region
     unique_addresses = _test_address_with_comune_provincia_regione(
-        unique_addresses, comuni_tag, province_tag, regioni_tag
+        unique_addresses, comune_column, provincia_column, regione_column
     )
 
     # Clean up intermediate columns
     unique_addresses.drop(columns=["address_search", "location", "address_test", "test"], errors="ignore",
                           inplace=True)
+    check_duplicate_column_output(df, unique_addresses, ["latitude", "longitude"], suffix, handle_duplicate_column, log)
 
     # Merge results back into the original DataFrame
     result_df = df.merge(unique_addresses, how="left", on=relevant_columns)
@@ -1263,46 +1253,35 @@ def get_coordinates_from_address(
 
 @validate
 def get_address_from_coordinates(
-        df: pd.DataFrame,
-        latitude_col: Optional[str] = None,
-        longitude_col: Optional[str] = None
+    df: pd.DataFrame,
+    latitude_column: Optional[str] = None,
+    longitude_column: Optional[str] = None,
+    geometry_column: Optional[str] = None,
+    suffix: Optional[str] = None,
+    handle_duplicate_column: str = "error"
 ) -> pd.DataFrame:
     """
     Retrieve addresses from latitude and longitude coordinates.
 
     Args:
         df (pd.DataFrame): Input DataFrame containing coordinates.
-        latitude_col (str): Column name for latitude. Automatically detected if not provided.
-        longitude_col (str): Column name for longitude. Automatically detected if not provided.
+        latitude_column (str): Column name for latitude. Automatically detected if not provided.
+        longitude_column (str): Column name for longitude. Automatically detected if not provided.
+        geometry_column (str): Column name for geometry. Automatically detected if not provided.
+        suffix (str): the suffix of result columns.
+        handle_duplicate_column (str): How to handle duplicate columns in the result.
+            Possible values are 'error', 'overwrite', or 'progressive'.
 
     Returns:
         pd.DataFrame: DataFrame with addresses and cities extracted from coordinates.
     """
-    # Check or infer coordinate column names
-    if latitude_col is None or longitude_col is None:
-        flag_coord_found, latitude_col, longitude_col = __find_coord_columns(df)
-        if not flag_coord_found:
-            raise ValueError(
-                "Latitude and longitude columns could not be found. "
-                "Please specify them using 'latitude_col' and 'longitude_col'."
-            )
-    # Ensure latitude and longitude columns contain float values
-    try:
-        df[latitude_col] = df[latitude_col].astype(float)
-        df[longitude_col] = df[longitude_col].astype(float)
-    except ValueError:
-        raise ValueError("Latitude and longitude columns must contain float values.")
-
-    # Check that specified columns exist in the DataFrame
-    if (latitude_col is not None and latitude_col not in df.columns) or \
-            (longitude_col is not None and longitude_col not in df.columns):
-        raise Exception(
-            "Use latitude_columns and longitude_column to specify the columns where to find the coordinates.")
+    df = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column, geo_tag=geometry_column)
+    df.to_crs("epsg:4326", inplace=True)
 
     # Prepare unique coordinate pairs
-    coordinates_df = df[[latitude_col, longitude_col]].drop_duplicates()
+    coordinates_df = df[["geometry"]].drop_duplicates()
     coordinates_df["coordinates"] = (
-            coordinates_df[latitude_col].map(str) + ", " + coordinates_df[longitude_col].map(str)
+            coordinates_df["geometry"].y.map(str) + ", " + coordinates_df["geometry"].x.map(str)
     )
 
     # Estimate the time required
@@ -1321,10 +1300,6 @@ def get_address_from_coordinates(
     # Define address and city column names, avoiding collisions
     address_col = "address"
     city_col = "city"
-    if address_col in df.columns:
-        address_col = "address_geo"
-    if city_col in df.columns:
-        city_col = "city_geo"
 
     # Extract and clean address and city information
     coordinates_df[address_col] = coordinates_df["location"].apply(
@@ -1338,28 +1313,34 @@ def get_address_from_coordinates(
     # Drop temporary columns
     coordinates_df.drop(columns=["coordinates", "location"], inplace=True)
 
+    check_duplicate_column_output(df, coordinates_df, [address_col, city_col], suffix, handle_duplicate_column, log)
+
     # Merge back with the original DataFrame
-    result_df = df.merge(coordinates_df, how="left", on=[latitude_col, longitude_col])
-    return result_df
+    df = df.merge(coordinates_df, how="left", on=["geometry"])
+    df = pd.DataFrame(df.drop(columns=["geometry"]))
+
+    return df
 
 
 @validate
 def aggregate_point_by_distance(
-        df: pd.DataFrame,
-        distance_in_meters: Union[int, float],
-        latitude_column: str = None,
-        longitude_column: str = None,
-        agg_column_name: str = "aggregation_code"
+    df: pd.DataFrame,
+    distance_in_meters: Union[int, float],
+    latitude_column: str = None,
+    longitude_column: str = None,
+    geometry_column: str = None,
+    output_column: str = "aggregation_code"
 ) -> pd.DataFrame:
     """
-    Aggregates points into clusters based on a specified distance.
+    Aggregates points into clusters based on a specified distance, associating points to a cluster based on their proximity.
 
     Args:
         df (pd.DataFrame): Input DataFrame containing latitude and longitude columns.
         distance_in_meters (Union[int, float]): The maximum distance between points to consider them in the same cluster.
         latitude_column (str): Column name for latitude. Optional if inferred.
         longitude_column (str): Column name for longitude. Optional if inferred.
-        agg_column_name (str): Column name for the aggregation cluster ID.
+        geometry_column (str): Column name for geometry. Optional if inferred.
+        output_column (str): Column name for the aggregation cluster ID.
 
     Returns:
         pd.DataFrame: DataFrame with an additional column indicating the aggregation cluster.
@@ -1370,10 +1351,13 @@ def aggregate_point_by_distance(
     if longitude_column is not None:
         test_column_in_dataframe(df, longitude_column)
 
-    df["key_mapping"] = range(df.shape[0])  # Unique identifier for each point
+    if output_column in df.columns:
+        log.warning(f"Column '{output_column}' already exists in the DataFrame. It will be overwritten.")
+
+    df["key_mapping"] = range(len(df))
 
     # Create a GeoDataFrame
-    gdf = _create_geo_dataframe(df, latitude_column, longitude_column)
+    gdf = _create_geo_dataframe(df, latitude_column, longitude_column, geometry_column)
     gdf = gdf.to_crs(epsg=3857)  # Project to a CRS with units in meters
 
     # Compute centroids (in case geometries are not points)
@@ -1399,14 +1383,14 @@ def aggregate_point_by_distance(
     n_clusters, cluster_labels = connected_components(csgraph=adjacency_matrix, directed=False)
 
     # Map cluster labels back to the original DataFrame
-    gdf[agg_column_name] = cluster_labels
-    df[agg_column_name] = df["key_mapping"].map(gdf.set_index("key_mapping")[agg_column_name])
+    gdf[output_column] = cluster_labels
+    df[output_column] = df["key_mapping"].map(gdf.set_index("key_mapping")[output_column])
 
     # Clean up and drop temporary columns
     df.drop(columns=["key_mapping"], inplace=True)
 
     # Logging cluster information
-    largest_cluster_size = df[agg_column_name].value_counts().max()
+    largest_cluster_size = df[output_column].value_counts().max()
     log.info(f"Aggregated {df.shape[0]} points into {n_clusters} clusters. "
              f"The largest cluster contains {largest_cluster_size} points.")
 
@@ -1415,10 +1399,12 @@ def aggregate_point_by_distance(
 
 @validate
 def get_population_nearby(
-        df: pd.DataFrame,
-        radius: Union[int, float],
-        latitude_column: str = None,
-        longitude_column: str = None
+    df: pd.DataFrame,
+    radius: Union[int, float],
+    latitude_column: str = None,
+    longitude_column: str = None,
+    geometry_column: str = None,
+    output_column: str = "population"
 ) -> pd.DataFrame:
     """
     Calculate the total population within a specified radius for each point in the dataset.
@@ -1428,6 +1414,8 @@ def get_population_nearby(
     - radius (Union[int, float]): Radius (in meters) to search for population data.
     - latitude_column (str): Name of the latitude column in the input DataFrame.
     - longitude_column (str): Name of the longitude column in the input DataFrame.
+    - geometry_column (str): Name of the geometry column in the input DataFrame.
+    - output_column (str): Name of the output column containing the population data.
 
     Returns:
     - pd.DataFrame: DataFrame with an additional column 'n_residents' representing the population.
@@ -1440,10 +1428,13 @@ def get_population_nearby(
     population_df = get_high_resolution_population_density_df()
 
     # Assign unique identifiers for input DataFrame
-    df = df.rename_axis("key_mapping").reset_index()
+    df["key_mapping"] = range(len(df))
+
+    if output_column in df.columns:
+        log.warning(f"Column '{output_column}' already exists in the DataFrame. It will be overwritten.")
 
     # Convert input DataFrame to GeoDataFrame
-    points_gdf = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column)[
+    points_gdf = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column, geo_tag=geometry_column)[
         ["key_mapping", "geometry"]]
     points_gdf = points_gdf.to_crs(epsg=4326)  # Convert to df_population metric projections
 
@@ -1498,7 +1489,7 @@ def get_population_nearby(
     log.info(f"Merging input data with population df ended in {end - start}")
 
     # Map population data back to the original DataFrame
-    df["n_residents"] = df["key_mapping"].map(population_df).fillna(0).astype(int)
+    df[output_column] = df["key_mapping"].map(population_df).fillna(0).astype(int)
 
     # Drop temporary columns
     df.drop(columns=["key_mapping"], inplace=True)

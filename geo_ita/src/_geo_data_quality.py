@@ -199,7 +199,7 @@ class GeoDataQuality:
         if regione_code == CodeLevel.DENOMINATION:
             addinfo.run_similarity_match(threshold=0.85)
             addinfo.accept_similarity_result()
-        check_df = addinfo.get_result(suffix_result_columns=self.DATA_QUALITY_CHECK_TAG)
+        check_df = addinfo.get_result(suffix=self.DATA_QUALITY_CHECK_TAG)
         self.original_df[cfg.TAG_REGIONE + "_" + GeoLevel.REGIONE] = self._clean_denomination(
             check_df[cfg.TAG_REGIONE + self.DATA_QUALITY_CHECK_TAG])
 
@@ -218,7 +218,7 @@ class GeoDataQuality:
         if provincia_code == CodeLevel.DENOMINATION:
             addinfo.run_similarity_match(threshold=0.85)
             addinfo.accept_similarity_result()
-        check_df = addinfo.get_result(suffix_result_columns=self.DATA_QUALITY_CHECK_TAG)
+        check_df = addinfo.get_result(suffix=self.DATA_QUALITY_CHECK_TAG)
         self.original_df[cfg.TAG_REGIONE + "_" + GeoLevel.PROVINCIA] = self._clean_denomination(
             check_df[cfg.TAG_REGIONE + self.DATA_QUALITY_CHECK_TAG])
         self.original_df[cfg.TAG_PROVINCIA + "_" + GeoLevel.PROVINCIA] = self._clean_denomination(
@@ -245,7 +245,7 @@ class GeoDataQuality:
             addinfo.run_find_frazioni_on_web()
             addinfo.run_similarity_match(threshold=0.85)
             addinfo.accept_similarity_result()
-        check_df = addinfo.get_result(suffix_result_columns=self.DATA_QUALITY_CHECK_TAG)
+        check_df = addinfo.get_result(suffix=self.DATA_QUALITY_CHECK_TAG)
         self.original_df[cfg.TAG_REGIONE + "_" + GeoLevel.COMUNE] = self._clean_denomination(
             check_df[cfg.TAG_REGIONE + self.DATA_QUALITY_CHECK_TAG])
         self.original_df[cfg.TAG_PROVINCIA + "_" + GeoLevel.COMUNE] = self._clean_denomination(
@@ -258,7 +258,7 @@ class GeoDataQuality:
     def _check_coordinates(self):
         self._first_check(GeoLevel.COORDINATES)
 
-        check_df = get_city_from_coordinates(self.original_df, suffix_result_columns=self.DATA_QUALITY_CHECK_TAG)
+        check_df = get_city_from_coordinates(self.original_df, suffix=self.DATA_QUALITY_CHECK_TAG)
         self.original_df[cfg.TAG_REGIONE + "_" + GeoLevel.COORDINATES] = self._clean_denomination(
             check_df[cfg.TAG_REGIONE + self.DATA_QUALITY_CHECK_TAG])
         self.original_df[cfg.TAG_PROVINCIA + "_" + GeoLevel.COORDINATES] = self._clean_denomination(

@@ -6,5 +6,6 @@ from geo_ita.src._data_enrichment import (AddGeographicalInfo,
                                           get_address_from_coordinates,
                                           get_coordinates_from_address,
                                           aggregate_point_by_distance,
-                                          GeoDataQuality,
                                           get_population_nearby)
+from geo_ita.src._geo_data_quality import GeoDataQuality
+#from geo_ita.src._density import DensityCalculator
