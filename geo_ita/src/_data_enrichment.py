@@ -270,11 +270,6 @@ class AddGeographicalInfo:
                 "If you want to identify the right comune add provincia or regione detail or homonym comuni will be "
                 "ignored.")
             self.df.loc[match_homonym_comuni, self.MATCH_COLUMN] = ""
-            #registry_column_detail = get_tag_registry(CodeLevel.SIGLA, GeoLevel.PROVINCIA)
-            #comuni_homonym_df["key"] = comuni_homonym_df[cfg.TAG_COMUNE] + " " + comuni_homonym_df[
-            #    registry_column_detail]
-            #self.istat_registry = self._split_comuni_homonym(self.istat_registry, registry_column_detail,
-            #                                                 comuni_homonym_df)
             return
         log.info(f"The column {detail_column} will be used in order to found the right comune.")
         comuni_homonym_df["key"] = comuni_homonym_df[cfg.TAG_COMUNE] + " " + comuni_homonym_df[registry_column_detail]
@@ -791,7 +786,7 @@ def __find_coordinates_system(df, lat=None, lon=None, geometry=None):
         raise Exception("To find the coordinate System usa lat-lon or geometry")
 
     italy = _get_shape_italia()
-    italy.crs = {'init': "epsg:32632"}
+    italy.crs = {'init': cfg.SHAPE_CRS}
     italy = italy.to_crs({'init': "epsg:4326"})
     test_join = gpd.tools.sjoin(test, italy, op='within')
 
@@ -920,8 +915,7 @@ def get_city_from_coordinates(
     # Load official geographic data
     df_comuni = get_df_comuni()
     df_comuni = gpd.GeoDataFrame(df_comuni)
-    df_comuni.crs = "epsg:32632"  # Original CRS (UTM)
-    df_comuni = df_comuni.to_crs("epsg:4326")  # Convert to WGS84
+    df_comuni.crs = cfg.SHAPE_CRS  # Original CRS (UTM)
 
     # Create a GeoDataFrame from the input dataframe coordinates
     geo_df = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column, geo_tag=geometry_column)
@@ -932,7 +926,7 @@ def get_city_from_coordinates(
     geo_df["geometry"] = geo_df["geometry"].centroid
     geo_df["prova_x"] = geo_df["geometry"].x
     geo_df["prova_y"] = geo_df["geometry"].y
-    geo_df = geo_df.to_crs("epsg:4326")
+    geo_df = geo_df.to_crs(cfg.SHAPE_CRS)
 
     # Perform spatial join with city boundaries
     map_city = gpd.sjoin(geo_df, df_comuni, op="within", how="left")
@@ -1276,7 +1270,7 @@ def get_address_from_coordinates(
         pd.DataFrame: DataFrame with addresses and cities extracted from coordinates.
     """
     df = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column, geo_tag=geometry_column)
-    df.to_crs("epsg:4326", inplace=True)
+    df.to_crs(cfg.REVERSE_GEOCODING_CRS, inplace=True)
 
     # Prepare unique coordinate pairs
     coordinates_df = df[["geometry"]].drop_duplicates()
@@ -1358,7 +1352,7 @@ def aggregate_point_by_distance(
 
     # Create a GeoDataFrame
     gdf = _create_geo_dataframe(df, latitude_column, longitude_column, geometry_column)
-    gdf = gdf.to_crs(epsg=3857)  # Project to a CRS with units in meters
+    gdf = gdf.to_crs(cfg.DISTANCE_MAINTAINING_CRS)  # Project to a CRS with units in meters
 
     # Compute centroids (in case geometries are not points)
     gdf["geometry"] = gdf["geometry"].centroid
@@ -1436,7 +1430,7 @@ def get_population_nearby(
     # Convert input DataFrame to GeoDataFrame
     points_gdf = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column, geo_tag=geometry_column)[
         ["key_mapping", "geometry"]]
-    points_gdf = points_gdf.to_crs(epsg=4326)  # Convert to df_population metric projections
+    points_gdf = points_gdf.to_crs(cfg.HIGH_RESOLUTION_CRS)  # Convert to df_population metric projections
 
     # Filter population data before transformations (step 1 one big box)
     lat_margin = (2 * radius / 110540)
@@ -1470,7 +1464,7 @@ def get_population_nearby(
     start = datetime.now()
     population_df = gpd.GeoDataFrame(
         population_df.drop(["Lon", "Lat"], axis=1),
-        crs="EPSG:4326",
+        crs=cfg.HIGH_RESOLUTION_CRS,
         geometry=gpd.points_from_xy(population_df["Lon"], population_df["Lat"])
     ).to_crs(epsg=3857)
     end = datetime.now()
@@ -1537,7 +1531,7 @@ def _get_margins(filter_comune=None,
         raise Exception("Unable to find the filter.")
     else:
         margins = margins[["geometry"]]
-        margins.crs = {'init': "epsg:32632"}
+        margins.crs = {'init': cfg.SHAPE_CRS}
         margins = margins.to_crs({'init': f'epsg:{epsg}'})
         margins_coord = margins["geometry"].values
         margins_coord = (min([margins_coord[i].bounds[0] for i in range(len(margins_coord))]),

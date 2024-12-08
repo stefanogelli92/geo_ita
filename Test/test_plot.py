@@ -104,18 +104,20 @@ class TestPlot(unittest.TestCase):
         for level, func, func_interactive in tests:
             df = get_df(level)
             tag = get_tag_registry(CodeLevel.DENOMINATION, level)
-            func(df, tag, cfg.TAG_SUPERFICIE, save_path=f"test_choropleth_{level}_new.png")
+            func(df, tag, cfg.TAG_SUPERFICIE, save_path=f"test_choropleth_{level}_new.png", show_plot=False)
             compare_images(f"test_choropleth_{level}_new.png", f"test_choropleth_{level}.png")
-            func(df, tag, cfg.TAG_SUPERFICIE, filter_regione="Toscana", save_path=f"test_choropleth_toscana_{level}_new.png")
+            func(df, tag, cfg.TAG_SUPERFICIE, filter_regione="Toscana",
+                 save_path=f"test_choropleth_toscana_{level}_new.png", show_plot=False)
             compare_images(f"test_choropleth_toscana_{level}_new.png", f"test_choropleth_toscana_{level}.png")
 
             values = {
                 cfg.TAG_SUPERFICIE: "Superficie",
                 cfg.TAG_POPOLAZIONE: "Popolazione",
             }
-            func_interactive(df, tag, values, save_path=f"test_choropleth_interactive_{level}_new.html")
+            func_interactive(df, tag, values, save_path=f"test_choropleth_interactive_{level}_new.html", show_plot=False)
             compare_html_files(f"test_choropleth_interactive_{level}_new.html", f"test_choropleth_interactive_{level}.html")
-            func_interactive(df, tag, values, filter_regione="Toscana", save_path=f"test_choropleth_interactive_toscana_{level}_new.html")
+            func_interactive(df, tag, values, filter_regione="Toscana",
+                             save_path=f"test_choropleth_interactive_toscana_{level}_new.html", show_plot=False)
             compare_html_files(f"test_choropleth_interactive_toscana_{level}_new.html", f"test_choropleth_interactive_toscana_{level}.html")
 
     def test_plot_point_map(self):
@@ -126,19 +128,19 @@ class TestPlot(unittest.TestCase):
         df.drop(columns=["points"], inplace=True)
         df = df.explode("geometry")
         df = df.reset_index(drop=True)
-        plot_point_map(df, color_column=cfg.TAG_SUPERFICIE, save_in_path="test_point_map_new.png")
+        plot_point_map(df, color_column=cfg.TAG_SUPERFICIE, save_path="test_point_map_new.png", show_plot=False)
         compare_images("test_point_map_new.png", "test_point_map_test.png")
 
-        plot_point_map(df, filter_regione="Toscana", color_column=cfg.TAG_SUPERFICIE,
-                       save_in_path="test_point_map_toscana_new.png")
+        plot_point_map(df, filter_regione="Toscana", color_column=cfg.TAG_SUPERFICIE, add_map_background=False,
+                       save_path="test_point_map_toscana_new.png", show_plot=False)
         compare_images("test_point_map_toscana_new.png", "test_point_map_toscana_test.png")
 
-        plot_point_map_interactive(df, color_column=cfg.TAG_SUPERFICIE, save_in_path="test_point_map_interactive_new.html",
-                                   show_flag=False)
+        plot_point_map_interactive(df, color_column=cfg.TAG_SUPERFICIE, save_path="test_point_map_interactive_new.html",
+                                   show_plot=False)
         compare_html_files("test_point_map_interactive_new.html", "test_point_map_interactive_test.html")
 
         plot_point_map_interactive(df, color_column=cfg.TAG_SUPERFICIE, filter_regione="Toscana",
-                                   save_in_path="test_point_map_interactive_toscana_new.html", show_flag=False)
+                                   save_path="test_point_map_interactive_toscana_new.html", show_plot=False)
         compare_html_files("test_point_map_interactive_toscana_new.html", "test_point_map_interactive_toscana_test.html")
 
     """

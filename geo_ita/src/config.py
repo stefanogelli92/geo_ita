@@ -165,3 +165,8 @@ overpass_url = 'http://overpass-api.de/api/interptreter'
 highway_shape_file_path = r"data/highway/highway_shape.pkl"
 highway_exit_file_path = r"data/highway/highway_exits.pkl"
 
+SHAPE_CRS = "EPSG:32632"
+OPENSTREETMAP_CRS = "EPSG:3857"
+REVERSE_GEOCODING_CRS = "EPSG:4326"
+DISTANCE_MAINTAINING_CRS = "EPSG:3857"
+HIGH_RESOLUTION_CRS = "EPSG:4326"
