@@ -3,6 +3,7 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
+from geo_ita.src._data import get_high_resolution_population_density_df
 from geo_ita.src._plot import *
 import geo_ita.src.config as cfg
 from PIL import Image, ImageChops
@@ -143,40 +144,20 @@ class TestPlot(unittest.TestCase):
                                    save_path="test_point_map_interactive_toscana_new.html", show_plot=False)
         compare_html_files("test_point_map_interactive_toscana_new.html", "test_point_map_interactive_toscana_test.html")
 
-    """
-    def test_density_heatmap(self):
-        test_df = get_df(GeoLevel.COMUNE)
-        plot_density_heatmap(test_df, latitude_column='center_y', longitude_column='center_x',
-                             save_in_path="test_density_heatmap_simple_new.png")
-        compare_images("test_density_heatmap_simple_new.png", "test_density_heatmap_simple_test.png")
+    def test_plot_density_map(self):
+        """test_df = get_df(GeoLevel.COMUNE)
+        plot_density_map(test_df, latitude_column='center_y', longitude_column='center_x',
+                         save_path="test_plot_density_map_new.png")
+        compare_images("test_plot_density_map_new.png", "test_plot_density_map_test.png")
 
-        plot_density_heatmap(test_df, value_column="popolazione", latitude_column='center_y', longitude_column='center_x',
-                             save_in_path="test_density_heatmap_variable_new.png")
-        compare_images("test_density_heatmap_variable_new.png", "test_density_heatmap_variable_test.png")
+        plot_density_map(test_df, color_column="popolazione", latitude_column='center_y', longitude_column='center_x',
+                         save_path="test_plot_density_map_toscana_new.png", filter_regione="Toscana")
+        compare_images("test_plot_density_map_toscana_new.png", "test_plot_density_map_toscana_test.png")
+        """
+        test_df = get_high_resolution_population_density_df()
 
-        plot_density_heatmap(test_df, value_column="popolazione", latitude_column='center_y',
-                                         longitude_column='center_x', filter_regione="Lazio",
-                             interactive=True,
-                                         save_in_path="test_density_heatmap_interactive_new.html")
-        compare_html_files("test_density_heatmap_interactive_new.html", "test_density_heatmap_interactive_test.html")
-    """
-"""
-    def test_density(self):
-        #df = get_high_resolution_population_density_df()
-        #plot_kernel_density_estimation(df, n_grid_x=500, n_grid_y=500)
+        plot_density_map(test_df, latitude_column='Lat', longitude_column='Lon', color_column="Population",
+                         save_path="test_plot_density_map_high_res_new.png", filter_regione="Toscana")
+        compare_images("test_plot_density_map_high_res_new.png", "test_plot_density_map_high_res_test.png")
 
-        test_df = get_df_comuni()
-        plot_kernel_density_estimation(test_df, latitude_columns='center_y', longitude_columns='center_x',
-                                       n_grid_x=500, n_grid_y=500,
-                                       save_in_path="usage_kernel_density_simple.png")
-        plot_kernel_density_estimation(test_df, value_tag="popolazione", latitude_columns='center_y', longitude_columns='center_x',
-                                       n_grid_x=500, n_grid_y=500,
-                                       save_in_path="usage_kernel_density_variable.png")
-        plot_kernel_density_estimation_interactive(test_df, value_tag="popolazione", latitude_columns='center_y',
-                                       longitude_columns='center_x',
-                                       n_grid_x=500, n_grid_y=500,
-                                       filter_regione="Lazio",
-                                                   save_in_path="usage_kernel_density_estimation_1.html")
-
-"""
 

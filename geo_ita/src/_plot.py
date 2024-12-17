@@ -12,6 +12,8 @@ from matplotlib.axes import Axes
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+import geoplot as gplt
+import geoplot.crs as gcrs
 from pandas.api.types import is_numeric_dtype, is_string_dtype
 from bokeh.palettes import (
     Blues9, Greens9, Reds9, Greys9, Purples9, Oranges9, Category10, Category20, RdYlGn11, Viridis256
@@ -32,7 +34,6 @@ from geo_ita.src._data import get_df
 from geo_ita.src._data_enrichment import (
     _clean_denomination_text, AddGeographicalInfo, _create_geo_dataframe, _get_margins
 )
-# from geo_ita.src._density import SpatialDensity
 from geo_ita.src.utils import infer_geographical_category, get_tag_registry, ensure_list, GeoLevel, CodeLevel, \
     clean_denomination_text_value, _linear_colormap, _human_format
 
@@ -45,10 +46,10 @@ PLOT_VALUE_COLUMN = "geo_ita_value_plot"
 
 @validate
 def plot_choropleth_map_regionale(
-        df: pd.DataFrame,
-        regione_column: str,
-        color_column: str,
-        **kwargs,
+    df: pd.DataFrame,
+    regione_column: str,
+    color_column: str,
+    **kwargs,
 ):
     """
     Wrapper for regioni choropleth map plotting.
@@ -67,10 +68,10 @@ def plot_choropleth_map_regionale(
 
 @validate
 def plot_choropleth_map_provinciale(
-        df: pd.DataFrame,
-        provincia_column: str,
-        color_column: str,
-        **kwargs,
+    df: pd.DataFrame,
+    provincia_column: str,
+    color_column: str,
+    **kwargs,
 ):
     """
     Wrapper for province choropleth map plotting.
@@ -89,10 +90,10 @@ def plot_choropleth_map_provinciale(
 
 @validate
 def plot_choropleth_map_comunale(
-        df: pd.DataFrame,
-        comune_column: str,
-        color_column: str,
-        **kwargs
+    df: pd.DataFrame,
+    comune_column: str,
+    color_column: str,
+    **kwargs
 ):
     """
     Wrapper for comuni choropleth map plotting.
@@ -111,10 +112,10 @@ def plot_choropleth_map_comunale(
 
 @validate
 def plot_choropleth_map_comunale_interactive(
-        df: pd.DataFrame,
-        comune_column: str,
-        color_columns: Union[str, list, dict],
-        **kwargs
+    df: pd.DataFrame,
+    comune_column: str,
+    color_columns: Union[str, list, dict],
+    **kwargs
 ):
     """
     Wrapper for comuni choropleth map plotting.
@@ -133,10 +134,10 @@ def plot_choropleth_map_comunale_interactive(
 
 @validate
 def plot_choropleth_map_provinciale_interactive(
-        df: pd.DataFrame,
-        provincia_column: str,
-        color_columns: Union[str, list, dict],
-        **kwargs
+    df: pd.DataFrame,
+    provincia_column: str,
+    color_columns: Union[str, list, dict],
+    **kwargs
 ):
     """
     Wrapper for province choropleth map plotting.
@@ -155,10 +156,10 @@ def plot_choropleth_map_provinciale_interactive(
 
 @validate
 def plot_choropleth_map_regionale_interactive(
-        df: pd.DataFrame,
-        regione_column: str,
-        color_columns: Union[str, list, dict],
-        **kwargs
+    df: pd.DataFrame,
+    regione_column: str,
+    color_columns: Union[str, list, dict],
+    **kwargs
 ):
     """
     Wrapper for regioni choropleth map plotting.
@@ -709,7 +710,7 @@ def plot_point_map(
     filter_regione: Union[str, List[str]] = None,
     color_column: Optional[str] = None,
     color: Optional[str] = None,
-    ax = None,
+    ax=None,
     title: Optional[str] = None,
     title_size: float = 20,
     legend_font: Union[int, float] = None,
@@ -826,7 +827,8 @@ def _plot_points(df, ax, color_tag, color, marker, size, marker_alpha, show_colo
 def _plot_numeric_points(df, ax, color_tag, color, marker, size, marker_alpha, show_colorbar, legend_font):
     vmin, vmax = df[color_tag].min(), df[color_tag].max()
     cmap = get_cmap(color or "Blues")
-    scatter = ax.scatter(df.geometry.x, df.geometry.y, c=df[color_tag], cmap=cmap, vmin=vmin, vmax=vmax, alpha=marker_alpha,
+    scatter = ax.scatter(df.geometry.x, df.geometry.y, c=df[color_tag], cmap=cmap, vmin=vmin, vmax=vmax,
+                         alpha=marker_alpha,
                          linewidths=0.1, marker=marker, s=size, edgecolors=color or "blue")
     if show_colorbar:
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
@@ -1019,3 +1021,112 @@ def plot_point_map_interactive(
         else:
             os.startfile(save_path)
     return p
+
+
+@validate
+def plot_density_map(
+    df0: pd.DataFrame,
+    latitude_column: Optional[str] = None,
+    longitude_column: Optional[str] = None,
+    geometry_column: Optional[str] = None,
+    filter_comune: Union[str, List[str]] = None,
+    filter_provincia: Union[str, List[str]] = None,
+    filter_regione: Union[str, List[str]] = None,
+    color_column: Optional[str] = None,
+    color: Optional[str] = None,
+    bw_method=None,
+    log_scale: bool = False,
+    ax=None,
+    title: Optional[str] = None,
+    title_size: float = 20,
+    save_path: Union[str, Path] = None,
+    add_map_background: bool = True,
+    show_plot: bool = True,
+    dpi: int = 100
+) -> Axes:
+    """
+    Plots a density map based on the provided DataFrame and filters.
+
+    Args:
+        df0 (pd.DataFrame): DataFrame containing the data to plot.
+        latitude_column (str, optional): Column name for latitude. Defaults to None.
+        longitude_column (str, optional): Column name for longitude. Defaults to None.
+        geometry_column (str, optional): Column name for geographic data. Defaults to None.
+        filter_comune (Union[str, List[str]], optional): Filter for specific Comune. Defaults to None.
+        filter_provincia (Union[str, List[str]], optional): Filter for specific Provincia. Defaults to None.
+        filter_regione (Union[str, List[str]], optional): Filter for specific Regione. Defaults to None.
+        color_column (str, optional): Column name for color coding. Defaults to None.
+        color (str, optional): Color to use for the points. Defaults to None.
+        bw_method (float, optional): Bandwidth method for the KDE. Defaults to None.
+        log_scale (bool, optional): Whether to use a logarithmic scale. Defaults to False.
+        ax (Axes, optional): Matplotlib Axes object to plot on. Defaults to None.
+        title (str, optional): Title of the plot. Defaults to None.
+        title_size (float, optional): Font size for the title. Defaults to 20.
+        save_path (Union[str, Path], optional): Path to save the plot. Defaults to None.
+        add_map_background (bool, optional): Whether to add a map background. Defaults to True.
+        show_plot (bool, optional): Whether to display the plot. Defaults to True.
+        dpi (int, optional): Resolution of the saved plot. Defaults to 100.
+
+    Returns:
+        Axes: Matplotlib Axes object with the plot.
+    """
+    df = df0.copy()
+    df = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column, geo_tag=geometry_column)
+    df.to_crs(cfg.OPENSTREETMAP_CRS, inplace=True)
+
+    filter_level, filter_list = _get_filter_params(filter_regione, filter_provincia, filter_comune)
+    filter_list = ensure_list(filter_list)
+    if filter_list is not None:
+        shape = get_df(filter_level)
+        shape = _filter_data(shape, filter_list, filter_level)
+        shape = gpd.GeoDataFrame(shape, geometry="geometry")
+        shape.crs = {'init': cfg.SHAPE_CRS}
+        shape.to_crs(cfg.OPENSTREETMAP_CRS, inplace=True)
+        df = gpd.tools.sjoin(df, shape[["geometry"]], op='within')
+        shape_list = [(shape, 0.4, "0.6")]
+        if filter_level == GeoLevel.REGIONE:
+            shape_list.extend(_get_additional_shapes(GeoLevel.PROVINCIA, filter_list, filter_level))
+        elif filter_level == GeoLevel.PROVINCIA:
+            shape_list.extend(_get_additional_shapes(GeoLevel.COMUNE, filter_list, filter_level))
+    else:
+        shape_list = _get_default_shapes()
+        shape = get_df(GeoLevel.REGIONE)
+        shape = gpd.GeoDataFrame(shape, geometry="geometry")
+
+    fig = None
+    if ax is None:
+        fig, ax = plt.subplots(subplot_kw={'projection': gcrs.WebMercator()})
+
+    if title:
+        ax.set_title(title, fontsize=title_size)
+
+    _plot_density(df, ax, color_column, color, bw_method, log_scale, shape)
+    if add_map_background:
+        ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik)
+    _plot_shapes(ax, shape_list)
+
+    ax.axis('off')
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight', dpi=dpi)
+    if show_plot:
+        plt.show()
+
+    return ax
+
+
+def _plot_density(df, ax, color_tag, color, bw_method, log_scale, shape):
+    shape["geometry"] = shape["geometry"].buffer(0)
+    shape = shape.explode(index_parts=False)
+    shape = shape[~shape["geometry"].is_empty]
+
+    df.to_crs(cfg.GEOPLOT_CRS, inplace=True)
+    shape.to_crs(cfg.GEOPLOT_CRS, inplace=True)
+    df = df.dropna()
+    weights = df[color_tag].values if color_tag else None
+    gplt.kdeplot(
+        df, projection=gcrs.WebMercator(),
+        weights=weights, color=color or "Blue", cbar=False,
+        bw_method=bw_method, fill=True, log_scale=log_scale, thresh=0.05, alpha=0.7,
+        clip=shape[["geometry"]],
+        ax=ax,
+    )

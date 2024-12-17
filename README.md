@@ -14,7 +14,7 @@ pip install geo_ita-0.0.1-py3-none-any.whl
 
 ## Documentation
 1. [Data](#data)
-2. [Enrich Dataframe](#enrich-dataframe)
+2. [Data Enrichment](#data-enrichment)
 3. [Plot](#plot)
 
 ### Data
@@ -90,7 +90,7 @@ df = pd.DataFrame(data=[[41.939965, 12.470965],
                         [45.460908, 9.191498],
                         [40.846269, 14.267525]], columns=["latitude", "longitude"])
 
-df = get_address_from_coordinates(df, latitude_columns="latitude", longitude_columns="longitude")
+df = get_address_from_coordinates(df, latitude_column="latitude", longitude_column="longitude")
 ```
 ###### Output
 
@@ -101,7 +101,7 @@ df = get_address_from_coordinates(df, latitude_columns="latitude", longitude_col
 | 40.846269 | 14.267525 | via nuova marina, Napoli | Napoli |
 
 ```python
-df = get_city_from_coordinates(df, latitude_columns="latitide", longitude_columns="longitude")
+df = get_city_from_coordinates(df, latitude_column="latitude", longitude_column="longitude")
 ```
 ##### Output
 
@@ -133,7 +133,7 @@ addinfo.run_simple_match()
 # (Optional) The remaining values are searched on OpenStreetMap in order to find any frazione used instead of the name of comune (such as Ostia Lido is a Frazione of the municipality of Rome).
 addinfo.run_find_frazioni()
 # (Optional) The remaining values are searched on Google in order to find other frazioni used instead of the name of comune.
-addinfo.run_find_frazioni_from_google()
+addinfo.run_find_frazioni_on_web()
 # (Optional) The remaining values are searched for similarity with ISTAT's registry. This can find some wrong match so you can look at the match and decide to accept or not this step.
 addinfo.run_similarity_match()
 # (Optional) You can show the similarity step result in order to accept or decline the step
@@ -165,13 +165,15 @@ df = < your dataframe >
 # Create the class and pass the dataframe
 dq = GeoDataQuality(df)
 # Set alL the columns with geographical information you want to check
-dq.set_nazione_tag("nazione")
+dq.set_country_tag("nazione")
 dq.set_regioni_tag("regione")
 dq.set_province_tag("provincia")
 dq.set_comuni_tag("comune")
 dq.set_latitude_longitude_tag("latitudine", "longitudine")
-# Run the check and get the result
-result = dq.start_check(show_only_warning=False, sensitive=True)
+# Run the check
+dq.start_check(show_only_warning=False, sensitive=True)
+result = dq.get_results()
+
 # Plot an interactive view that can help deep dive into the warning
 dq.plot_result()
 
@@ -277,7 +279,7 @@ df = get_df_province()[["denominazione_comune", "center_x", "center_y", "popolaz
             Ala di Stura  365344.513419  5.018472e+06          441
 
 # Simple use plot
-plot_point_map(df, latitude_columns='center_y', longitude_columns='center_x', title="Province")
+plot_point_map(df, latitude_column='center_y', longitude_column='center_x', title="Province")
 ```
 ![plot](./Test/usage_point_map_comuni.png?raw=true)
 
@@ -289,23 +291,22 @@ plot_point_map(df, latitude_columns='center_y', longitude_columns='center_x', ti
 
 ```python
 # Usage
-from geo_ita.plot import plot_kernel_density_estimation
+from geo_ita.plot import plot_density_map
 
 # Get the dataframe you want to use 
 df = get_df_comuni()
 
 # Simple point density
-plot_kernel_density_estimation(df, latitude_columns='center_y', longitude_columns='center_x',
-                               n_grid_x=500, n_grid_y=500)
+plot_density_map(df, latitude_column='center_y', longitude_column='center_x')
 ```
-![plot](./Test/usage_kernel_density_simple.png?raw=true)
+![plot](./Test/test_plot_density_map_test.png?raw=true)
 ```python
 # Density of variable Popolazione
-plot_kernel_density_estimation_interactive(df, value_tag="popolazione",
-                               latitude_columns='center_y', longitude_columns='center_x',
-                               n_grid_x=500, n_grid_y=500)
+df = get_high_resolution_population_density_df()
+plot_density_map(df, color_column="Population",
+                 latitude_column='Lat', longitude_column='Lon')
 ```
-![plot](./Test/usage_kernel_density_variable.png?raw=true)
+![plot](./Test/test_plot_density_map_high_res_test.png?raw=true)
 ***
 
 ## License

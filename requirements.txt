@@ -21,3 +21,4 @@ valdec
 osm2geojson
 pandasdmx
 contextily
+geoplot
