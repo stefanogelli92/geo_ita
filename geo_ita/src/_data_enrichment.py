@@ -524,7 +524,7 @@ class AddGeographicalInfo:
         ]
         sentences = " ".join([tag.string for tag in soup.find_all(text=True) if tag.parent.name not in blacklist])
         sentences = clean_htmltext(sentences)
-        sentences = re.split(r'[\r\n\.]', sentences)
+        sentences = re.split(r"[\r\n\.]", sentences)
         matches = []
         for text in sentences:
             results = re.findall(cfg.regex_find_frazioni.format(denomination), text)
@@ -739,22 +739,22 @@ def _create_geo_dataframe(df0, lat_tag=None, long_tag=None, geo_tag=None):
         df = df0.copy()
         if df.crs is None:
             coord_system = __find_coordinates_system(df, geometry="geometry")
-            df.crs = {'init': coord_system}
+            df.set_crs(coord_system, inplace=True)
     elif isinstance(df0, pd.DataFrame):
         if lat_tag is not None and long_tag is not None:
             df = df0[df0[long_tag].notnull() & df0[lat_tag].notnull()]
             df = gpd.GeoDataFrame(
                 df.drop([long_tag, lat_tag], axis=1), geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
             coord_system = __find_coordinates_system(df, lat_tag, long_tag)
-            df.crs = {'init': coord_system}
+            df.set_crs(coord_system, inplace=True)
         elif geo_tag is not None:
             df = gpd.GeoDataFrame(df0, geometry=geo_tag)
             coord_system = __find_coordinates_system(df0, geometry=geo_tag)
-            df.crs = {'init': coord_system}
+            df.set_crs(coord_system, inplace=True)
         elif "geometry" in df0.columns:
             df = gpd.GeoDataFrame(df0)
             coord_system = __find_coordinates_system(df0, geometry="geometry")
-            df.crs = {'init': coord_system}
+            df.set_crs(coord_system, inplace=True)
             log.info("Found geometry columns")
         else:
             flag_coord_found, lat_tag, long_tag = __find_coord_columns(df0)
@@ -764,7 +764,7 @@ def _create_geo_dataframe(df0, lat_tag=None, long_tag=None, geo_tag=None):
             df = gpd.GeoDataFrame(
                 df.drop([long_tag, lat_tag], axis=1), geometry=gpd.points_from_xy(df[long_tag], df[lat_tag]))
             coord_system = __find_coordinates_system(df, lat_tag, long_tag)
-            df.crs = {'init': coord_system}
+            df.set_crs(coord_system, inplace=True)
     else:
         raise Exception("You need to pass a Pandas DataFrame of GeoDataFrame.")
     return df
@@ -776,7 +776,8 @@ def __find_coordinates_system(df, lat=None, lon=None, geometry=None):
         return "epsg:4326"
     test = df.sample(n=n_test)
     if isinstance(df, gpd.GeoDataFrame):
-        pass
+        if df.crs is not None:
+            return df.crs
     elif geometry is not None:
         test = gpd.GeoDataFrame(test, geometry=geometry)
     elif lat is not None and lon is not None:
@@ -786,23 +787,24 @@ def __find_coordinates_system(df, lat=None, lon=None, geometry=None):
         raise Exception("To find the coordinate System usa lat-lon or geometry")
 
     italy = _get_shape_italia()
-    italy.crs = {'init': cfg.SHAPE_CRS}
-    italy = italy.to_crs({'init': "epsg:4326"})
-    test_join = gpd.tools.sjoin(test, italy, op='within')
+    if italy.crs is None:
+        italy.set_crs(cfg.SHAPE_CRS, inplace=True)
+    italy.to_crs("epsg:4326", inplace=True)
+    test_join = gpd.tools.sjoin(test, italy, predicate='within')
 
     if test_join.shape[0] / n_test >= 0.8:
         log.info("Found coord system: epsg:4326")
         return "epsg:4326"
 
-    italy = italy.to_crs({'init': "epsg:32632"})
-    test_join = gpd.tools.sjoin(test, italy, op='within')
+    italy.to_crs("epsg:32632", inplace=True)
+    test_join = gpd.tools.sjoin(test, italy, predicate='within')
 
     if test_join.shape[0] / n_test >= 0.8:
         log.info("Found coord system: epsg:32632")
         return "epsg:32632"
 
-    italy = italy.to_crs({'init': "epsg:3857"})
-    test_join = gpd.tools.sjoin(test, italy, op='within')
+    italy.to_crs("epsg:3857", inplace=True)
+    test_join = gpd.tools.sjoin(test, italy, predicate='within')
 
     if test_join.shape[0] / n_test >= 0.8:
         log.info("Found coord system: epsg:3857")
@@ -915,7 +917,8 @@ def get_city_from_coordinates(
     # Load official geographic data
     df_comuni = get_df_comuni()
     df_comuni = gpd.GeoDataFrame(df_comuni)
-    df_comuni.crs = cfg.SHAPE_CRS  # Original CRS (UTM)
+    if df_comuni.crs is None:
+        df_comuni.set_crs(cfg.SHAPE_CRS, inplace=True)
 
     # Create a GeoDataFrame from the input dataframe coordinates
     geo_df = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column, geo_tag=geometry_column)
@@ -929,7 +932,7 @@ def get_city_from_coordinates(
     geo_df = geo_df.to_crs(cfg.SHAPE_CRS)
 
     # Perform spatial join with city boundaries
-    map_city = gpd.sjoin(geo_df, df_comuni, op="within", how="left")
+    map_city = gpd.sjoin(geo_df, df_comuni, predicate="within", how="left")
 
     # Log missing points
     missing_points = map_city[map_city[cfg.TAG_COMUNE].isna() & (~map_city["geometry"].is_empty)]["geometry"].unique()
@@ -1362,7 +1365,7 @@ def aggregate_point_by_distance(
     buffer_gdf["geometry"] = buffer_gdf["geometry"].buffer(distance_in_meters, cap_style=1)
 
     # Perform a spatial join to find points within the buffer
-    joined_gdf = gpd.sjoin(gdf, buffer_gdf, op='within', how="left")
+    joined_gdf = gpd.sjoin(gdf, buffer_gdf, predicate='within', how="left")
     joined_gdf = joined_gdf[["key_mapping_left", "key_mapping_right"]]
 
     # Create a sparse adjacency matrix for connected components
@@ -1475,7 +1478,7 @@ def get_population_nearby(
 
     # Perform spatial join to aggregate population within the radius
     log.info("Start Merging input data with population df")
-    population_df = gpd.sjoin(population_df, points_gdf, op="within", how="inner")
+    population_df = gpd.sjoin(population_df, points_gdf, predicate="within", how="inner")
     population_df = (
         population_df.groupby("key_mapping")["Population"].sum()
     )
@@ -1494,7 +1497,7 @@ def get_population_nearby(
 def _get_margins(filter_comune=None,
                  filter_provincia=None,
                  filter_regione=None,
-                 epsg=3857):
+                 crs=cfg.SHAPE_CRS):
     filter_comune = ensure_list(filter_comune)
     filter_provincia = ensure_list(filter_provincia)
     filter_regione = ensure_list(filter_regione)
@@ -1531,8 +1534,9 @@ def _get_margins(filter_comune=None,
         raise Exception("Unable to find the filter.")
     else:
         margins = margins[["geometry"]]
-        margins.crs = {'init': cfg.SHAPE_CRS}
-        margins = margins.to_crs({'init': f'epsg:{epsg}'})
+        if margins.crs is None:
+            margins.set_crs(cfg.SHAPE_CRS, inplace=True)
+        margins.to_crs(crs, inplace=True)
         margins_coord = margins["geometry"].values
         margins_coord = (min([margins_coord[i].bounds[0] for i in range(len(margins_coord))]),
                          min([margins_coord[i].bounds[1] for i in range(len(margins_coord))]),

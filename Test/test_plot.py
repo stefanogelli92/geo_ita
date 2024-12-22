@@ -145,6 +145,13 @@ class TestPlot(unittest.TestCase):
         compare_html_files("test_point_map_interactive_toscana_new.html", "test_point_map_interactive_toscana_test.html")
 
     def test_plot_density_map(self):
+        logger = logging.getLogger('_plot')
+        logger.setLevel(logging.DEBUG)
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+
         """test_df = get_df(GeoLevel.COMUNE)
         plot_density_map(test_df, latitude_column='center_y', longitude_column='center_x',
                          save_path="test_plot_density_map_new.png")

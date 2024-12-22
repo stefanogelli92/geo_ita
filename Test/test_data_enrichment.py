@@ -3,7 +3,6 @@ from geopy import Point
 from geopy.distance import distance
 
 from geo_ita.src._data_enrichment import *
-#from geo_ita.src._density import SpatialDensity
 from geo_ita.src._data import *
 from geo_ita.src.config import *
 import logging

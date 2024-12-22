@@ -37,8 +37,11 @@ from geo_ita.src._data_enrichment import (
 from geo_ita.src.utils import infer_geographical_category, get_tag_registry, ensure_list, GeoLevel, CodeLevel, \
     clean_denomination_text_value, _linear_colormap, _human_format
 
-log = logging.getLogger(__name__)
-log.addHandler(logging.NullHandler())
+logger = logging.getLogger('_plot')
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 PLOT_SUFFIX_COLUMNS = "_plot_suffix_addGeoInfo"
 PLOT_VALUE_COLUMN = "geo_ita_value_plot"
@@ -764,7 +767,7 @@ def plot_point_map(
         shape = gpd.GeoDataFrame(shape, geometry="geometry")
         shape.crs = {'init': cfg.SHAPE_CRS}
         shape.to_crs(cfg.OPENSTREETMAP_CRS, inplace=True)
-        df = gpd.tools.sjoin(df, shape[["geometry"]], op='within')
+        df = gpd.tools.sjoin(df, shape[["geometry"]], predicate='within')
         shape_list = [(shape, 0.4, "0.6")]
         if filter_level == GeoLevel.REGIONE:
             shape_list.extend(_get_additional_shapes(GeoLevel.PROVINCIA, filter_list, filter_level))
@@ -808,7 +811,8 @@ def _get_default_shapes():
     for level, lw, ec in [(GeoLevel.REGIONE, 0.4, "0.6"), (GeoLevel.PROVINCIA, 0.2, "0.8")]:
         shape = get_df(level)
         shape = gpd.GeoDataFrame(shape, geometry="geometry")
-        shape.crs = {'init': cfg.SHAPE_CRS}
+        if shape.crs is None:
+            shape.crs = {'init': cfg.SHAPE_CRS}
         shape.to_crs(cfg.OPENSTREETMAP_CRS, inplace=True)
         shapes.append((shape, lw, ec))
     return shapes
@@ -923,7 +927,7 @@ def plot_point_map_interactive(
     df[longitude_column] = df.geometry.x
     df = df.to_crs({'init': cfg.OPENSTREETMAP_CRS})
     if filter_regione or filter_comune or filter_provincia:
-        df = gpd.tools.sjoin(df, shape, op='within')
+        df = gpd.tools.sjoin(df, shape, predicate='within')
 
     if info_dict is not None:
         table_columns = list(info_dict.keys())
@@ -1070,19 +1074,23 @@ def plot_density_map(
     Returns:
         Axes: Matplotlib Axes object with the plot.
     """
-    df = df0.copy()
-    df = _create_geo_dataframe(df, lat_tag=latitude_column, long_tag=longitude_column, geo_tag=geometry_column)
+    from datetime import datetime
+    start = datetime.now()
+    df = _create_geo_dataframe(df0, lat_tag=latitude_column, long_tag=longitude_column, geo_tag=geometry_column)
     df.to_crs(cfg.OPENSTREETMAP_CRS, inplace=True)
+    end = datetime.now()
+    logger.debug(f"Time to create geo dataframe: {end - start}.")
 
+    start = datetime.now()
     filter_level, filter_list = _get_filter_params(filter_regione, filter_provincia, filter_comune)
     filter_list = ensure_list(filter_list)
     if filter_list is not None:
         shape = get_df(filter_level)
         shape = _filter_data(shape, filter_list, filter_level)
         shape = gpd.GeoDataFrame(shape, geometry="geometry")
-        shape.crs = {'init': cfg.SHAPE_CRS}
+        if shape.crs is None:
+            shape.set_crs(cfg.SHAPE_CRS, inplace=True)
         shape.to_crs(cfg.OPENSTREETMAP_CRS, inplace=True)
-        df = gpd.tools.sjoin(df, shape[["geometry"]], op='within')
         shape_list = [(shape, 0.4, "0.6")]
         if filter_level == GeoLevel.REGIONE:
             shape_list.extend(_get_additional_shapes(GeoLevel.PROVINCIA, filter_list, filter_level))
@@ -1093,6 +1101,17 @@ def plot_density_map(
         shape = get_df(GeoLevel.REGIONE)
         shape = gpd.GeoDataFrame(shape, geometry="geometry")
 
+    #df.sindex
+    #shape.sindex
+    bbox = shape.total_bounds
+    df = df.cx[bbox[0]:bbox[2], bbox[1]:bbox[3]]
+
+    df = gpd.tools.sjoin(df, shape[["geometry"]], predicate='intersects', how="inner")
+
+    end = datetime.now()
+    logger.debug(f"Time to filter data: {end - start}.")
+
+    start = datetime.now()
     fig = None
     if ax is None:
         fig, ax = plt.subplots(subplot_kw={'projection': gcrs.WebMercator()})
@@ -1101,6 +1120,10 @@ def plot_density_map(
         ax.set_title(title, fontsize=title_size)
 
     _plot_density(df, ax, color_column, color, bw_method, log_scale, shape)
+    end = datetime.now()
+    logger.debug(f"Time to plot density: {end - start}.")
+
+    start = datetime.now()
     if add_map_background:
         ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik)
     _plot_shapes(ax, shape_list)
@@ -1110,7 +1133,8 @@ def plot_density_map(
         plt.savefig(save_path, bbox_inches='tight', dpi=dpi)
     if show_plot:
         plt.show()
-
+    end = datetime.now()
+    logger.debug(f"Time to add map background: {end - start}.")
     return ax
 
 

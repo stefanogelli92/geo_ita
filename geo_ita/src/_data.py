@@ -3,9 +3,11 @@ import shutil
 from datetime import datetime
 import logging
 import geopandas as gpd
+import pandas as pd
 import pandasdmx as sdmx
 import urllib.request
 import zipfile
+from typing import List, Tuple, Dict, Union
 
 from valdec.decorators import validate
 from geo_ita.src.definition import *
@@ -18,7 +20,7 @@ log.addHandler(logging.NullHandler())
 
 # Helper functions to fetch lists of Italian geographical entities
 
-def get_comuni_list() -> list[str]:
+def get_comuni_list() -> List[str]:
     """
     Returns a list of names of Italian comuni (municipalities).
     """
@@ -26,7 +28,7 @@ def get_comuni_list() -> list[str]:
     return list(df[cfg.TAG_COMUNE].values)
 
 
-def get_province_list() -> list[str]:
+def get_province_list() -> List[str]:
     """
     Returns a list of names of Italian provinces.
     """
@@ -34,7 +36,7 @@ def get_province_list() -> list[str]:
     return list(df[cfg.TAG_PROVINCIA].unique())
 
 
-def get_regioni_list() -> list[str]:
+def get_regioni_list() -> List[str]:
     """
     Returns a list of names of Italian regions.
     """
@@ -70,7 +72,7 @@ def __get_last_shape_file_from_folder(path):
     return last_files, last_date
 
 
-def __rename_columns(df, rename_dict):
+def __rename_columns(df: pd.DataFrame, rename_dict: Dict[str, str]) -> None:
     """
     Rename columns in a dataframe based on a dictionary.
 
@@ -232,9 +234,8 @@ def _get_popolazione_df():
 
 def _get_comuni_shape_df():
     """
-    Returns
-    Restituisce un dataset con le shape di ciascun comune italiano (Provenienza Istat).
-    Dataset utilizzato per fare plot geografici dell'italia.
+    Returns a dataset with the shapes of each Italian municipality (Source: ISTAT).
+    Dataset used for geographic plots of Italy.
     """
     path = root_path / Path(cfg.shape_comuni["path"])
     last_files, _ = __get_last_shape_file_from_folder(path)
@@ -248,9 +249,8 @@ def _get_comuni_shape_df():
 
 def _get_province_shape_df():
     """
-    Returns
-    Restituisce un dataset con le shape di ciascun comune italiano (Provenienza Istat).
-    Dataset utilizzato per fare plot geografici dell'italia.
+    Returns a dataset with the shapes of each Italian province (Source: ISTAT).
+    Dataset used for geographic plots of Italy.
     """
     path = root_path / Path(cfg.shape_province["path"])
     last_files, _ = __get_last_shape_file_from_folder(path)
@@ -264,9 +264,8 @@ def _get_province_shape_df():
 
 def _get_regioni_shape_df():
     """
-    Returns
-    Restituisce un dataset con le shape di ciascun comune italiano (Provenienza Istat).
-    Dataset utilizzato per fare plot geografici dell'italia.
+    Returns a dataset with the shapes of each Italian region (Source: ISTAT).
+    Dataset used for geographic plots of Italy.
     """
     path = root_path / Path(cfg.shape_regioni["path"])
     last_files, _ = __get_last_shape_file_from_folder(path)

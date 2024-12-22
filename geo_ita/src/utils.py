@@ -69,7 +69,7 @@ def infer_geographical_category(list_values: List[Union[str, int, float]]) -> Co
         list_values (List[Union[str, int, float]]): List of values to analyze.
 
     Returns:
-        str: The determined code, either CODE_DENOMINAZIONE, CODE_CODICE_ISTAT, or CODE_SIGLA.
+        infer_geographical_category
     """
     # Filter out NaN and None values
     list_values = [x for x in list_values if str(x) != 'nan' and x is not None]
@@ -95,7 +95,7 @@ def infer_geographical_category(list_values: List[Union[str, int, float]]) -> Co
     return CodeLevel.DENOMINATION
 
 
-def get_tag_registry(code, level):
+def get_tag_registry(code: CodeLevel, level: GeoLevel) -> str:
     tag_mapping = {
         GeoLevel.COMUNE: {
             CodeLevel.CODE: cfg.TAG_CODICE_COMUNE,
